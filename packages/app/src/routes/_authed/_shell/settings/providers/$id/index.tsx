@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { ProviderModelsPage } from "../../../../../../features/providers/provider-models-page.js"
+import { ProviderPage } from "../../../../../../features/providers/provider-page.js"
 import { Loader } from "../../../../../../lib/loader.js"
 
-export const Route = createFileRoute("/_authed/_shell/settings/providers/$id/models")({
-  head: () => ({ meta: [{ title: "Models · Ren" }] }),
+export const Route = createFileRoute("/_authed/_shell/settings/providers/$id/")({
+  head: () => ({ meta: [{ title: "Provider · Ren" }] }),
   loader: (options) => {
     const queryClient = options.context.queryClient
     Loader.start(
@@ -11,5 +11,5 @@ export const Route = createFileRoute("/_authed/_shell/settings/providers/$id/mod
       queryClient.query(options.context.api.provider.list.queryOptions()),
     )
   },
-  component: ProviderModelsPage,
+  component: ProviderPage,
 })

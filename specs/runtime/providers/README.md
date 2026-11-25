@@ -119,49 +119,40 @@ A self-hosted Ren chooses other model gateways (§6.3), or none: then it has no 
 
 ### 5.1 Providers page
 
-Settings → Providers. It replaces "Subscriptions your agents run on" (`app/src/features/providers/providers-page.tsx:130`). The OpenCode Console's Providers pages are the model ([`references/console.md`](references/console.md)).
+Settings → Providers: one grid of every provider the model gateways offer, 3 per row, as the Console's Connect provider page ([`references/console.md`](references/console.md)). The built-in providers come first, then those the organization added, then the others.
 
 ```
-Providers                                                                        [ Add provider ]
+ Providers                                                        [ Search ]   [ Inference keys ]
 
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                            │
-│  Ren                          On ●      Credit $3.20 left · Free today 41 / 100            │
-│  Claude, GPT and more on Ren credit; free models every day             [ Models › ]        │
-│                                                                                            │
-└────────────────────────────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                            │
-│  Anthropic                    On ●      Method [ Subscription ▾ ]                          │
-│  Asha (Max)  5h 42% · 7d 81%        Ben (Pro)  5h 12% · 7d 30%      [ Connect your Claude ]│
-│                                                                                            │
-└────────────────────────────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                            │
-│  OpenAI                       On ●      Method [ API key ▾ ]        sk-…9f2c · Test ✓      │
-│                                                                                            │
-└────────────────────────────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                            │
-│  Google                       Off ○     Method [ API key ▾ ]        No key                 │
-│                                                                                            │
-└────────────────────────────────────────────────────────────────────────────────────────────┘
+ ┌───────────────────────────────┐  ┌───────────────────────────────┐  ┌───────────────────────────────┐
+ │                               │  │                               │  │                               │
+ │  [logo]  Ren            On    │  │  [logo]  Anthropic     On     │  │  [logo]  Groq      [Connect]  │
+ │                               │  │                               │  │                               │
+ │  292 models · Built in        │  │  12 models · 2 subscriptions  │  │  7 models                     │
+ │  Chat 287 · Image 2 · …       │  │  Chat 12                      │  │  Chat 7                       │
+ │                               │  │                               │  │                               │
+ └───────────────────────────────┘  └───────────────────────────────┘  └───────────────────────────────┘
 ```
 
-| Element                     | Behaviour                                                                                                                                                                                                                                                                                      |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add provider                | A page, Settings → Providers → Connect provider, laid out as the Console's: search, 37 providers, a tile per provider with its mark, name, model count from models.dev (a link to models.dev) and Connect. A provider already on the page is marked                                            |
-| Connect (own key)           | A dialog with the provider's fields (most: API key; Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway, Cloudflare Workers AI and Databricks have more, §16), **Test connection**, Cancel, Save. Save runs the test first. A failed test shows the vendor's message and saves nothing |
-| Provider switch             | On or off. Off removes the provider's models from pickers at the next push                                                                                                                                                                                                                     |
-| Method (Anthropic, OpenAI)  | `API key` or `Subscription`. A change applies at the next push                                                                                                                                                                                                                                 |
-| Seats (subscription method) | One line per seat: who connected it, plan, limits (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. A seat that needs a new sign-in shows "Sign in again"                                                                                       |
-| Key line                    | The last 4 characters, who saved it, the test result. Replace, remove                                                                                                                                                                                                                          |
-| Ren provider                | Credit and today's free count. **Models ›** opens §5.2                                                                                                                                                                                                                                         |
-| Members                     | See the page. Only "Connect your …" and their own seats are active (P7)                                                                                                                                                                                                                        |
+| Element | Behaviour                                                                                                                                                                                                    |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Logo    | The address the gateway gives (`ModelGateway.Provider.logo`): models.dev's for a vendor, the gateway's own for Ren. The app shows it on a white tile; a provider without one shows its first letter          |
+| Card    | Model count and the count of each type (chat, image, voice, transcription, decisions). A connected provider shows On or Off and its key's last 4 characters or its subscriptions. Clicking it opens its page |
+| Connect | On a provider that is not connected, for admins: the dialog with the provider's fields, **Test connection**, Cancel, Save. Save runs the test first. A failed test shows the vendor's message, saves nothing |
+| Members | See every page. Connect and every switch are disabled for them (P7)                                                                                                                                          |
+
+A provider's page (Settings → Providers → <provider>):
+
+| Element                           | Behaviour                                                                                                                                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header                            | Logo, the provider switch (Off removes its models from pickers at the next push) and, for Anthropic and OpenAI, the method: `API key` or `Subscription`                                                           |
+| API key                           | The last 4 characters, who saved it, when it was tested. Add, replace, remove                                                                                                                                     |
+| Subscriptions (Anthropic, OpenAI) | One card per seat: who connected it, plan, status, limits (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. "Sign in again" when needed                            |
+| Models                            | Filters All, On, Free; one tab per model type the provider has. Columns: model, features (reasoning, reads images, reads PDFs, each with a tooltip), context, prices per 1M tokens, the switch. A new model is on |
 
 ### 5.2 Ren models
 
-A table like the Console's Models page: name, id, price per 1M tokens (input, output, cache read, cache write), a "Free" tag and an on/off switch per model. Filters: All, On, Free. A new model from models.dev is always on; an admin can switch it off after it arrives. Admins change the switches.
+Ren's page is the provider page of §5.1: its models by type (chat, image, transcription, decisions), with price, a "Free" tag and a switch per model. A new model from models.dev is always on; an admin can switch it off after it arrives.
 
 ### 5.3 Picker
 

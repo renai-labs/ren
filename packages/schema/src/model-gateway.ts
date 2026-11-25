@@ -49,6 +49,10 @@ export const Provider = Schema.Struct({
   modelCount: Schema.optionalKey(Schema.Int).annotate({
     description: "How many models the provider offers, for the Connect provider page.",
   }),
+  modelTypes: Schema.optionalKey(Schema.Record(Schema.String, Schema.Int)).annotate({
+    description: "How many models of each type the provider offers, such as `{ chat: 30, image: 4 }`.",
+  }),
+  logo: Schema.optionalKey(Schema.String).annotate({ description: "The address of the provider’s logo." }),
 }).annotate({
   identifier: "ModelGateway.Provider",
   description: "One provider a model gateway offers, such as Ren, Anthropic or Groq.",

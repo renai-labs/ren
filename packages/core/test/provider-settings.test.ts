@@ -79,10 +79,12 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     Effect.gen(function* () {
       const found = yield* setup
       const page = yield* found.providers.page(found.member)
-      expect(page.providers.map((each) => [each.id, each.builtIn, each.modelCount, each.canManage])).toEqual([
-        ["ren", true, 2, false],
+      expect(
+        page.providers.map((each) => [each.id, each.builtIn, each.added, each.modelTypes, each.canManage]),
+      ).toEqual([
+        ["ren", true, true, { chat: 2 }, false],
+        ["groq", false, false, { chat: 0 }, false],
       ])
-      expect(page.available.map((each) => [each.id, each.added])).toEqual([["groq", false]])
       const changes: ReadonlyArray<Effect.Effect<unknown, ProviderSettings.Failure>> = [
         found.providers.update(found.member, "ren", { enabled: false }),
         found.providers.test(found.member, "groq", fields(secret)),
@@ -107,14 +109,18 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         })
         const refused = yield* Effect.flip(found.providers.connect(found.admin, "groq", fields("bad-key")))
         expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "Invalid API Key" })
-        expect((yield* found.providers.page(found.admin)).providers.map((each) => each.id)).toEqual(["ren"])
+        expect((yield* found.providers.page(found.admin)).providers.map((each) => [each.id, each.added])).toEqual([
+          ["ren", true],
+          ["groq", false],
+        ])
 
         const page = yield* found.providers.connect(found.admin, "groq", fields(secret))
         expect(page.providers.find((each) => each.id === "groq")).toMatchObject({
           enabled: true,
           method: "key",
           key: { last4: "9f2c" },
-          modelCount: 1,
+          added: true,
+          modelTypes: { chat: 1 },
         })
         expect(yield* found.test.keyOf("groq", found.organizationId)).toBe(secret)
         const pg = yield* PgClient.PgClient
@@ -167,6 +173,22 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
       expect(providersOf(yield* found.lists.list(found.organizationId))).toEqual([
         ["ren", ["vendor/one", "vendor/two"]],
       ])
+    }),
+  )
+
+  it.live("a provider's models list the latest release first, and a model without a date last", () =>
+    Effect.gen(function* () {
+      const found = yield* setup
+      yield* found.test.setModels("groq", {
+        revision: "2",
+        models: [
+          { ...TestModelGateway.model("undated"), gateway: "groq/undated" },
+          { ...TestModelGateway.model("older"), gateway: "groq/older", released: "2025-01-23" },
+          { ...TestModelGateway.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
+        ],
+      })
+      const listed = yield* found.providers.models(found.member, "groq")
+      expect(listed.models.map((model) => model.id)).toEqual(["groq/newest", "groq/older", "groq/undated"])
     }),
   )
 
