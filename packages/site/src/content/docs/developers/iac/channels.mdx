@@ -47,7 +47,9 @@ spaces:
         channelId: C0123ABCD
 ```
 
-If your organization already has channels, `ren infra pull` writes each one to both files, with a slug made from its name, such as `acme-example-app`. Channels of personal spaces stay out of the spec.
+For a private Slack channel, run `/invite @Ren` in it first.
+
+If your organization already has channels, `ren infra pull` writes each one to both files, with a slug made from its name, such as `acme-example-app`.
 
 ## Keys
 
@@ -65,9 +67,7 @@ These go in `channels.yaml`:
 
 Ren runs each chat as the member who wrote the message. With `fallback` on, a message from someone Ren can't match to a member runs as the channel's [fallback user](/docs/channels/#who-ren-runs-as). With `fallback: false`, Ren doesn't run those messages.
 
-Fallback is on by default, and off for a public GitHub repository. If you leave the key out, apply keeps the channel's current setting.
-
-For a new channel, apply makes you the fallback user. For an existing one, it keeps the current fallback user as long as they can still work in the space, and otherwise switches to you.
+Fallback is on by default, and off for a public GitHub repository. For a new channel, apply makes you the fallback user.
 
 ## Triggers
 
@@ -84,14 +84,3 @@ example-app:
 ```
 
 The agent gets `prompt` as its message. To use the default prompt, `Review this pull request.`, write `pull_request_ready: {}`.
-
-## Change and remove
-
-Changing `agent`, `fallback` or `triggers` updates the channel. To move a channel to another space, move both its entries. To disconnect it, remove both.
-
-## When it fails
-
-| Message                                                                                        | Fix                                                                                                   |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `This Slack place is mapped to a space that the folder does not manage. Unmap it there first.` | The Slack channel is connected to a personal space. Select **Unlink** in that space, then plan again. |
-| `Ren can’t reach this place on Slack.`                                                         | Check `channelId`. For a private Slack channel, run `/invite @Ren` in it.                             |
