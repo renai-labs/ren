@@ -7,6 +7,12 @@ summary: Ask Ren for work where your team talks
 
 A channel links a [space](/docs/spaces/) to a place where your team already communicates, such as a Slack channel or a GitHub repository.
 
+<Screenshot
+  shot="channels/settings-slack"
+  alt="Settings Channels Slack for the Northwind workspace, listing Slack channels such as #deploys, #growth and #onboarding, each linked to a space: General Space, Engineering, Growth or Customer Success"
+  caption="Settings → Channels → Slack: each Slack channel and the space it works in."
+/>
+
 | Channel                          | A space links to    | One chat is                |
 | -------------------------------- | ------------------- | -------------------------- |
 | [Slack](/docs/channels/slack/)   | A Slack channel     | A Slack thread             |
@@ -14,9 +20,7 @@ A channel links a [space](/docs/spaces/) to a place where your team already comm
 
 ## How a channel works
 
-1. Someone mentions Ren in a linked place.
-2. Ren starts a chat in the linked space, with the apps, repositories and instructions of that space.
-3. Ren replies in the same thread, issue or pull request. A reply there continues the chat.
+When someone mentions Ren in a linked place, Ren starts a chat in the linked space, with that space's apps, repositories and instructions. It replies in the same thread, issue or pull request, and a reply there continues the chat.
 
 Each chat also shows in the app, so you can continue it there. Its header links back to the conversation.
 
@@ -28,25 +32,37 @@ First connect Slack or GitHub in **Settings → Channels**. Then link places in 
 
 Use this to link places to a space you are a member of.
 
-1. Open the space, then **Channels**, and select **Add channel**.
-2. Pick the Slack channels or repositories, then link them.
+<Steps>
+
+1. Open the space → **Channels**, and select **Add channel**.
+
+2. Pick the Slack channels or repositories, and select **Link**.
+
+</Steps>
 
 ### From settings
 
 Use this to see every place and its space in one list. An admin can link places to any shared space.
 
-1. Open **Settings → Channels**, then Slack or GitHub, and select **Add channel** or **Add repo**.
-2. Pick the places and the space, then select **Link**.
+<Steps>
+
+1. Open **Settings → Channels → Slack** or **GitHub**, and select **Add channel** or **Add repo**.
+
+2. Pick the places and the space, and select **Link**.
+
+</Steps>
 
 Each place links to one space.
 
 ## Who Ren runs as
 
-Ren runs each message as a Ren member, so it uses that member's access. It picks the member in this order:
+Ren runs each message as the first of these that can work in the space. It uses that person's access.
 
-1. **The sender.** Ren matches the sender by the Slack or GitHub account they signed in to Ren with, or by the email on their Slack or GitHub profile. The sender must be able to work in the space.
-2. **The fallback user.** When Ren cannot match the sender, or the sender cannot work in the space, Ren runs as the person in **Run unknown senders as**. Select `✎` on a linked place to change it.
-3. **Nobody.** When the fallback user is **Nobody**, or has left the space, Ren does not run the message. It replies with the reason.
+| Order | Ren runs as       | How Ren finds them                                                                                          |
+| ----- | ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1     | The sender        | By the Slack or GitHub account they signed in to Ren with, or by the email on their Slack or GitHub profile |
+| 2     | The fallback user | The person in **Run unknown senders as**. Select `✎` on a linked place to change it.                        |
+| 3     | Nobody            | Ren does not run the message, and replies with the reason                                                   |
 
 Each channel's page lists where it has a fallback user by default.
 
