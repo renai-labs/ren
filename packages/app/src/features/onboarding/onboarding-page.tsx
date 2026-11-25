@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   IconCheck,
@@ -7,6 +8,7 @@ import {
   IconDownload,
   IconPuzzle,
 } from "@tabler/icons-react"
+import { buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
 import { Progress } from "@ren/ui/progress"
 import { cn } from "cn"
@@ -21,9 +23,9 @@ import { StepAction } from "./step-action.js"
 const row =
   "flex w-full items-center gap-3 text-left outline-none transition-colors duration-150 ease-out focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset enabled:hover:bg-muted/50 disabled:cursor-progress motion-reduce:transition-none"
 
-const taskRow = cn(row, "min-h-16 items-start px-4 py-3")
+const taskRow = cn(row, "group/row min-h-16 items-start px-4 py-3")
 
-const partRow = cn(row, "group/part min-h-10 py-2 pr-4 pl-11")
+const partRow = cn(row, "group/row min-h-10 py-2 pr-4 pl-11")
 
 const glyphs = { import: IconDownload, plugin: IconPuzzle } as const
 
@@ -146,6 +148,21 @@ function TaskText(props: { state: Onboarding.TaskState; count?: string | undefin
   )
 }
 
+function ActionHint(props: { children: ReactNode }) {
+  return (
+    <span
+      className={buttonVariants({
+        variant: "secondary",
+        size: "sm",
+        className:
+          "pointer-events-none -my-0.75 shrink-0 transition-opacity duration-150 ease-out pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-visible/row:opacity-100 motion-reduce:transition-none",
+      })}
+    >
+      {props.children}
+    </span>
+  )
+}
+
 function TaskRow(props: { state: Onboarding.TaskState }) {
   const state = props.state
   const action = state.task.action
@@ -159,6 +176,7 @@ function TaskRow(props: { state: Onboarding.TaskState }) {
     return (
       <StepAction action={action} className={taskRow}>
         {content}
+        <ActionHint>{action.label}</ActionHint>
       </StepAction>
     )
   return (
@@ -180,6 +198,10 @@ function GroupRow(props: { state: Onboarding.TaskState }) {
       <CollapsibleTrigger className={cn(taskRow, "group/trigger")}>
         <StepMark done={state.done} />
         <TaskText state={state} count={count} />
+        <ActionHint>
+          <span className="group-data-panel-open/trigger:hidden">Show steps</span>
+          <span className="hidden group-data-panel-open/trigger:inline">Hide steps</span>
+        </ActionHint>
         <IconChevronDown
           aria-hidden
           className="my-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-data-panel-open/trigger:rotate-180 motion-reduce:transition-none"
@@ -230,9 +252,7 @@ function PartRow(props: { part: Onboarding.Part; done: boolean }) {
           Done
         </span>
       ) : (
-        <span className="text-xs text-muted-foreground transition-opacity duration-150 ease-out pointer-fine:opacity-0 pointer-fine:group-hover/part:opacity-100 pointer-fine:group-focus-visible/part:opacity-100 motion-reduce:transition-none">
-          {part.action.label}
-        </span>
+        <ActionHint>{part.action.label}</ActionHint>
       )}
     </>
   )

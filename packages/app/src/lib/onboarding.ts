@@ -115,7 +115,7 @@ export const personal: ReadonlyArray<Task> = [
         step: "memory.imported",
         title: "Import memory from another agent",
         mark: { glyph: "import" },
-        action: { kind: "import-memory", label: "Import" },
+        action: { kind: "import-memory", label: "Import memory" },
       },
       {
         step: "custom-app.created",
@@ -160,7 +160,7 @@ export const organization: ReadonlyArray<Task> = [
     id: "provider.connected",
     title: "Connect Claude or ChatGPT",
     description: "Agents then run on your subscription instead of Ren credits.",
-    action: { kind: "provider", label: "Connect" },
+    action: { kind: "provider", label: "Connect subscription" },
   },
   {
     id: "member.joined",
@@ -174,14 +174,14 @@ export const organization: ReadonlyArray<Task> = [
     title: "Build an artifact",
     description: "Ren builds a dashboard or report and publishes it at its own link.",
     reward: { usd: 1 },
-    action: { kind: "chat", label: "Build", prompt: "Make an artifact of " },
+    action: { kind: "chat", label: "Start a chat", prompt: "Make an artifact of " },
   },
   {
     id: "automation.created",
     title: "Create an automation",
     description: "An agent runs in a space on a schedule, or each time another app sends a request.",
     reward: { usd: 2 },
-    action: { kind: "page", label: "Create", to: "/automations/new" },
+    action: { kind: "page", label: "New automation", to: "/automations/new" },
   },
   {
     id: "factory.created",
@@ -190,7 +190,7 @@ export const organization: ReadonlyArray<Task> = [
     reward: { usd: 1 },
     action: {
       kind: "chat",
-      label: "Set up",
+      label: "Start a chat",
       prompt:
         "Set up a factory in this space: a triager reads each new bug and hands it to a fixer, and a reviewer checks the fixer’s pull request.",
     },
