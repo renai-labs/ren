@@ -121,19 +121,12 @@ export const make = Effect.gen(function* () {
     const declared = context.spaces.flatMap((space) =>
       Object.entries(space.declaration.apps).map(([slug, app]) => ({ space: space.slug, slug, app })),
     )
-    const problems = declared.flatMap((entry) => [
-      ...(taken.has(entry.slug) || outOfScope.has(entry.slug)
-        ? [
-            {
-              path: path(entry.space, entry.slug),
-              message: `App slug “${entry.slug}” is taken by another app. Choose another slug.`,
-            },
-          ]
-        : []),
-      ...((entry.app.renamedFrom ?? []).length > 0
-        ? [{ path: path(entry.space, entry.slug), message: "Infra does not rename apps yet. Remove renamedFrom." }]
-        : []),
-    ])
+    const problems = declared
+      .filter((entry) => taken.has(entry.slug) || outOfScope.has(entry.slug))
+      .map((entry) => ({
+        path: path(entry.space, entry.slug),
+        message: `App slug “${entry.slug}” is taken by another app. Choose another slug.`,
+      }))
 
     const declaredBySlug = new Map(declared.map((entry) => [entry.slug, entry]))
     const liveIdOf = new Map(context.spaces.map((space) => [space.slug, space.liveId]))

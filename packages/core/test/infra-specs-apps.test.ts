@@ -117,7 +117,7 @@ describe("InfraSpecs apps", () => {
     }),
   )
 
-  it.live("a slug that another app holds, or a rename, is a problem", () =>
+  it.live("a slug that another app holds is a problem", () =>
     Effect.gen(function* () {
       const infra = yield* InfraSpecs.Service
       const o = yield* InfraFixture.org
@@ -131,17 +131,13 @@ describe("InfraSpecs apps", () => {
 
       const plan = yield* infra.plan(o.admin, {
         bindings: o.bindings,
-        spec: InfraFixture.spec({ home: { name: "Home", apps: notes(slug, { renamedFrom: ["older"] }) } }),
+        spec: InfraFixture.spec({ home: { name: "Home", apps: notes(slug) } }),
       })
 
       expect(plan.problems).toEqual([
         {
           path: `spaces/home/apps/${slug}`,
           message: `App slug “${slug}” is taken by another app. Choose another slug.`,
-        },
-        {
-          path: `spaces/home/apps/${slug}`,
-          message: "Infra does not rename apps yet. Remove renamedFrom.",
         },
       ])
     }),

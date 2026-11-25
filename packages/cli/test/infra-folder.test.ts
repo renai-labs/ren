@@ -99,6 +99,7 @@ describe("InfraFolder.validate", () => {
       "spaces/support/agents/qa/agent.yaml": "settings:\n  instructions: Test.\n",
       "spaces/support/agents/qa/instructions.md": "Test it.\n",
       "spaces/support/memory/people/ana.md": "Ana leads design.\n",
+      "spaces/support/apps/notes/app.yaml": "name: Notes\ndescription: Writes notes.\nrenamedFrom: [changelog]\n",
       "memory/memory.md": "- Be brief.\n",
       "memory/logo.png": new Uint8Array([137, 80, 78, 71, 0, 1]),
       "deploy.yaml": "organization: acme\nspaces:\n  support:\n    timezone: Asia/Kolkata\n",
@@ -113,6 +114,7 @@ describe("InfraFolder.validate", () => {
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
       "spaces/engineering/space.yaml: name: Missing key",
       "spaces/support/agents/qa: Put the instructions in instructions.md only.",
+      "spaces/support/apps/notes/app.yaml: renamedFrom: Ren cannot rename an app.",
       "spaces/support/memory: A memory folder needs memory.md.",
     ])
   })

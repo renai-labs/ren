@@ -16265,6 +16265,75 @@
         "required": ["name", "description", "slug", "ownerSpaceId"],
         "additionalProperties": false
       },
+      "App.Declaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "$ref": "#/components/schemas/Primitive.HttpsUrl"
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/Packages.Setup"
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Declaration"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Declaration"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug_1"
+            }
+          },
+          "webhooks": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Webhook.Preset"
+            },
+            "description": "Webhooks that a space can turn on. Each one reads its name, message and parser from here."
+          }
+        },
+        "required": ["name", "description"],
+        "additionalProperties": false
+      },
       "App.ID": {
         "type": "string",
         "pattern": "^app_"
@@ -20989,80 +21058,7 @@
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
-                  "minLength": 1,
-                  "maxLength": 256
-                },
-                "description": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "icon": {
-                  "$ref": "#/components/schemas/Primitive.HttpsUrl"
-                },
-                "requiredCredentials": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Credential.Requirement"
-                  }
-                },
-                "environment": {
-                  "$ref": "#/components/schemas/Packages.Setup"
-                },
-                "skills": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-                  },
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/Skill.Declaration"
-                  }
-                },
-                "mcps": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-                  },
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/Mcp.Declaration"
-                  }
-                },
-                "dependsOn": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Primitive.Slug_1"
-                  }
-                },
-                "webhooks": {
-                  "type": "object",
-                  "propertyNames": {
-                    "type": "string",
-                    "maxLength": 64,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-                  },
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/Webhook.Preset"
-                  },
-                  "description": "Webhooks that a space can turn on. Each one reads its name, message and parser from here."
-                },
-                "renamedFrom": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Primitive.Slug_1"
-                  },
-                  "description": "Earlier names. Apply renames the live row that has one of them, so its history stays."
-                }
-              },
-              "required": ["name", "description"],
-              "additionalProperties": false
+              "$ref": "#/components/schemas/App.Declaration"
             }
           },
           "schedules": {

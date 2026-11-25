@@ -39,7 +39,7 @@ Not built. The registry holds listings: templates for apps and factories (a fact
 
 1. **Installing a listing.** The command that copies a listing into a space, and what it writes.
 2. **Environment packages.** Nothing merges an app's `environment` (`Packages.Setup`) into a template. Ren runs it as setup steps on each chat's hand machine, after the machine starts from the space's template (`brain/src/hand/copies.ts`), and no check compares the packages of two apps. Provider config is specific to each provider: the Docker provider takes an `image` and has no package list. Decide: a template builds the packages of the space's apps into its image, or validation checks that the image has them.
-3. **Renaming an environment template.** A rename in the folder plans an archive and a create, which a space that still uses the template blocks. Decide whether templates get `renamedFrom` like spaces, agents and apps.
+3. **Renaming an environment template.** A rename in the folder plans an archive and a create, which a space that still uses the template blocks. Decide whether templates get `renamedFrom` like spaces and agents.
 4. **Credential tiers.** A personal OAuth connection, for example a user's Gmail, is not a space value. Decide whether a binding can name a person's credential.
 5. **`pull` and bindings.** `pull` writes the spec. Decide whether it also writes `deploy.yaml` with the live channel ids and credential names. It never writes credential values.
 6. **Agents.** Visual character and voice, and the view order of agents in a space.

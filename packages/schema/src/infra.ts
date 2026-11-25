@@ -113,9 +113,7 @@ export const SpaceDeclaration = Schema.Struct({
   agents: Schema.Record(Agent.Name, Schema.Struct({ ...Agent.Declaration.fields, renamedFrom: RenamedFrom })).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
-  apps: Schema.Record(Primitive.Slug, Schema.Struct({ ...App.Declaration.fields, renamedFrom: RenamedFrom })).pipe(
-    Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
-  ),
+  apps: Schema.Record(Primitive.Slug, App.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   schedules: Schema.Record(Primitive.Slug, Schedule.Declaration).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
@@ -216,13 +214,6 @@ export const Spec = Schema.Struct({
               defined: (earlier: string) => owners.agents.has(earlier),
             })),
           ),
-          ...apps.map((owned) => ({
-            noun: "App",
-            path: ["spaces", owned.space, "apps", owned.name],
-            name: owned.name,
-            renamedFrom: owned.app.renamedFrom,
-            defined: (earlier: string) => owners.apps.has(earlier),
-          })),
         ].flatMap((renamed) =>
           (renamed.renamedFrom ?? []).filter(renamed.defined).map((earlier) => ({
             path: [...renamed.path, "renamedFrom"],

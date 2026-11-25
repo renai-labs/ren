@@ -187,6 +187,8 @@ export const validate = async (root: string): Promise<Validated> => {
   const app = async (folder: string) => {
     const value = (await yaml(`${folder}app.yaml`)) ?? {}
     if (!Predicate.isObject(value)) return value
+    if ("renamedFrom" in value)
+      problems.push(problem(`${folder}app.yaml`, ["renamedFrom"], "Ren cannot rename an app."))
     const mcps = await yaml(`${folder}mcps.yaml`)
     return {
       ...value,

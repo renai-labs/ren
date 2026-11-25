@@ -10289,7 +10289,6 @@ export type InfraPullInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -10700,7 +10699,6 @@ export type InfraPullInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -11111,7 +11109,6 @@ export type InfraPullInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -11527,7 +11524,6 @@ export type InfraPlanInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -11938,7 +11934,6 @@ export type InfraPlanInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -12349,7 +12344,6 @@ export type InfraPlanInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -12765,7 +12759,6 @@ export type InfraApplyInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -13178,7 +13171,6 @@ export type InfraApplyInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -13591,7 +13583,6 @@ export type InfraApplyInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -14004,7 +13995,6 @@ export type InfraApplyInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
@@ -14417,7 +14407,6 @@ export type InfraApplyInput = {
                   readonly setup: string
                 }
               }
-              readonly renamedFrom?: ReadonlyArray<string>
             }
           }
           readonly schedules?: {
