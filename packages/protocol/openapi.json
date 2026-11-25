@@ -14452,134 +14452,6 @@
         "summary": "Get the onboarding checklists"
       }
     },
-    "/onboarding/report": {
-      "post": {
-        "tags": ["onboarding"],
-        "operationId": "onboarding.report",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The caller’s onboarding checklists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Onboarding.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Complete a step of the caller’s own checklist that Ren cannot check, such as starring Ren on GitHub. Reporting it again keeps the first time.",
-        "summary": "Report an onboarding step",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Onboarding.ReportInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/onboarding/memory": {
-      "post": {
-        "tags": ["onboarding"],
-        "operationId": "onboarding.importMemory",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The caller’s onboarding checklists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Onboarding.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Add what another agent exported about the caller to the end of a space’s root memory file, and complete the caller’s memory import step.",
-        "summary": "Import memory from another agent",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Onboarding.ImportMemoryInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
     "/onboarding/dismiss": {
       "post": {
         "tags": ["onboarding"],
@@ -23301,21 +23173,6 @@
         "required": ["checklist"],
         "additionalProperties": false
       },
-      "Onboarding.ImportMemoryInput": {
-        "type": "object",
-        "properties": {
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID_7"
-          },
-          "content": {
-            "type": "string",
-            "minLength": 1,
-            "description": "What the other agent exported, as the person pasted it."
-          }
-        },
-        "required": ["spaceId", "content"],
-        "additionalProperties": false
-      },
       "Onboarding.Info": {
         "type": "object",
         "properties": {
@@ -23336,28 +23193,13 @@
         "description": "An action that counts toward the organization’s onboarding, in the order the checklist shows it."
       },
       "Onboarding.PersonalStep": {
-        "type": "string",
-        "enum": ["github.starred", "gmail.connected", "memory.imported"],
-        "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
-      },
-      "Onboarding.ReportInput": {
-        "type": "object",
-        "properties": {
-          "step": {
-            "$ref": "#/components/schemas/Onboarding.ReportedStep"
-          }
-        },
-        "required": ["step"],
-        "additionalProperties": false
-      },
-      "Onboarding.ReportedStep": {
         "anyOf": [
           {
             "type": "string",
-            "enum": ["github.starred"]
+            "enum": ["gmail.connected"]
           }
         ],
-        "description": "A personal step that Ren cannot check, so it trusts the person who reports it."
+        "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
       },
       "Onboarding.Step": {
         "anyOf": [
@@ -27523,11 +27365,6 @@
         "type": "string",
         "pattern": "^spc_",
         "description": "The one space that the shared profile lists."
-      },
-      "Space.ID_7": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "The space whose root memory gets the import."
       },
       "Space.Info": {
         "type": "object",

@@ -2,7 +2,6 @@ export * as Onboarding from "./onboarding.js"
 
 import { Schema } from "effect"
 import { Identifier } from "./identifier.js"
-import { Space } from "./space.js"
 
 export const ID = Identifier.make("onb", "Onboarding.ID")
 export type ID = typeof ID.Type
@@ -13,9 +12,7 @@ export const steps = {
     memberJoined: "member.joined",
   },
   personal: {
-    githubStarred: "github.starred",
     gmailConnected: "gmail.connected",
-    memoryImported: "memory.imported",
   },
 } as const
 
@@ -30,12 +27,6 @@ export const PersonalStep = Schema.Literals(Object.values(steps.personal)).annot
   description: "An action that counts toward a person’s own onboarding in the organization, in checklist order.",
 })
 export type PersonalStep = typeof PersonalStep.Type
-
-export const ReportedStep = Schema.Literals([steps.personal.githubStarred]).annotate({
-  identifier: "Onboarding.ReportedStep",
-  description: "A personal step that Ren cannot check, so it trusts the person who reports it.",
-})
-export type ReportedStep = typeof ReportedStep.Type
 
 export const Step = Schema.Union([OrganizationStep, PersonalStep]).annotate({ identifier: "Onboarding.Step" })
 export type Step = typeof Step.Type
@@ -64,17 +55,6 @@ export const Info = Schema.Struct({
   }),
   personal: Checklist.annotate({ description: "The caller’s own checklist in the organization." }),
 }).annotate({ identifier: "Onboarding.Info", description: "The caller’s onboarding checklists." })
-
-export interface ReportInput extends Schema.Schema.Type<typeof ReportInput> {}
-export const ReportInput = Schema.Struct({ step: ReportedStep }).annotate({
-  identifier: "Onboarding.ReportInput",
-})
-
-export interface ImportMemoryInput extends Schema.Schema.Type<typeof ImportMemoryInput> {}
-export const ImportMemoryInput = Schema.Struct({
-  spaceId: Space.ID.annotate({ description: "The space whose root memory gets the import." }),
-  content: Schema.NonEmptyString.annotate({ description: "What the other agent exported, as the person pasted it." }),
-}).annotate({ identifier: "Onboarding.ImportMemoryInput" })
 
 export interface DismissInput extends Schema.Schema.Type<typeof DismissInput> {}
 export const DismissInput = Schema.Struct({ checklist: ChecklistKind }).annotate({

@@ -334,10 +334,6 @@ import type {
   BillingCancelOutput,
   BillingPortalOutput,
   OnboardingGetOutput,
-  OnboardingReportInput,
-  OnboardingReportOutput,
-  OnboardingImportMemoryInput,
-  OnboardingImportMemoryOutput,
   OnboardingDismissInput,
   OnboardingDismissOutput,
   ChannelInstallListInput,
@@ -2830,30 +2826,6 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<OnboardingGetOutput>(
           { method: "GET", path: `/onboarding`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
-          requestOptions,
-        ),
-      report: (input: OnboardingReportInput, requestOptions?: RequestOptions) =>
-        request<OnboardingReportOutput>(
-          {
-            method: "POST",
-            path: `/onboarding/report`,
-            body: { step: input["step"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      importMemory: (input: OnboardingImportMemoryInput, requestOptions?: RequestOptions) =>
-        request<OnboardingImportMemoryOutput>(
-          {
-            method: "POST",
-            path: `/onboarding/memory`,
-            body: { spaceId: input["spaceId"], content: input["content"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404],
-            empty: false,
-          },
           requestOptions,
         ),
       dismiss: (input: OnboardingDismissInput, requestOptions?: RequestOptions) =>
