@@ -74,6 +74,7 @@ import {
   DropdownMenuTrigger,
 } from "@ren/ui/dropdown-menu"
 import type { CatalogApp } from "../lib/apps.js"
+import { ReducedMotion } from "../lib/reduced-motion.js"
 import { blockImage, inlineImage } from "./markdown-image.js"
 import { useCopy } from "../lib/use-copy.js"
 import { VideoUrl } from "../lib/video-url.js"
@@ -559,6 +560,8 @@ const streamdownIcons = {
 
 const controls = { code: false, table: false, mermaid: true } as const
 
+const streamAnimation = { animation: "fadeIn", duration: 180, easing: "ease-out", sep: "word" } as const
+
 const linkSafety = { enabled: false } as const
 
 const noApps: ReadonlyArray<CatalogApp> = []
@@ -590,6 +593,7 @@ export function Markdown(props: {
   }, [wantsMermaid])
   const dark = useSyncExternalStore(wantsMermaid ? subscribeDark : unsubscribed, isDark, () => false)
   const user = props.source === "user"
+  const reduced = ReducedMotion.useReduced()
   const workspace = props.workspaceImage !== undefined
   const videos = props.videos === true
   // oxlint-disable-next-line ren/no-comments -- Streamdown re-renders every block of a message when these change identity, which on each streamed chunk made every finished block and earlier message render again.
@@ -635,6 +639,7 @@ export function Markdown(props: {
           remarkPlugins={user ? userRemarkPlugins : remarkPlugins}
           components={components}
           isAnimating={props.streaming === true}
+          animated={user || reduced ? false : streamAnimation}
           remarkRehypeOptions={remarkRehypeOptions}
           plugins={plugins}
           mermaid={dark ? mermaidOptions.dark : mermaidOptions.light}
