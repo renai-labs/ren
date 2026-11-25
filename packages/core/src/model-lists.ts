@@ -4,7 +4,7 @@ import { PgClient } from "@effect/sql-pg"
 import { Postgres } from "@ren/db/postgres"
 import { Auth } from "@ren/schema/auth"
 import type { Models } from "@ren/schema/models"
-import { Cache, Context, Duration, Effect, Exit, Layer, Stream } from "effect"
+import { Cache, Context, Duration, Effect, Exit, Layer } from "effect"
 import { ModelGateway } from "./model-gateway.js"
 
 // oxlint-disable-next-line ren/no-comments -- One provider of an organization's list: its gateway, how it is called and its models. The gateway's address is added when a brain reads the list.
@@ -59,12 +59,8 @@ export interface Interface {
     organizationId: Auth.OrganizationID,
     owned: ModelGateway.Owned,
   ) => Effect.Effect<ReadonlyArray<Models.Info>, ModelGateway.Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- After a settings change: the organization's brains pull now.
+  // oxlint-disable-next-line ren/no-comments -- After a change of one organization's settings or seats: its brains pull now. A change for every organization reaches brains at their next pull (Providers §6.4).
   readonly refresh: (organizationId: Auth.OrganizationID) => Effect.Effect<void>
-  // oxlint-disable-next-line ren/no-comments -- A gateway says a provider's models changed: the organizations it names pull now.
-  readonly changed: (
-    change: ModelGateway.Changed,
-  ) => Effect.Effect<{ readonly notified: number }, ModelGateway.Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ModelLists") {}
@@ -130,38 +126,6 @@ export const layer = Layer.effect(
           { concurrency: "unbounded" },
         )).flat()
       }),
-      // oxlint-disable-next-line ren/no-comments -- P26: a change for every organization notifies only those that have the provider on, never 'all'.
-      changed: Effect.fn("ModelLists.changed")(function* (change) {
-        const owned = (yield* Cache.get(providers, "providers")).find((each) => each.provider.id === change.provider)
-        if (!owned) return { notified: 0 }
-        const organizationIds = change.organizationId
-          ? [Auth.OrganizationID.make(change.organizationId)]
-          : yield* owned.gateway.organizations(change.provider)
-        yield* Effect.forEach(organizationIds, notify, { concurrency: 16, discard: true })
-        return { notified: organizationIds.length }
-      }),
     })
-  }),
-)
-
-// oxlint-disable-next-line ren/no-comments -- Providers §6.4: each gateway's `changed` pushes to the organizations it names. Ren core never polls a gateway. Each stream subscribes before the layer is built, so no change is lost.
-export const layerJob = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const registry = yield* ModelGateway.Registry
-    const lists = yield* Service
-    yield* Effect.forEach(registry.gateways, (gateway) =>
-      gateway.changed.pipe(
-        Stream.runForEach((change) =>
-          lists.changed(change).pipe(
-            Effect.tap((pushed) =>
-              Effect.logInfo(`Models of ${change.provider} changed: ${pushed.notified} organizations notified`),
-            ),
-            Effect.catch((error) => Effect.logWarning("A model list change could not be pushed", error)),
-          ),
-        ),
-        Effect.withErrorReporting,
-        Effect.forkScoped({ startImmediately: true }),
-      ),
-    )
   }),
 )

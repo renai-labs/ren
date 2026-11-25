@@ -1,17 +1,10 @@
 export * as RenGateway from "./ren-gateway.js"
 
-import { Config, Context, Effect, Layer, Option, PubSub, Stream } from "effect"
+import { Config, Effect, Option } from "effect"
 import { ModelGateway } from "../model-gateway.js"
 import { RenInference } from "../ren-inference.js"
 
 export const id = "ren-gateway"
-
-// oxlint-disable-next-line ren/no-comments -- Providers §6.2: what the gateway says changed (`POST /internal/inference/changed`). The server's handler publishes; the gateway's `changed` reads.
-export class Changes extends Context.Service<Changes, PubSub.PubSub<ModelGateway.Changed>>()(
-  "@ren/core/RenGateway/Changes",
-) {}
-
-export const layerChanges = Layer.effect(Changes, PubSub.unbounded<ModelGateway.Changed>())
 
 export const configured = Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), Option.isSome)
 
@@ -33,15 +26,12 @@ export const gateway = Effect.gen(function* () {
     ),
   )
   const inference = yield* RenInference.Service
-  const changes = yield* Changes
   return {
     id,
     baseUrl: `${brainRoot}/v1`,
     headers: {},
     providers: inference.providers.pipe(Effect.mapError(unavailable)),
     models: (provider, organizationId) => inference.models(provider, organizationId).pipe(Effect.mapError(unavailable)),
-    changed: Stream.fromPubSub(changes),
-    organizations: (provider) => inference.organizations(provider).pipe(Effect.mapError(unavailable)),
     grant: (input) =>
       inference.grant(input.brainId, input.organizationId, input.spaceId).pipe(
         Effect.mapError(unavailable),

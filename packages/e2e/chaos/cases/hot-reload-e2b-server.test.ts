@@ -242,7 +242,6 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
               Models.layer.pipe(
                 Layer.provideMerge(ModelLists.layer),
                 Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
-                Layer.provide(RenGateway.layerChanges),
                 Layer.provide(RenInference.layer.pipe(Layer.provide([Signer.layerLocal, Access.layer]))),
               ),
             ),

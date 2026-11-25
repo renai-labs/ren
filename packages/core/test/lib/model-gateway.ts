@@ -4,7 +4,7 @@ import { expect, test } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
-import { DateTime, Duration, Effect, PubSub, Redacted, Ref, Stream } from "effect"
+import { DateTime, Duration, Effect, Redacted, Ref } from "effect"
 import { ModelGateway } from "../../src/model-gateway.js"
 
 export const provider = (id: string, fields: Partial<ModelGateway.Provider> = {}): ModelGateway.Provider => ({
@@ -20,18 +20,16 @@ export const provider = (id: string, fields: Partial<ModelGateway.Provider> = {}
 
 export const model = (id: string) => ({ id, type: "chat" as const, protocol: "openai-chat" as const })
 
-// oxlint-disable-next-line ren/no-comments -- A gateway that Ren's tests drive: its providers, each provider's models per organization, the organizations that have a provider on, and the keys it mints, counted. `grant` follows the contract: one key per brain until the key nears expiry.
+// oxlint-disable-next-line ren/no-comments -- A gateway that Ren's tests drive: its providers, each provider's models per organization, and the keys it mints, counted. `grant` follows the contract: one key per brain until the key nears expiry.
 export const make = Effect.fnUntraced(function* (options: {
   readonly id?: string
   readonly providers: ReadonlyArray<ModelGateway.Provider>
   readonly keyLifetime?: Duration.Duration
   readonly fixed?: boolean
 }) {
-  const changes = yield* PubSub.unbounded<ModelGateway.Changed>()
   const lists = yield* Ref.make(new Map<string, ModelGateway.Listed>())
   const minted = yield* Ref.make(new Map<string, { readonly key: string; readonly expiresAt: DateTime.Utc }>())
   const calls = yield* Ref.make({ models: 0, grants: 0 })
-  const enabled = yield* Ref.make(new Map<string, ReadonlyArray<Auth.OrganizationID>>())
   const settings = yield* Ref.make(new Map<string, Readonly<Record<string, ModelGateway.ProviderSettings>>>())
   const keys = yield* Ref.make(new Map<string, string>())
   const limits = yield* Ref.make(new Map<string, ReadonlyArray<ModelGateway.Limit>>())
@@ -69,8 +67,6 @@ export const make = Effect.fnUntraced(function* (options: {
           all.get(listOf(providerId)) ?? { revision: "0", models: [] }
         return listed
       }),
-    changed: Stream.fromPubSub(changes),
-    organizations: (providerId) => Effect.map(Ref.get(enabled), (all) => all.get(providerId) ?? []),
     grant: (input) =>
       Effect.gen(function* () {
         yield* Ref.update(calls, (found) => ({ ...found, grants: found.grants + 1 }))
@@ -156,14 +152,9 @@ export const make = Effect.fnUntraced(function* (options: {
     calls: Ref.get(calls),
     keyOf: (providerId: string, organizationId: Auth.OrganizationID) =>
       Effect.map(Ref.get(keys), (all) => all.get(keyAt(providerId, organizationId))),
-    // oxlint-disable-next-line ren/no-comments -- Sets a provider's models (for one organization, or for all) and says so on `changed`, as a gateway does.
+    // oxlint-disable-next-line ren/no-comments -- Sets a provider's models, for one organization or for all.
     setModels: (providerId: string, listed: ModelGateway.Listed, organizationId?: Auth.OrganizationID) =>
-      Effect.gen(function* () {
-        yield* Ref.update(lists, (all) => new Map(all).set(listOf(providerId, organizationId), listed))
-        yield* PubSub.publish(changes, { provider: providerId, ...(organizationId && { organizationId }) })
-      }),
-    setOrganizations: (providerId: string, organizationIds: ReadonlyArray<Auth.OrganizationID>) =>
-      Ref.update(enabled, (all) => new Map(all).set(providerId, organizationIds)),
+      Ref.update(lists, (all) => new Map(all).set(listOf(providerId, organizationId), listed)),
     // oxlint-disable-next-line ren/no-comments -- The gateway's settings and model lists fail, as when its service is slow or answers 5xx; keys still work.
     setListsDown: (down: boolean) => Ref.set(listsDown, down),
     setLimits: (providerId: string, found: ReadonlyArray<ModelGateway.Limit>) =>

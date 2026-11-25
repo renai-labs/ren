@@ -60,7 +60,7 @@ const InferenceGroup = HttpApiGroup.make("inference")
         identifier: "inference.changed",
         summary: "A provider’s models changed",
         description:
-          "The model gateway says that a provider’s models changed: for one organization (a seat) or, without `organizationId`, for every organization (models.dev, Ren’s list). Ren tells the brains of those organizations to pull. Only the usage ingest key.",
+          "The inference service says that one organization’s models of a provider changed, such as after a seat sign-in. Ren tells that organization’s brains to pull. Only the usage ingest key.",
       }),
     ),
   )

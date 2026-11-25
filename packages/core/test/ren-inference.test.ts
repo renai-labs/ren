@@ -53,7 +53,6 @@ const it = testEffect(
   Models.layer.pipe(
     Layer.provideMerge(ModelLists.layer),
     Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
-    Layer.provideMerge(RenGateway.layerChanges),
     Layer.provideMerge(RenInference.layer),
     Layer.provide([Signer.layerLocal, FetchHttpClient.layer, Access.layer]),
     Layer.provideMerge(Testing.layer),

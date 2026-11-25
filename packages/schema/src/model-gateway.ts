@@ -67,10 +67,11 @@ export const Listed = Schema.Struct({
 export interface Changed extends Schema.Schema.Type<typeof Changed> {}
 export const Changed = Schema.Struct({
   provider: Schema.NonEmptyString,
-  organizationId: Schema.optionalKey(Schema.NonEmptyString),
+  organizationId: Schema.NonEmptyString,
 }).annotate({
   identifier: "ModelGateway.Changed",
-  description: "A provider’s models changed: for one organization, or for every organization without `organizationId`.",
+  description:
+    "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull.",
 })
 
 export interface Window extends Schema.Schema.Type<typeof Window> {}

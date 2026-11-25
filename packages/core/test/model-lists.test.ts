@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
-import { Effect, Exit, Layer } from "effect"
+import { Effect, Exit } from "effect"
 import { ModelGateway } from "../src/model-gateway.js"
 import { ModelLists } from "../src/model-lists.js"
 import { testEffect } from "./lib/effect.js"
@@ -36,57 +36,6 @@ describe("ModelLists (Providers §6.4, P26)", () => {
         yield* test.setModels("ren", { revision: "2", models: [TestModelGateway.model("vendor/new")] })
         expect(modelIds(yield* lists.list(organizationId))).toEqual(["vendor/new"])
       }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
-    }),
-  )
-
-  it.live("a change for one organization notifies only that organization", () =>
-    Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({
-        providers: [TestModelGateway.provider("seats", { models: "organization" })],
-      })
-      const first = yield* Seed.organization()
-      yield* Seed.organization()
-      yield* Effect.gen(function* () {
-        const lists = yield* ModelLists.Service
-        yield* listener.collect
-        yield* lists.changed({ provider: "seats", organizationId: first })
-        expect(yield* listener.collect).toEqual([`org:${first}`])
-      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
-    }),
-  )
-
-  it.live("a change for every organization notifies only those the gateway names, never 'all'", () =>
-    Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
-      const on = yield* Seed.organization()
-      yield* Seed.organization()
-      yield* test.setOrganizations("ren", [on])
-      yield* Effect.gen(function* () {
-        yield* listener.collect
-        yield* ModelLists.Service.use((lists) => lists.changed({ provider: "ren" }))
-        expect(yield* listener.collect).toEqual([`org:${on}`])
-      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
-    }),
-  )
-
-  it.live("a gateway's `changed` reaches the organization's brains", () =>
-    Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({
-        providers: [TestModelGateway.provider("seats", { models: "organization" })],
-      })
-      const organizationId = yield* Seed.organization()
-      yield* Effect.gen(function* () {
-        yield* listener.collect
-        yield* test.setModels(
-          "seats",
-          { revision: "2", models: [TestModelGateway.model("vendor/seat")] },
-          organizationId,
-        )
-        yield* listener.awaitPayload(`org:${organizationId}`)
-      }).pipe(Effect.provide(ModelLists.layerJob.pipe(Layer.provideMerge(ModelListsTest.layer(test.gateway)))))
     }),
   )
 })

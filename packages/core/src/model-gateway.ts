@@ -6,7 +6,7 @@ import { Changed, Field, Limit, Listed, Provider, Window } from "@ren/schema/mod
 import type { Models } from "@ren/schema/models"
 import type { Provider as ProviderInput } from "@ren/schema/provider"
 import type { Space } from "@ren/schema/space"
-import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema, type Stream } from "effect"
+import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema } from "effect"
 
 export { Changed, Field, Limit, Listed, Provider, Window }
 
@@ -62,9 +62,6 @@ export interface Gateway {
   readonly providers: Effect.Effect<ReadonlyArray<Provider>, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- A shared provider's models are asked for without an organization.
   readonly models: (provider: string, organizationId?: Auth.OrganizationID) => Effect.Effect<Listed, Unavailable>
-  readonly changed: Stream.Stream<Changed>
-  // oxlint-disable-next-line ren/no-comments -- Providers §6.4: the organizations that have a provider on, for a push after a change for every organization.
-  readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- Idempotent per brain: the same valid key until it nears expiry, also after Ren core restarts (the contract suite checks it).
   readonly grant: (input: GrantInput) => Effect.Effect<Grant, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- Providers P29: the organization's settings of each provider it added or changed. A provider not in the answer has its defaults: on, its first method, no key, every model on.

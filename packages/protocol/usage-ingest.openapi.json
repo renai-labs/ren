@@ -117,7 +117,7 @@
             }
           }
         },
-        "description": "The model gateway says that a provider’s models changed: for one organization (a seat) or, without `organizationId`, for every organization (models.dev, Ren’s list). Ren tells the brains of those organizations to pull. Only the usage ingest key.",
+        "description": "The inference service says that one organization’s models of a provider changed, such as after a seat sign-in. Ren tells that organization’s brains to pull. Only the usage ingest key.",
         "summary": "A provider’s models changed",
         "requestBody": {
           "content": {
@@ -194,9 +194,9 @@
             "minLength": 1
           }
         },
-        "required": ["provider"],
+        "required": ["provider", "organizationId"],
         "additionalProperties": false,
-        "description": "A provider’s models changed: for one organization, or for every organization without `organizationId`."
+        "description": "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull."
       },
       "Space.ID": {
         "type": "string",

@@ -116,7 +116,6 @@ export interface Interface {
     provider: string,
     organizationId?: Auth.OrganizationID,
   ) => Effect.Effect<ModelGateway.Listed, Failure>
-  readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Failure>
   readonly limits: (
     organizationId: Auth.OrganizationID,
     provider: string,
@@ -528,15 +527,6 @@ export const layer = Layer.effect(
           ModelGateway.Listed,
         )
       }),
-      // oxlint-disable-next-line ren/no-comments -- Providers §6.4, §10: the organizations whose LiteLLM team allows the provider.
-      organizations: Effect.fn("RenInference.organizations")(function* (provider) {
-        return yield* call(
-          { org: renOrganization },
-          "GET",
-          `/v1/providers/${encodeURIComponent(provider)}/organizations`,
-          Schema.Array(Auth.OrganizationID),
-        )
-      }),
       // oxlint-disable-next-line ren/no-comments -- Providers §9.3, §10: the free cap of a free model, and the windows of the seat when it is the provider's.
       limits: Effect.fn("RenInference.limits")(function* (organizationId, provider, query) {
         const search = new URLSearchParams({ model: query.model, ...(query.seat && { seat: query.seat }) })
@@ -576,7 +566,6 @@ export const layerNone = Layer.succeed(
     saveKey: () => Effect.fail(notConfigured()),
     removeKey: () => Effect.fail(notConfigured()),
     models: () => Effect.fail(notConfigured()),
-    organizations: () => Effect.fail(notConfigured()),
     limits: () => Effect.fail(notConfigured()),
   }),
 )

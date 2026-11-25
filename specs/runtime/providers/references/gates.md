@@ -158,7 +158,9 @@ Imports: `@opencode/core/plugin/provider/claude-agent/{claude/io,claude/sessions
 
 A turn on the Claude runtime still works (GR1).
 
-## GR3. A change for every organization, under load
+## GR3. A change for every organization, under load (withdrawn)
+
+Withdrawn: Ren no longer pushes a change for every organization; brains read it at their next pull (README §6.4). The test is removed. The record below is kept.
 
 **Setup.** `core/test/model-lists.slow.test.ts`: 2,000 organizations. The test gateway says 1,000 of them have Groq on (`organizations("groq")`). The gateway reports a change of Groq's models for every organization.
 

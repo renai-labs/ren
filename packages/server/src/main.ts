@@ -171,17 +171,11 @@ const models = Layer.unwrap(
   Effect.map(RenGateway.configured, (isConfigured) =>
     Models.layer.pipe(
       Layer.provideMerge(ProviderSettings.layer),
-      Layer.provideMerge(ModelLists.layerJob),
       Layer.provideMerge(ModelLists.layer),
       Layer.provideMerge(ModelGateway.layer(isConfigured ? [RenGateway.gateway] : [])),
     ),
   ),
-).pipe(
-  Layer.provideMerge(RenGateway.layerChanges),
-  Layer.provide(FetchHttpClient.layer),
-  Layer.provideMerge(RenInference.layerConfig),
-  Layer.provide(Access.layer),
-)
+).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),

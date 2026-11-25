@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto"
-import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
+import { ModelLists } from "@ren/core/model-lists"
 import { Usage } from "@ren/core/usage"
 import { ForbiddenError, UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
 import { UsageAuthentication, UsageIngestApi, UsageKey } from "@ren/protocol/usage-ingest"
-import { Config, Effect, Layer, Option, PubSub, Redacted } from "effect"
+import { Auth } from "@ren/schema/auth"
+import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 const digest = (key: Redacted.Redacted) => new Bun.CryptoHasher("sha256").update(Redacted.value(key)).digest()
@@ -32,16 +33,16 @@ export const UsageAuthenticationLayer = Layer.effect(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Providers §10: only the gateway's usage key, never the integrations key, says a provider's models changed.
+// oxlint-disable-next-line ren/no-comments -- Providers §10: only the inference service's usage key, never the integrations key, says one organization's models changed. The push goes through Postgres, so it reaches the brains of every Ren process.
 export const InferenceHandler = HttpApiBuilder.group(UsageIngestApi, "inference", (handlers) =>
   Effect.gen(function* () {
-    const changes = yield* RenGateway.Changes
+    const lists = yield* ModelLists.Service
     return handlers.handle("inference.changed", (request) =>
       Effect.gen(function* () {
         const key = yield* UsageKey
         if (Option.isSome(key.onlySource))
           return yield* new ForbiddenError({ message: "This key cannot report model changes." })
-        yield* PubSub.publish(changes, request.payload)
+        yield* lists.refresh(Auth.OrganizationID.make(request.payload.organizationId))
       }),
     )
   }),

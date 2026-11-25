@@ -25,7 +25,6 @@ import { Hands } from "@ren/core/hands"
 import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
 import { ModelGateway } from "@ren/core/model-gateway"
-import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { ModelLists } from "@ren/core/model-lists"
 import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
@@ -108,7 +107,6 @@ const server = HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([
     ChaosModels.layer,
-    RenGateway.layerChanges,
     ProviderSettings.layer.pipe(
       Layer.provideMerge(ModelLists.layer),
       Layer.provideMerge(ModelGateway.layer([])),

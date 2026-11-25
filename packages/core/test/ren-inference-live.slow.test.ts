@@ -48,8 +48,7 @@ const config = ConfigProvider.layer(
   }),
 )
 
-const gateway = RenGateway.layerChanges.pipe(
-  Layer.provideMerge(RenInference.layer),
+const gateway = RenInference.layer.pipe(
   Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
   Layer.provideMerge(Testing.layer),
 )
