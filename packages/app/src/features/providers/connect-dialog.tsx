@@ -22,6 +22,7 @@ function FieldInput(props: {
   field: InferencePluginField
   value: string
   invalid: boolean
+  disabled: boolean
   onChange: (value: string) => void
 }) {
   const field = props.field
@@ -31,6 +32,7 @@ function FieldInput(props: {
     value: props.value,
     placeholder: field.placeholder,
     autoComplete: "off",
+    disabled: props.disabled,
     "aria-invalid": props.invalid || undefined,
   }
   return (
@@ -45,7 +47,7 @@ function FieldInput(props: {
           onChange={(event) => props.onChange(event.currentTarget.value)}
         />
       )}
-      {props.invalid ? <FieldError>Enter {field.label.toLowerCase()}.</FieldError> : null}
+      {props.invalid ? <FieldError>{field.label} is required.</FieldError> : null}
     </Field>
   )
 }
@@ -103,6 +105,7 @@ export function ConnectDialog(props: {
                 field={field}
                 value={values[field.name] ?? ""}
                 invalid={missing.includes(field.name)}
+                disabled={test.isPending}
                 onChange={(value) => {
                   setValues((previous) => ({ ...previous, [field.name]: value }))
                   setMissing((previous) => previous.filter((name) => name !== field.name))
@@ -122,7 +125,7 @@ export function ConnectDialog(props: {
             <Button
               type="button"
               variant="outline"
-              disabled={test.isPending}
+              disabled={test.isPending || save.isPending}
               onClick={() => {
                 if (!filled()) return
                 test.mutate(input(), {
@@ -137,7 +140,7 @@ export function ConnectDialog(props: {
             <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" disabled={save.isPending || test.isPending}>
               {save.isPending ? <Spinner data-icon="inline-start" /> : null}
               Save
             </Button>

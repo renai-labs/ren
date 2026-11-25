@@ -22,13 +22,13 @@ import {
 } from "../../components/page.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { ProviderMark } from "../../components/provider-mark.js"
-import { GoogleMark } from "../../icons/brands.js"
 import { Logomark } from "../../icons/logomark.js"
 import { Insights } from "../../lib/insights.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMembers, type Member } from "../../lib/use-members.js"
 import { UsageQuery } from "./usage-query.js"
 import { UsageSearch } from "./usage-search.js"
+import { useProviderLogo } from "../../lib/use-provider-logo.js"
 
 const tabLabels: Readonly<Record<UsageSearch.Breakdown, string>> = {
   space: "Spaces",
@@ -46,8 +46,6 @@ const nameHeads: Readonly<Record<UsageSearch.Breakdown, string>> = {
   provider: "Provider",
 }
 
-const providerMarks: Readonly<Record<string, string>> = { anthropic: "Anthropic", openai: "OpenAI" }
-
 const overlay =
   "after:absolute after:inset-0 focus-visible:ring-0 focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
 
@@ -58,9 +56,8 @@ const nameOf = (by: UsageSearch.Breakdown, row: InsightsRow, member: Member | un
 }
 
 function ProviderIcon(props: { provider: string }) {
-  if (props.provider === "google") return <GoogleMark className="size-4 shrink-0" />
-  const mark = providerMarks[props.provider]
-  if (mark) return <ProviderMark provider={mark} />
+  const logo = useProviderLogo(props.provider)
+  if (logo) return <ProviderMark provider={props.provider} logo={logo} />
   return <IconCpu className="size-4 shrink-0 text-muted-foreground" />
 }
 

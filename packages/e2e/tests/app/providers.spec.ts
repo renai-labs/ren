@@ -15,7 +15,7 @@ test("an admin connects a key from the grid (bad, then good) and turns the provi
 
   const connect = page.getByRole("dialog", { name: "Connect Groq" })
   await connect.getByRole("button", { name: "Save" }).click()
-  await expect(connect.getByText("Enter api key.")).toBeVisible()
+  await expect(connect.getByText("API key is required.")).toBeVisible()
   await connect.getByLabel("API key").fill("sk-bad-0000")
   await connect.getByRole("button", { name: "Save" }).click()
   await expect(connect.getByText("Invalid API key.")).toBeVisible()

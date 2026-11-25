@@ -9,6 +9,7 @@ import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
 import { SubscriptionLimits } from "../../components/subscription-limits.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { useProviderLogo } from "../../lib/use-provider-logo.js"
 
 const link = "block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50 *:h-full"
 
@@ -34,12 +35,13 @@ const sampleConnection: RenInferenceConnection = {
 
 function SubscriptionSummary(props: { connection: RenInferenceConnection }) {
   const connection = props.connection
+  const logo = useProviderLogo(connection.providerId)
   return (
     <Link to="/settings/providers" className={link}>
       <Card className="gap-3 border px-4 ring-0">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-            <ProviderMark provider={connection.providerName} />
+            <ProviderMark provider={connection.providerName} logo={logo} />
             <span className="truncate">{connection.label}</span>
           </span>
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
