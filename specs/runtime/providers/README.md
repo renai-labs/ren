@@ -36,7 +36,7 @@ Done when:
 
 | Word          | Meaning                                                                                                                                                                    |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model gateway | An Effect plug-in in Ren core that supplies providers, their models, connections and meters (§6). The Ren gateway is one; a self-hosted LiteLLM is another                 |
+| Model gateway | An Effect plug-in in Ren core that supplies providers, their models, connections and limits (§6). The Ren gateway is one; a self-hosted LiteLLM is another                 |
 | Provider      | A source of models that an organization turns on and connects: Ren, Anthropic, OpenAI, Google, …. A model gateway offers it; the Providers page shows one row per provider |
 | Method        | How a provider connects: `key` or `subscription`. Only Anthropic and OpenAI have `subscription`                                                                            |
 | Seat          | One connected subscription account. An organization can have several per vendor                                                                                            |
@@ -69,7 +69,7 @@ Done when:
 | P18 | A provider that an organization did not connect never runs on Ren's account                                                                                                                                                                                                                                                                                                                                              |
 | P19 | Claude models that run on a subscription or on the Claude Code runtime run on the `claude` program, through a Ren-owned setup of OpenCode's Claude Agent parts. OpenCode is not changed or patched (G4)                                                                                                                                                                                                                  |
 | P20 | ChatGPT seats use OpenAI token sharing on `api.openai.com/v1`                                                                                                                                                                                                                                                                                                                                                            |
-| P21 | Warnings: a banner above the composer, not saved. Steps 75, 80, 85, 90, 95, 100%. Each step shows once per chat, meter and reset period                                                                                                                                                                                                                                                                                  |
+| P21 | Warnings: a banner above the composer, not saved. Steps 75, 80, 85, 90, 95, 100%. Each step shows once per chat, limit and reset period                                                                                                                                                                                                                                                                                  |
 | P22 | Warning sources: Claude seats, Ren credit, the free cap. ChatGPT seats have no warnings; only a refusal at the limit                                                                                                                                                                                                                                                                                                     |
 | P23 | For a seat, the banner shows the seat that served this chat's last call                                                                                                                                                                                                                                                                                                                                                  |
 | P24 | The model chip shows `<model> · <provider>`, with `(subscription)` or `(key)` on Anthropic and OpenAI                                                                                                                                                                                                                                                                                                                    |
@@ -90,7 +90,7 @@ Done when:
                                          └──────────────┘                                            └──────────────────┘
                                                 │  RenGateway gateway (§6.2), §10 routes                       │ every call
                                                 │  providers, models, configure, keys,                             │ Bearer ren:MODELS
-                                                │  connections, meters, brain keys                             v
+                                                │  connections, limits, brain keys                             v
                                                 v                                                     ┌──────────────────┐
                                        ┌──────────────────────────┐   brain key                       │  egress          │
                                        │  Model gateway (closed)  │ <──────────────────────────────── │  swaps ren:MODELS│
@@ -154,7 +154,7 @@ Providers                                                                       
 | Connect (own key)           | A dialog with the provider's fields (most: API key; Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway, Cloudflare Workers AI and Databricks have more, §16), **Test connection**, Cancel, Save. Save runs the test first. A failed test shows the vendor's message and saves nothing |
 | Provider switch             | On or off. Off removes the provider's models from pickers at the next push                                                                                                                                                                                                                     |
 | Method (Anthropic, OpenAI)  | `API key` or `Subscription`. A change applies at the next push                                                                                                                                                                                                                                 |
-| Seats (subscription method) | One line per seat: who connected it, plan, meters (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. A seat that needs a new sign-in shows "Sign in again"                                                                                       |
+| Seats (subscription method) | One line per seat: who connected it, plan, limits (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. A seat that needs a new sign-in shows "Sign in again"                                                                                       |
 | Key line                    | The last 4 characters, who saved it, the test result. Replace, remove                                                                                                                                                                                                                          |
 | Ren provider                | Credit and today's free count. **Models ›** opens §5.2                                                                                                                                                                                                                                         |
 | Members                     | See the page. Only "Connect your …" and their own seats are active (P7)                                                                                                                                                                                                                        |
@@ -207,7 +207,7 @@ A model gateway is an Effect plug-in in `core`. It is built like a machine provi
 | `connect`       | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test                                                               | the `RenInference` key and connect routes              |
 | `disconnect`    | removes a key or a seat                                                                                                                                                             | the same                                               |
 | `connections`   | a provider's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                                                                                       | the same                                               |
-| `meters`        | the meters of a chat's model: credit, free cap, seat limits                                                                                                                         | the gateway calls in `limits.ts`                       |
+| `limits`        | the limits of a chat's model: the free cap, the limits of the seat that served it. Not the credit, which is billing's (§9.2)                                                        | the gateway calls in `limits.ts`                       |
 
 A `Grant`:
 
@@ -243,7 +243,7 @@ A provider:
 | `auth`     | one or more of: `key` with its fields (name, label, secret, multiline, placeholder); `subscription` with its sign-in label; `operator` (no form: the deployment holds the credential) |
 | `models`   | `shared` (the same list for every organization) or `organization` (depends on the organization: seats)                                                                                |
 
-The app renders a provider's fields and meters as data. It knows no provider.
+The app renders a provider's fields and limits as data. It knows no provider.
 
 The deployment chooses the gateways in `server/src/main.ts`:
 
@@ -310,7 +310,7 @@ Not built in this work. It shows that the contract fits a self-hosted Ren; build
 | `baseUrl`                              | `LITELLM_URL`                                                                                                                                                                                       |
 | `grant`                                | `Minted`: a LiteLLM virtual key per brain (`POST /key/generate`, 6 h, alias `brain-<id>`, metadata: organization, brain, space), found again by alias until it nears expiry                         |
 | `connect`, `disconnect`, `connections` | none: the owner configures LiteLLM                                                                                                                                                                  |
-| `meters`                               | none                                                                                                                                                                                                |
+| `limits`                               | none                                                                                                                                                                                                |
 
 ### 6.4 An organization's list
 
@@ -425,14 +425,16 @@ Billing holds the credit and the markup. The gateway checks credit before each R
 
 ### 9.3 Warnings
 
-| Meter        | Source                                                              | Reset                  |
-| ------------ | ------------------------------------------------------------------- | ---------------------- |
-| Claude seat  | the gateway's per-seat meters (5h and 7d, from Anthropic's answers) | the meter's reset time |
-| ChatGPT seat | none; only the refusal                                              | —                      |
-| Ren credit   | `Billing.Summary` used ÷ granted (`schema/src/billing.ts:21-22`)    | the plan cycle         |
-| Free cap     | `GET /v1/usage/free`                                                | 00:00 UTC              |
+A warning shows how much of a limit or of the credit is used. A limit is a cap that the gateway or a vendor enforces, with a reset time: the free cap and a seat's windows. The credit is the organization's balance in billing (Dodo). Neither is a billing meter.
 
-Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the chat's current model, from the `meters` of the provider's model gateway: the seat of the session's last `usage_event` with a `seat` (P23), or credit, or the free cap. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, meter and reset time.
+| Warning      | Source                                                                                                                                 | Reset                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Claude seat  | the gateway's `limits`: the seat's windows (5h and 7d, from Anthropic's answers)                                                       | the window's reset time |
+| ChatGPT seat | none; only the refusal                                                                                                                 | —                       |
+| Free cap     | the gateway's `limits`, for a free model                                                                                               | 00:00 UTC               |
+| Ren credit   | billing: `Billing.Summary` used ÷ granted (`schema/src/billing.ts:21-22`), for a model whose provider has `payer: ren` and is not free | the plan cycle          |
+
+Delivery: an endpoint `limits.get({ sessionId })` returns the warnings for the chat's current model: the `limits` of its provider's model gateway, for the model and the seat of the session's last `usage_event` with a `seat` (P23), and the credit from billing. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, limit and reset time.
 
 ### 9.4 Errors
 
@@ -461,10 +463,10 @@ The `RenGateway` gateway (§6.2) and `RenInference` call the gateway with today'
 | `PUT /v1/providers/:provider/key {fields}`                                           | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them    |
 | `DELETE /v1/providers/:provider/key`                                                 | new    | remove the key                                                                                                 |
 | `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | seats. `GET` adds each seat's provider, plan and models                                                        |
-| `GET /v1/providers/:provider/meters?sessionId=`                                      | new    | `meters`: credit, the free cap `{ used, limit, resetsAt }`, the seat meters                                    |
+| `GET /v1/providers/:provider/limits?model=&seat=`                                    | new    | `limits`: the free cap `{ used, limit, resetsAt }` for a free model, the seat's windows                        |
 | `POST /v1/keys {brainId, spaceId}`                                                   | keep   | `grant`: the brain key, `Minted`                                                                               |
 | inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | not part of the model gateway                                                                                  |
-| `PUT /v1/ren-models`, `GET /v1/catalog`, `GET /v1/usage/free`                        | remove | the gateway builds Ren's list; the free cap is a meter                                                         |
+| `PUT /v1/ren-models`, `GET /v1/catalog`, `GET /v1/usage/free`                        | remove | the gateway builds Ren's list; the free cap is a limit                                                         |
 
 Gateway → Ren core: `POST /internal/inference/changed {provider, organizationId?}` when a provider's models change: a seat (one organization) or models.dev and Ren's list (no organization). Only the usage ingest key may call it.
 
@@ -516,7 +518,7 @@ Only rules that the code does not show:
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core`  | the contract suite (§6.1) on `RenGateway`; a `Minted` grant is reused until its renewal time, a `Fixed` one until a 401; a `changed` event mints no key; the registry refuses a duplicate provider; an organization's list from settings and two gateways (a test gateway as the second); a `changed` for all organizations notifies only those whose list changed; the default model setting |
 | `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                                                                                                                                                                               |
-| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                                                                                                                                                                                    |
+| `chat`  | each banner step shows once per chat, limit and reset period; each error code maps to its text and actions                                                                                                                                                                                                                                                                                    |
 
 ### 13.3 End-to-end (`packages/e2e/chaos`)
 
