@@ -13,7 +13,7 @@ const mapFailure = <A>(effect: Effect.Effect<A, ProviderSettings.Failure>) =>
       "Primitive.NotFound": (error) => Effect.fail(new NotFoundError({ message: error.message })),
       "Primitive.Forbidden": (error) => Effect.fail(new ForbiddenError({ message: error.message })),
       "Primitive.Invalid": (error) => Effect.fail(new InvalidRequestError({ message: error.message })),
-      "ModelGateway.Unavailable": (error) =>
+      "InferencePlugin.Unavailable": (error) =>
         Effect.fail(new UnavailableError({ message: error.message, retryAfterMs })),
     }),
   )

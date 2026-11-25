@@ -1,23 +1,23 @@
-export * as RenGateway from "./ren-gateway.js"
+export * as RenInferencePlugin from "./ren.js"
 
 import { Config, Effect, Option } from "effect"
-import { ModelGateway } from "../model-gateway.js"
+import { InferencePlugin } from "../inference-plugin.js"
 import { RenInference } from "../ren-inference.js"
 
-export const id = "ren-gateway"
+export const id = "ren-inference"
 
 export const configured = Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), Option.isSome)
 
 const trimmed = (url: string) => url.replace(/\/+$/u, "")
 
-const unavailable = (cause: RenInference.Failure) => new ModelGateway.Unavailable({ message: cause.message, cause })
+const unavailable = (cause: RenInference.Failure) => new InferencePlugin.Unavailable({ message: cause.message, cause })
 
-// oxlint-disable-next-line ren/no-comments -- A 400 from the gateway is the vendor's message or a field it does not take: the person can fix it.
+// oxlint-disable-next-line ren/no-comments -- A 400 from the inference service is the vendor's message or a field it does not take: the person can fix it.
 const rejectedOr = (cause: RenInference.Failure) =>
-  cause._tag === "Primitive.Invalid" ? new ModelGateway.Rejected({ message: cause.message }) : unavailable(cause)
+  cause._tag === "Primitive.Invalid" ? new InferencePlugin.Rejected({ message: cause.message }) : unavailable(cause)
 
-// oxlint-disable-next-line ren/no-comments -- Providers §6.2: the gateway's providers and models through the Ren Inference Service; brains call its LiteLLM (`REN_INFERENCE_BRAIN_URL`) with a key it mints per brain.
-export const gateway = Effect.gen(function* () {
+// oxlint-disable-next-line ren/no-comments -- Providers §6.2: the inference service's providers and models through the Ren Inference Service; brains call its LiteLLM (`REN_INFERENCE_BRAIN_URL`) with a key it mints per brain.
+export const plugin = Effect.gen(function* () {
   const root = trimmed(yield* Config.String("REN_INFERENCE_URL"))
   const brainRoot = trimmed(
     yield* Config.String("REN_INFERENCE_BRAIN_URL").pipe(
@@ -35,7 +35,7 @@ export const gateway = Effect.gen(function* () {
     grant: (input) =>
       inference.grant(input.brainId, input.organizationId, input.spaceId).pipe(
         Effect.mapError(unavailable),
-        Effect.map((key): ModelGateway.Grant =>
+        Effect.map((key): InferencePlugin.Grant =>
           key.expiresAt ? { _tag: "Minted", key: key.key, expiresAt: key.expiresAt } : { _tag: "Fixed", key: key.key },
         ),
       ),
@@ -52,5 +52,5 @@ export const gateway = Effect.gen(function* () {
       inference.removeKey(organizationId, provider).pipe(Effect.mapError(unavailable)),
     limits: (provider, organizationId, query) =>
       inference.limits(organizationId, provider, query).pipe(Effect.mapError(unavailable)),
-  } satisfies ModelGateway.Gateway
+  } satisfies InferencePlugin.Plugin
 })

@@ -1,6 +1,6 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
-import { ModelGateway } from "@ren/core/model-gateway"
+import { InferencePlugin } from "@ren/core/inference-plugin"
 import { ModelLists } from "@ren/core/model-lists"
 import { ProviderSettings } from "@ren/core/provider-settings"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
@@ -155,7 +155,7 @@ export const services = Layer.mergeAll(
     Models.layerNone,
     ProviderSettings.layer.pipe(
       Layer.provideMerge(ModelLists.layer),
-      Layer.provideMerge(ModelGateway.layer([])),
+      Layer.provideMerge(InferencePlugin.layer([])),
       Layer.provide(Access.layer),
     ),
     Hands.layer.pipe(

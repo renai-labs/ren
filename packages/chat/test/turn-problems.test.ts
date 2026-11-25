@@ -38,7 +38,7 @@ const refused = (input: {
   })
 
 describe("TurnProblems.of", () => {
-  test("the gateway's code in the response body decides the text and the actions", () => {
+  test("the inference service's code in the response body decides the text and the actions", () => {
     const shown = (input: Parameters<typeof refused>[0]) => {
       const problem = refused(input)
       return { title: problem.title, fix: problem.fix, actions: problem.actions }
@@ -105,7 +105,7 @@ describe("TurnProblems.of", () => {
     })
   })
 
-  test("the next reset of a subscription limit comes from the gateway's answer", () => {
+  test("the next reset of a subscription limit comes from the inference service's answer", () => {
     const problem = TurnProblems.of({
       kind: "provider.rate-limit",
       text: "Every seat is at its limit.",

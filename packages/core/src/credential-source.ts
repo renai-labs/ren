@@ -244,7 +244,7 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
-    // oxlint-disable-next-line ren/no-comments -- Models keeps each brain's key per gateway; asking it again is cheap, and it never reads a model list.
+    // oxlint-disable-next-line ren/no-comments -- Models keeps each brain's key per inference plugin; asking it again is cheap, and it never reads a model list.
     const keysOf = (scope: Credentials.Scope) =>
       scope.workload.kind === "brain" && Option.isSome(scope.spaceId)
         ? grants
@@ -312,7 +312,7 @@ export const layerMinted = Layer.effect(
               if (!url) return []
               return [
                 {
-                  id: `minted:${models}:${endpoint.gateway}`,
+                  id: `minted:${models}:${endpoint.plugin}`,
                   source: "minted",
                   label: models,
                   owner: "workload",
@@ -467,7 +467,7 @@ export const layerMinted = Layer.effect(
             () => new Unavailable({ label: candidate.label, message: "Ren could not mint the model key." }),
           ),
         )
-        const endpoint = granted.find((found) => candidate.id === `minted:${models}:${found.gateway}`)
+        const endpoint = granted.find((found) => candidate.id === `minted:${models}:${found.plugin}`)
         return Option.map(Option.fromNullishOr(endpoint), (found): Sourced => ({
           value: { type: "key", value: found.key.key },
           ...(found.key.expiresAt && { expiresAt: found.key.expiresAt }),

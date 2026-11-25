@@ -12,8 +12,8 @@ import { BrainRegistry } from "../src/brain-registry.js"
 import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
 import { ModelLists } from "../src/model-lists.js"
-import { ModelGateway } from "../src/model-gateway.js"
-import { RenGateway } from "../src/model-gateway/ren-gateway.js"
+import { InferencePlugin } from "../src/inference-plugin.js"
+import { RenInferencePlugin } from "../src/inference-plugin/ren.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
 import { RenInference } from "../src/ren-inference.js"
@@ -25,12 +25,12 @@ import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { TranscriptCodec } from "../src/transcript-codec.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
-import { TestModelGateway } from "./lib/model-gateway.js"
+import { TestInferencePlugin } from "./lib/inference-plugin.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(300_000)
 
-// oxlint-disable-next-line ren/no-comments -- A real Ren Inference Service, its gateway and a real model. REN_INFERENCE_LIVE_MODEL is endpoint/model as the picker lists it; REN_INFERENCE_LIVE_ORG is an organization the service serves that model to.
+// oxlint-disable-next-line ren/no-comments -- A real Ren Inference Service, its LiteLLM and a real model. REN_INFERENCE_LIVE_MODEL is endpoint/model as the picker lists it; REN_INFERENCE_LIVE_ORG is an organization the service serves that model to.
 const live = {
   service: process.env.REN_INFERENCE_LIVE_URL ?? "",
   gateway: process.env.REN_INFERENCE_LIVE_GATEWAY ?? "",
@@ -48,15 +48,15 @@ const config = ConfigProvider.layer(
   }),
 )
 
-const gateway = RenInference.layer.pipe(
+const inference = RenInference.layer.pipe(
   Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
   Layer.provideMerge(Testing.layer),
 )
 
 const models = Models.layer.pipe(
   Layer.provideMerge(ModelLists.layer),
-  Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
-  Layer.provideMerge(gateway),
+  Layer.provideMerge(InferencePlugin.layer([RenInferencePlugin.plugin])),
+  Layer.provideMerge(inference),
   Layer.provide(config),
   Layer.orDie,
 )
@@ -83,7 +83,7 @@ const SpendLogs = Schema.Array(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- The gateway writes its spend log in batches, so the test reads it again until the turn shows. The test checks who the turn is counted on, not the amount.
+// oxlint-disable-next-line ren/no-comments -- The inference service writes its spend log in batches, so the test reads it again until the turn shows. The test checks who the turn is counted on, not the amount.
 const countedOn = (memberId: string) =>
   Effect.promise(async () => {
     const response = await fetch(`${live.gateway}/spend/logs`, {
@@ -97,44 +97,46 @@ const countedOn = (memberId: string) =>
   )
 
 describe.skipIf(Object.values(live).some((value) => !value))("Ren Inference Service, live (test 13)", () => {
-  it.live("a turn on the real gateway is counted on the organization's team and on the member who sent it", () =>
-    Effect.gen(function* () {
-      const sessions = yield* Session.Service
-      const spaces = yield* Space.Service
-      const provisioning = yield* SpaceProvisioning.Service
-      const organizationId = yield* Seed.organization(Auth.OrganizationID.make(live.organization))
-      const ada = yield* Seed.user()
-      const memberId = yield* Seed.member(organizationId, ada.id, "member")
-      yield* provisioning.createInitialMemberships(organizationId, ada)
-      const actor = { userId: ada.id, organizationId, roles: ["member"] }
-      const team = yield* spaces.create(actor, { name: "Team" })
-      const [providerID = "", id = ""] = live.model.split("/")
-      expect((yield* sessions.models(actor, Session.ID.create())).models).toContainEqual(
-        expect.objectContaining({ providerID, id }),
-      )
+  it.live(
+    "a turn on the real inference service is counted on the organization's team and on the member who sent it",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const spaces = yield* Space.Service
+        const provisioning = yield* SpaceProvisioning.Service
+        const organizationId = yield* Seed.organization(Auth.OrganizationID.make(live.organization))
+        const ada = yield* Seed.user()
+        const memberId = yield* Seed.member(organizationId, ada.id, "member")
+        yield* provisioning.createInitialMemberships(organizationId, ada)
+        const actor = { userId: ada.id, organizationId, roles: ["member"] }
+        const team = yield* spaces.create(actor, { name: "Team" })
+        const [providerID = "", id = ""] = live.model.split("/")
+        expect((yield* sessions.models(actor, Session.ID.create())).models).toContainEqual(
+          expect.objectContaining({ providerID, id }),
+        )
 
-      yield* sessions.create(actor, {
-        id: Session.ID.create(),
-        spaceId: team.id,
-        model: { providerID, id },
-        message: { id: SessionMessage.ID.create(), text: "Reply with the word OK and nothing else." },
-      })
+        yield* sessions.create(actor, {
+          id: Session.ID.create(),
+          spaceId: team.id,
+          model: { providerID, id },
+          message: { id: SessionMessage.ID.create(), text: "Reply with the word OK and nothing else." },
+        })
 
-      expect(yield* countedOn(memberId)).toContainEqual({
-        end_user: memberId,
-        team_id: organizationId,
-        status: "success",
-      })
-    }),
+        expect(yield* countedOn(memberId)).toContainEqual({
+          end_user: memberId,
+          team_id: organizationId,
+          status: "success",
+        })
+      }),
   )
 })
 
-// oxlint-disable-next-line ren/no-comments -- Providers §6.1: the gateway keeps the rules of `grant` (one key per brain, also after Ren core restarts).
-describe.skipIf(Object.values(live).some((value) => !value))("RenGateway, live", () => {
-  TestModelGateway.contract("RenGateway", {
-    make: RenGateway.gateway,
+// oxlint-disable-next-line ren/no-comments -- Providers §6.1: the inference service keeps the rules of `grant` (one key per brain, also after Ren core restarts).
+describe.skipIf(Object.values(live).some((value) => !value))("RenInferencePlugin, live", () => {
+  TestInferencePlugin.contract("RenInferencePlugin", {
+    make: RenInferencePlugin.plugin,
     run: (effect) =>
-      Effect.runPromise(effect.pipe(Effect.provide(gateway.pipe(Layer.provide(config), Layer.orDie)), Effect.scoped)),
+      Effect.runPromise(effect.pipe(Effect.provide(inference.pipe(Layer.provide(config), Layer.orDie)), Effect.scoped)),
     organizationId: live.organization,
   })
 })

@@ -56,7 +56,7 @@ const stubRoute = (request: Request) => {
   return new Response(null, { status: 204 })
 }
 
-// oxlint-disable-next-line ren/no-comments -- Ren's models in the e2e stack: the stub's models, which the stand-in gateway serves as the Ren provider. A list sent to /models changes them, and the gateway tells Ren, as the real one does.
+// oxlint-disable-next-line ren/no-comments -- Ren's models in the e2e stack: the stub's models, which the stand-in gateway serves as the Ren provider. A list sent to /models changes them, and the inference service tells Ren, as the real one does.
 let listed: ReadonlyArray<Models.Info> = StubModel.defaultModels
 
 const usageKey = `ren_usage_${crypto.randomUUID().replaceAll("-", "")}`

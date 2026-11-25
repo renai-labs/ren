@@ -1,8 +1,8 @@
-export * as ModelGateway from "./model-gateway.js"
+export * as InferencePlugin from "./inference-plugin.js"
 
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import { Changed, Field, Limit, Listed, Provider, Window } from "@ren/schema/model-gateway"
+import { Changed, Field, Limit, Listed, Provider, Window } from "@ren/schema/inference-plugin"
 import type { Models } from "@ren/schema/models"
 import type { Provider as ProviderInput } from "@ren/schema/provider"
 import type { Space } from "@ren/schema/space"
@@ -11,9 +11,9 @@ import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema } 
 export { Changed, Field, Limit, Listed, Provider, Window }
 
 // oxlint-disable-next-line ren/no-comments -- The vendor refused a key, or the fields are not the provider's: the person can fix it.
-export class Rejected extends Schema.TaggedError<Rejected>()("ModelGateway.Rejected", { message: Schema.String }) {}
+export class Rejected extends Schema.TaggedError<Rejected>()("InferencePlugin.Rejected", { message: Schema.String }) {}
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("ModelGateway.Unavailable", {
+export class Unavailable extends Schema.TaggedError<Unavailable>()("InferencePlugin.Unavailable", {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
@@ -38,7 +38,7 @@ export interface Key extends Saved {
   readonly savedBy?: typeof Auth.MemberID.Type
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers P29: a provider's settings as the gateway keeps them. Ren core keeps none.
+// oxlint-disable-next-line ren/no-comments -- Providers P29: a provider's settings as the inference service keeps them. Ren core keeps none.
 export interface ProviderSettings extends Settings {
   readonly key?: Key
 }
@@ -54,8 +54,8 @@ export type Grant =
   | { readonly _tag: "Minted"; readonly key: Redacted.Redacted; readonly expiresAt: DateTime.Utc }
   | { readonly _tag: "Fixed"; readonly key: Redacted.Redacted }
 
-// oxlint-disable-next-line ren/no-comments -- Providers §6.1: everything Ren core knows about a model gateway, such as the Ren gateway or an owner's LiteLLM. Ren core names no gateway and no provider; a deployment passes its gateways to `layer`.
-export interface Gateway {
+// oxlint-disable-next-line ren/no-comments -- Providers §6.1: an inference plugin: everything Ren core knows about one inference service, such as Ren's or an owner's LiteLLM. Ren core names no inference service and no provider; a deployment passes its plugins to `layer`.
+export interface Plugin {
   readonly id: string
   readonly baseUrl: string
   readonly headers: Readonly<Record<string, string>>
@@ -68,7 +68,7 @@ export interface Gateway {
   readonly settings: (
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<Readonly<Record<string, ProviderSettings>>, Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- Providers P29: changes only the fields sent, so two changes at once never undo each other; the gateway allows only what is on and connected (§6.4.1).
+  // oxlint-disable-next-line ren/no-comments -- Providers P29: changes only the fields sent, so two changes at once never undo each other; the inference service allows only what is on and connected (§6.4.1).
   readonly update: (
     provider: string,
     organizationId: Auth.OrganizationID,
@@ -101,31 +101,31 @@ export interface Gateway {
 }
 
 export interface Owned {
-  readonly gateway: Gateway
+  readonly plugin: Plugin
   readonly provider: Provider
 }
 
 export interface Interface {
-  readonly gateways: ReadonlyArray<Gateway>
+  readonly plugins: ReadonlyArray<Plugin>
   readonly providers: Effect.Effect<ReadonlyArray<Owned>, Unavailable>
-  readonly gateway: (id: string) => Option.Option<Gateway>
+  readonly plugin: (id: string) => Option.Option<Plugin>
 }
 
-export class Registry extends Context.Service<Registry, Interface>()("@ren/core/ModelGateway/Registry") {}
+export class Registry extends Context.Service<Registry, Interface>()("@ren/core/InferencePlugin/Registry") {}
 
-export const registry = <E, R>(gateways: ReadonlyArray<Effect.Effect<Gateway, E, R>>) =>
+export const registry = <E, R>(plugins: ReadonlyArray<Effect.Effect<Plugin, E, R>>) =>
   Effect.gen(function* () {
-    const all = yield* Effect.all(gateways)
-    const ids = all.map((gateway) => gateway.id)
+    const all = yield* Effect.all(plugins)
+    const ids = all.map((plugin) => plugin.id)
     if (new Set(ids).size !== ids.length)
-      return yield* Effect.die(new Error(`Two model gateways share an id: ${ids.join(", ")}`))
+      return yield* Effect.die(new Error(`Two inference plugins share an id: ${ids.join(", ")}`))
     return Registry.of({
-      gateways: all,
+      plugins: all,
       providers: Effect.gen(function* () {
         const owned = (yield* Effect.forEach(
           all,
-          (gateway) =>
-            Effect.map(gateway.providers, (providers) => providers.map((provider): Owned => ({ gateway, provider }))),
+          (plugin) =>
+            Effect.map(plugin.providers, (providers) => providers.map((provider): Owned => ({ plugin, provider }))),
           { concurrency: "unbounded" },
         )).flat()
         const providerIds = owned.map((each) => each.provider.id)
@@ -133,9 +133,9 @@ export const registry = <E, R>(gateways: ReadonlyArray<Effect.Effect<Gateway, E,
           return yield* Effect.die(new Error(`Two providers share an id: ${providerIds.join(", ")}`))
         return owned
       }),
-      gateway: (id) => Option.fromNullishOr(all.find((gateway) => gateway.id === id)),
+      plugin: (id) => Option.fromNullishOr(all.find((plugin) => plugin.id === id)),
     })
   })
 
-export const layer = <E = never, R = never>(gateways: ReadonlyArray<Effect.Effect<Gateway, E, R>>) =>
-  Layer.effect(Registry, registry(gateways))
+export const layer = <E = never, R = never>(plugins: ReadonlyArray<Effect.Effect<Plugin, E, R>>) =>
+  Layer.effect(Registry, registry(plugins))

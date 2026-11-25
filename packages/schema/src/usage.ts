@@ -44,7 +44,8 @@ export const ModelCall = Schema.Struct({
   requested_model: Schema.String,
   served_model: Schema.String,
   operation: Schema.optionalKey(Schema.String).annotate({
-    description: "The gateway’s call type, such as completion, image_generation, speech, transcription or decisions.",
+    description:
+      "The inference service’s call type, such as completion, image_generation, speech, transcription or decisions.",
   }),
   kind: Claim,
   variant: Claim,

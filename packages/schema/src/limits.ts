@@ -18,7 +18,7 @@ export const Seat = Schema.TaggedStruct("seat", {
   seat: Schema.String.annotate({ description: "Who connected the seat and its plan, such as “Asha’s Max”." }),
   providerName: Schema.String.annotate({ description: "The provider of the seat, such as Anthropic." }),
   window: Schema.String.annotate({ description: "The vendor’s window, such as `5h` or `7d`." }),
-  title: Schema.String.annotate({ description: "The gateway’s name of the window." }),
+  title: Schema.String.annotate({ description: "The inference service’s name of the window." }),
 }).annotate({
   identifier: "Limits.Seat",
   description: "One window of the seat that served the chat’s last seat call.",
@@ -35,7 +35,7 @@ export const Free = Schema.TaggedStruct("free", {
 
 export const Limit = Schema.Union([Seat, Free]).annotate({
   identifier: "Limits.Limit",
-  description: "A cap the model gateway or a vendor enforces, with a reset: a seat’s window or the free cap.",
+  description: "A cap the inference service or a vendor enforces, with a reset: a seat’s window or the free cap.",
 })
 export type Limit = typeof Limit.Type
 
@@ -59,5 +59,5 @@ export const Info = Schema.Struct({
 }).annotate({
   identifier: "Limits.Info",
   description:
-    "What the chat’s current model uses up: the limits of its model gateway and the Ren credit. Empty when a source does not answer.",
+    "What the chat’s current model uses up: the limits of its inference service and the Ren credit. Empty when a source does not answer.",
 })

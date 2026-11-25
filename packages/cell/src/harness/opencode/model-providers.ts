@@ -21,7 +21,7 @@ const protocols = {
 
 const supportedTypes = new Set<Models.Type>(["chat", "image", "transcription", "decision"])
 
-// oxlint-disable-next-line ren/no-comments -- Client settings the gateway puts on a model, such as those of OpenCode's ChatGPT plugin, which Ren does not activate (providers §7.2).
+// oxlint-disable-next-line ren/no-comments -- Client settings the inference service puts on a model, such as those of OpenCode's ChatGPT plugin, which Ren does not activate (providers §7.2).
 const applyClient = (
   info: Parameters<Parameters<ProviderEditor["models"]["update"]>[2]>[0],
   client: NonNullable<Models.Info["client"]>,
@@ -54,7 +54,7 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       const own: { readonly canonical?: Provider.ID; readonly package: string } =
         model.runtime === "claude" ? ClaudeAgent.runtime : protocols[model.protocol]
       editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
-        // oxlint-disable-next-line ren/no-comments -- The gateway knows a model by its gateway name (`ren/<id>`, `<provider>/<model>`); the picker keeps Ren's id.
+        // oxlint-disable-next-line ren/no-comments -- The inference service knows a model by its gateway name (`ren/<id>`, `<provider>/<model>`); the picker keeps Ren's id.
         info.modelID = Model.ID.make(model.gateway ?? model.id)
         info.type = model.type
         info.package = own.package

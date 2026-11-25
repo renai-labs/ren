@@ -31,7 +31,7 @@ export const layer = Layer.effect(
       keys: (brainId) =>
         Effect.map(grant(brainId), (access) =>
           access.endpoints.map((endpoint) => ({
-            gateway: endpoint.id,
+            plugin: endpoint.id,
             baseUrl: endpoint.baseUrl,
             key: endpoint.apiKey,
           })),

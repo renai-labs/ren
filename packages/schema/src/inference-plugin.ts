@@ -1,4 +1,4 @@
-export * as ModelGateway from "./model-gateway.js"
+export * as InferencePlugin from "./inference-plugin.js"
 
 import { Schema } from "effect"
 import { Models } from "./models.js"
@@ -10,7 +10,7 @@ export const Field = Schema.Struct({
   secret: Schema.Boolean,
   multiline: Schema.optionalKey(Schema.Boolean),
   placeholder: Schema.optionalKey(Schema.String),
-}).annotate({ identifier: "ModelGateway.Field", description: "One field of a provider’s Connect form." })
+}).annotate({ identifier: "InferencePlugin.Field", description: "One field of a provider’s Connect form." })
 
 export const Auth = Schema.Union([
   Schema.TaggedStruct("key", { fields: Schema.Array(Field) }).annotate({
@@ -22,14 +22,14 @@ export const Auth = Schema.Union([
   Schema.TaggedStruct("operator", {}).annotate({
     description: "No form: the deployment holds the credential.",
   }),
-]).annotate({ identifier: "ModelGateway.Auth" })
+]).annotate({ identifier: "InferencePlugin.Auth" })
 export type Auth = typeof Auth.Type
 
-export const Payer = Schema.Literals(["ren", "customer"]).annotate({ identifier: "ModelGateway.Payer" })
+export const Payer = Schema.Literals(["ren", "customer"]).annotate({ identifier: "InferencePlugin.Payer" })
 export type Payer = typeof Payer.Type
 
 export const Scope = Schema.Literals(["shared", "organization"]).annotate({
-  identifier: "ModelGateway.Scope",
+  identifier: "InferencePlugin.Scope",
   description:
     "`shared`: the same models for every organization. `organization`: the models depend on the organization.",
 })
@@ -54,22 +54,22 @@ export const Provider = Schema.Struct({
   }),
   logo: Schema.optionalKey(Schema.String).annotate({ description: "The address of the provider’s logo." }),
 }).annotate({
-  identifier: "ModelGateway.Provider",
-  description: "One provider a model gateway offers, such as Ren, Anthropic or Groq.",
+  identifier: "InferencePlugin.Provider",
+  description: "One provider an inference plugin offers, such as Ren, Anthropic or Groq.",
 })
 
 export interface Listed extends Schema.Schema.Type<typeof Listed> {}
 export const Listed = Schema.Struct({
   revision: Schema.NonEmptyString,
   models: Schema.Array(Models.Info),
-}).annotate({ identifier: "ModelGateway.Listed", description: "A provider’s models for an organization." })
+}).annotate({ identifier: "InferencePlugin.Listed", description: "A provider’s models for an organization." })
 
 export interface Changed extends Schema.Schema.Type<typeof Changed> {}
 export const Changed = Schema.Struct({
   provider: Schema.NonEmptyString,
   organizationId: Schema.NonEmptyString,
 }).annotate({
-  identifier: "ModelGateway.Changed",
+  identifier: "InferencePlugin.Changed",
   description:
     "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull.",
 })
@@ -77,10 +77,12 @@ export const Changed = Schema.Struct({
 export interface Window extends Schema.Schema.Type<typeof Window> {}
 export const Window = Schema.Struct({
   key: Schema.NonEmptyString.annotate({ description: "The vendor’s window, such as `5h` or `7d`." }),
-  title: Schema.String.annotate({ description: "The gateway’s name of the window, such as “Weekly · Opus”." }),
+  title: Schema.String.annotate({
+    description: "The inference service’s name of the window, such as “Weekly · Opus”.",
+  }),
   percent: Schema.NullOr(Schema.Number).annotate({ description: "How much of the window is used, 0 to 100." }),
   resetsAt: Schema.NullOr(Schema.DateTimeUtc),
-}).annotate({ identifier: "ModelGateway.Window", description: "One usage window of a seat." })
+}).annotate({ identifier: "InferencePlugin.Window", description: "One usage window of a seat." })
 
 export const Limit = Schema.Union([
   Schema.TaggedStruct("free", {
@@ -96,8 +98,8 @@ export const Limit = Schema.Union([
     windows: Schema.Array(Window),
   }).annotate({ description: "A seat and its usage windows." }),
 ]).annotate({
-  identifier: "ModelGateway.Limit",
+  identifier: "InferencePlugin.Limit",
   description:
-    "A cap the gateway or a vendor enforces, with a reset: the free cap or a seat’s windows. Not the credit.",
+    "A cap the inference service or a vendor enforces, with a reset: the free cap or a seat’s windows. Not the credit.",
 })
 export type Limit = typeof Limit.Type

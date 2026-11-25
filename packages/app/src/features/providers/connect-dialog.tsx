@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { ModelGatewayField, ProviderTestResult } from "@ren/client"
+import type { InferencePluginField, ProviderTestResult } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { IconCircleCheck } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -15,11 +15,11 @@ import { RouterContext } from "../../lib/router-context.js"
 export interface Connecting {
   readonly id: string
   readonly name: string
-  readonly fields: ReadonlyArray<ModelGatewayField>
+  readonly fields: ReadonlyArray<InferencePluginField>
 }
 
 function FieldInput(props: {
-  field: ModelGatewayField
+  field: InferencePluginField
   value: string
   invalid: boolean
   onChange: (value: string) => void

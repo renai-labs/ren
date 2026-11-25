@@ -130,7 +130,7 @@ export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
   providers: Schema.optionalKey(Models.Providers).annotate({
     description:
-      "The organization’s model list: one entry per provider that is on and connected, with its models and the gateway’s address, without keys. The brain gets its key from `models.refresh`. Omitted when the list is unavailable; the brain keeps its last providers.",
+      "The organization’s model list: one entry per provider that is on and connected, with its models and the inference service’s address, without keys. The brain gets its key from `models.refresh`. Omitted when the list is unavailable; the brain keeps its last providers.",
   }),
   apps: Schema.optionalKey(PullApps).annotate({
     description: "The resolved app catalog. Omitted when unsupported or unavailable.",

@@ -107,7 +107,7 @@ const chatOn = Effect.fnUntraced(function* (endpointId: string, modelId: string)
 })
 
 it.live(
-  "a Claude model runs on `claude` through the gateway, under Ren's card, with Ren's key as its login and the chat's usage headers",
+  "a Claude model runs on `claude` through the inference service, under Ren's card, with Ren's key as its login and the chat's usage headers",
   () =>
     Effect.gen(function* () {
       const chat = yield* chatOn("ren", "anthropic/stub-claude")

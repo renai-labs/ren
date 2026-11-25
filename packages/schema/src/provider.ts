@@ -1,7 +1,7 @@
 export * as Provider from "./provider.js"
 
 import { Schema } from "effect"
-import { ModelGateway } from "./model-gateway.js"
+import { InferencePlugin } from "./inference-plugin.js"
 import { Models } from "./models.js"
 import { RenInference } from "./ren-inference.js"
 
@@ -18,7 +18,7 @@ export const Info = Schema.Struct({
   name: Schema.NonEmptyString,
   mark: Schema.NonEmptyString,
   logo: Schema.optionalKey(Schema.String).annotate({ description: "The address of the provider’s logo." }),
-  payer: ModelGateway.Payer,
+  payer: InferencePlugin.Payer,
   builtIn: Schema.Boolean.annotate({
     description: "The provider needs no connection: the deployment holds its credential.",
   }),
@@ -28,7 +28,7 @@ export const Info = Schema.Struct({
   enabled: Schema.Boolean,
   method: Schema.optionalKey(Models.Method).annotate({ description: "Absent on a built-in provider." }),
   methods: Schema.Array(Models.Method),
-  fields: Schema.Array(ModelGateway.Field),
+  fields: Schema.Array(InferencePlugin.Field),
   key: Schema.NullOr(Key),
   seats: Schema.Array(RenInference.Connection).annotate({
     description: "The members’ subscriptions, for a provider with the subscription method.",
@@ -40,7 +40,7 @@ export const Info = Schema.Struct({
   canManage: Schema.Boolean.annotate({ description: "True for admins and owners (Providers P7)." }),
 }).annotate({
   identifier: "Provider.Info",
-  description: "One provider of the model gateways, with the organization’s settings of it.",
+  description: "One provider of the inference plugins, with the organization’s settings of it.",
 })
 
 export interface Page extends Schema.Schema.Type<typeof Page> {}
@@ -62,7 +62,8 @@ export const KeyInput = Schema.Struct({
     Schema.String,
     Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(20_000))),
   ).annotate({
-    description: "The Connect form’s fields. Ren forwards them to the provider’s gateway once and never stores them.",
+    description:
+      "The Connect form’s fields. Ren forwards them to the provider’s inference service once and never stores them.",
   }),
 }).annotate({ identifier: "Provider.KeyInput" })
 

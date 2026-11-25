@@ -83,7 +83,7 @@ const askAdmin = (
   actions: input.admin ? ["providers", "model"] : ["model"],
 })
 
-// oxlint-disable-next-line ren/no-comments -- Providers §9.4: the model gateway's refusals, by the code in its answer. Each one is final: the gateway sends `x-should-retry: false`, so the brain does not try again.
+// oxlint-disable-next-line ren/no-comments -- Providers §9.4: the inference service's refusals, by the code in its answer. Each one is final: the inference service sends `x-should-retry: false`, so the brain does not try again.
 const byCode: Readonly<Record<string, (input: Context) => Problem>> = {
   insufficient_credits: outOfCredits,
   free_limit_reached: () => ({

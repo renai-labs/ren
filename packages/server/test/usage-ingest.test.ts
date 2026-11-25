@@ -69,7 +69,7 @@ describe("usage ingest", () => {
     }),
   )
 
-  it.live("a call keeps the gateway's operation, access, seat and the usage the provider reported", () =>
+  it.live("a call keeps the inference service's operation, access, seat and the usage the provider reported", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const http = yield* HttpClient.HttpClient

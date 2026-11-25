@@ -8,7 +8,7 @@ import { GitHubAccounts } from "@ren/core/github-accounts"
 import { SlackApp } from "@ren/core/slack-app"
 import { Mailer } from "@ren/core/mailer"
 import { ModelLists } from "@ren/core/model-lists"
-import { ModelGateway } from "@ren/core/model-gateway"
+import { InferencePlugin } from "@ren/core/inference-plugin"
 import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
@@ -65,7 +65,7 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
     Layer.provideMerge(BillingEnrollment.layer.pipe(Layer.provide([billing, DurableRunner.layerMemory]))),
     Layer.provideMerge(
       ProviderSettings.layer.pipe(
-        Layer.provide(ModelLists.layer.pipe(Layer.provideMerge(ModelGateway.layer([])))),
+        Layer.provide(ModelLists.layer.pipe(Layer.provideMerge(InferencePlugin.layer([])))),
         Layer.provide([RenInference.layerNone, Access.layer]),
       ),
     ),

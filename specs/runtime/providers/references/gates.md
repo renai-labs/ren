@@ -2,7 +2,7 @@
 
 This file records the experiments on Ren's side of [`../README.md`](../README.md): what `claude` sends, and how Ren runs OpenCode's Claude Agent parts. Run dates: 21 and 22 November 2026. Versions: `@opencode/core` 2.2.6, `@anthropic-ai/claude-agent-sdk` 0.3.301, Claude Code 2.1.318 (local) and 2.1.301 (bundled with the SDK).
 
-All runs were local, with a recorder on `127.0.0.1` in place of the model gateway. No traffic left the machine, and no E2B template or sandbox was used.
+All runs were local, with a recorder on `127.0.0.1` in place of the inference service. No traffic left the machine, and no E2B template or sandbox was used.
 
 ## Summary
 
@@ -139,9 +139,9 @@ Imports: `@opencode/core/plugin/provider/claude-agent/{claude/io,claude/sessions
 
 ## GR1. The Linux `claude` in a real brain
 
-**Setup.** A local Ren on E2B with its own template, the egress in Docker and the model gateway (LiteLLM) on the Mac, as the deployed path. The template carries the brain's dependency bundle, which holds the SDK's Linux binaries. A chat on a Ren Claude model (runtime `claude`), with a stand-in upstream behind the gateway.
+**Setup.** A local Ren on E2B with its own template, the egress in Docker and the inference service (LiteLLM) on the Mac, as the deployed path. The template carries the brain's dependency bundle, which holds the SDK's Linux binaries. A chat on a Ren Claude model (runtime `claude`), with a stand-in upstream behind the inference service.
 
-**Result.** The brain found the glibc binary next to the SDK and started `claude`. Each call left the sandbox as `POST /v1/messages` to the gateway host; the egress filled in `ren:MODELS` (in `Authorization` and `x-litellm-api-key`) and let it through. The gateway called the upstream; the chat finished `succeeded` with the upstream's text, under provider `ren`, with the Claude Agent session in the message's metadata.
+**Result.** The brain found the glibc binary next to the SDK and started `claude`. Each call left the sandbox as `POST /v1/messages` to the inference service host; the egress filled in `ren:MODELS` (in `Authorization` and `x-litellm-api-key`) and let it through. The inference service called the upstream; the chat finished `succeeded` with the upstream's text, under provider `ren`, with the Claude Agent session in the message's metadata.
 
 **Found.** The dependency bundle carries both Linux binaries of the SDK (glibc and musl, about 260 MB each unpacked), because the bundle installs for `--os linux --cpu x64` without a libc. Only glibc is used.
 
@@ -162,24 +162,24 @@ A turn on the Claude runtime still works (GR1).
 
 Withdrawn: Ren no longer pushes a change for every organization; brains read it at their next pull (README §6.4). The test is removed. The record below is kept.
 
-**Setup.** `core/test/model-lists.slow.test.ts`: 2,000 organizations. The test gateway says 1,000 of them have Groq on (`organizations("groq")`). The gateway reports a change of Groq's models for every organization.
+**Setup.** `core/test/model-lists.slow.test.ts`: 2,000 organizations. The test inference plugin says 1,000 of them have Groq on (`organizations("groq")`). The inference service reports a change of Groq's models for every organization.
 
 **Result.** Ren core notified exactly the 1,000 organizations the gateway named (`org:<id>`, once each), no other and never `all`. The test took 0.31 s, setup included.
 
 ## End to end on E2B
 
-**Setup.** One local Ren on E2B (own template, the egress in Docker, the model gateway and inference of this build). Upstream and own-key vendors are a stand-in on the Mac; the ChatGPT seat is Ren's test account (token sharing); the Claude seat is a real local seat that the gateway asks for each call. Chats were started through Ren's API and checked in the app with a headless browser.
+**Setup.** One local Ren on E2B (own template, the egress in Docker, the inference service and inference of this build). Upstream and own-key vendors are a stand-in on the Mac; the ChatGPT seat is Ren's test account (token sharing); the Claude seat is a real local seat that the inference service asks for each call. Chats were started through Ren's API and checked in the app with a headless browser.
 
-| Path                                        | Result                                                                                                                                                                                            |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ren credit, Claude model (`claude` runtime) | turn succeeded; usage row payer `ren`, `access: ren`                                                                                                                                              |
-| Ren credit, HTTP model                      | turn succeeded; cost at the models.dev price                                                                                                                                                      |
-| Ren free model; the 101st request           | turn succeeded; the 101st was refused at once (`x-should-retry: false`) with the free-cap text; `limits.get` showed 100%; the app showed the 90% banner and the error                             |
-| Own key (Groq)                              | the key test refused a wrong key with the vendor's message; the vendor received the organization's key; the key was in no Ren or gateway log or table; usage row payer `customer`, `access: key`  |
-| ChatGPT seat                                | sign-in imported, 10 models listed, OpenAI provider on the subscription method; turn succeeded through the seat hook (seat taken, outcome reported, seat given back)                              |
-| Claude seat                                 | Anthropic provider on the subscription method; turn on `claude` succeeded through the seat hook on the real seat                                                                                  |
-| No credit, Claude model                     | the `claude` program passes on only the error's message; with the code at its end (`(insufficient_credits)`) the app showed the out-of-credits error with Add credits, Change model and Providers |
-| Provider off during a chat                  | the picker lost the provider's models within 0.2 s; the brain pulled within 0.8 s; the next turn showed "model switched" and ran on the settings model                                            |
+| Path                                        | Result                                                                                                                                                                                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ren credit, Claude model (`claude` runtime) | turn succeeded; usage row payer `ren`, `access: ren`                                                                                                                                                       |
+| Ren credit, HTTP model                      | turn succeeded; cost at the models.dev price                                                                                                                                                               |
+| Ren free model; the 101st request           | turn succeeded; the 101st was refused at once (`x-should-retry: false`) with the free-cap text; `limits.get` showed 100%; the app showed the 90% banner and the error                                      |
+| Own key (Groq)                              | the key test refused a wrong key with the vendor's message; the vendor received the organization's key; the key was in no Ren or inference service log or table; usage row payer `customer`, `access: key` |
+| ChatGPT seat                                | sign-in imported, 10 models listed, OpenAI provider on the subscription method; turn succeeded through the seat hook (seat taken, outcome reported, seat given back)                                       |
+| Claude seat                                 | Anthropic provider on the subscription method; turn on `claude` succeeded through the seat hook on the real seat                                                                                           |
+| No credit, Claude model                     | the `claude` program passes on only the error's message; with the code at its end (`(insufficient_credits)`) the app showed the out-of-credits error with Add credits, Change model and Providers          |
+| Provider off during a chat                  | the picker lost the provider's models within 0.2 s; the brain pulled within 0.8 s; the next turn showed "model switched" and ran on the settings model                                                     |
 
 **Found.** The dependency bundle's version changed between two builds of the same code, so a template seeded with one build did not match the next, and a brain downloaded the dependency bundle (517 MB) through the bundle tunnel. Pin the published bundle set to the template's dependencies when testing with tunnels.
 

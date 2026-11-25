@@ -1,4 +1,4 @@
-import { ModelGateway } from "@ren/schema/model-gateway"
+import { InferencePlugin } from "@ren/schema/inference-plugin"
 import { Usage } from "@ren/schema/usage"
 import { Context, type Option } from "effect"
 import {
@@ -52,7 +52,7 @@ const UsageGroup = HttpApiGroup.make("usage")
 const InferenceGroup = HttpApiGroup.make("inference")
   .add(
     HttpApiEndpoint.post("inference.changed", "/internal/inference/changed", {
-      payload: ModelGateway.Changed,
+      payload: InferencePlugin.Changed,
       success: HttpApiSchema.NoContent,
       error: [ForbiddenError],
     }).annotateMerge(
@@ -74,6 +74,6 @@ export const UsageIngestApi = HttpApi.make("usage-ingest")
     OpenApi.annotations({
       title: "Ren Usage Ingest API",
       version: "1",
-      description: "Internal API where a trusted producer, such as the model gateway, sends the costs that it saw.",
+      description: "Internal API where a trusted producer, such as the inference service, sends the costs that it saw.",
     }),
   )

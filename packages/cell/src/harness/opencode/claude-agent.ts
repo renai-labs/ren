@@ -73,7 +73,7 @@ const widen =
         )
       : hook(name, callback, options)
 
-// oxlint-disable-next-line ren/no-comments -- The env of one `claude` process (providers §7.3): the gateway, the chat's usage headers, no calls the turn does not need, and Ren's key as the login, which puts `claude` in subscription mode; the gateway puts the seat's login in. Behind the egress the key is `ren:MODELS`, which the egress fills in only for the gateway, so a call of `claude` to any other host is refused.
+// oxlint-disable-next-line ren/no-comments -- The env of one `claude` process (providers §7.3): the inference service, the chat's usage headers, no calls the turn does not need, and Ren's key as the login, which puts `claude` in subscription mode; the inference service puts the seat's login in. Behind the egress the key is `ren:MODELS`, which the egress fills in only for the inference service, so a call of `claude` to any other host is refused.
 const connectionOf = (options: Record<string, unknown>, headers: Record<string, string | undefined> = {}) => {
   const key = Predicate.isString(options.apiKey) ? options.apiKey : undefined
   const own = Predicate.isObject(options.headers) ? options.headers : {}

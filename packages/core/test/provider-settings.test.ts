@@ -6,11 +6,11 @@ import type { SqlError } from "effect/sql/SqlError"
 import { Access } from "../src/access.js"
 import { BrainPush } from "../src/brain-push.js"
 import { ModelLists } from "../src/model-lists.js"
-import { ModelGateway } from "../src/model-gateway.js"
+import { InferencePlugin } from "../src/inference-plugin.js"
 import { ProviderSettings } from "../src/provider-settings.js"
 import { RenInference } from "../src/ren-inference.js"
 import { testEffect } from "./lib/effect.js"
-import { TestModelGateway } from "./lib/model-gateway.js"
+import { TestInferencePlugin } from "./lib/inference-plugin.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(Testing.layer)
@@ -19,7 +19,7 @@ const secret = "good-own-key-never-stored-9f2c"
 
 const fields = (value: string) => ({ apiKey: Redacted.make(value) })
 
-const groq = TestModelGateway.provider("groq", {
+const groq = TestInferencePlugin.provider("groq", {
   name: "Groq",
   payer: "customer",
   auth: [{ _tag: "key", fields: [{ name: "apiKey", label: "API key", secret: true }] }],
@@ -37,24 +37,24 @@ const listening = Effect.gen(function* () {
 
 // oxlint-disable-next-line ren/no-comments -- Ren (the deployment connects it) and Groq (an own key), each with its models, and two organizations.
 const setup = Effect.gen(function* () {
-  const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren"), groq] })
+  const test = yield* TestInferencePlugin.make({ providers: [TestInferencePlugin.provider("ren"), groq] })
   yield* test.setModels("ren", {
     revision: "1",
     models: [
-      { ...TestModelGateway.model("vendor/one"), gateway: "ren/vendor/one" },
-      { ...TestModelGateway.model("vendor/two"), gateway: "ren/vendor/two" },
+      { ...TestInferencePlugin.model("vendor/one"), gateway: "ren/vendor/one" },
+      { ...TestInferencePlugin.model("vendor/two"), gateway: "ren/vendor/two" },
     ],
   })
   yield* test.setModels("groq", {
     revision: "1",
-    models: [{ ...TestModelGateway.model("llama-5"), gateway: "groq/llama-5" }],
+    models: [{ ...TestInferencePlugin.model("llama-5"), gateway: "groq/llama-5" }],
   })
   const organizationId = yield* Seed.organization()
   const other = yield* Seed.organization()
   const context = yield* Layer.build(
     ProviderSettings.layer.pipe(
       Layer.provideMerge(ModelLists.layer),
-      Layer.provideMerge(ModelGateway.layer([Effect.succeed(test.gateway)])),
+      Layer.provideMerge(InferencePlugin.layer([Effect.succeed(test.plugin)])),
       Layer.provideMerge(Access.layer),
       Layer.provide(RenInference.layerNone),
     ),
@@ -75,7 +75,7 @@ const providersOf = (entries: ReadonlyArray<ModelLists.Entry>) =>
   entries.map((entry) => [entry.id, entry.models.map((model) => model.id)])
 
 describe("ProviderSettings (Providers P7, P17, P29)", () => {
-  it.live("a member sees the page and is refused every change; the gateway hears nothing", () =>
+  it.live("a member sees the page and is refused every change; the inference service hears nothing", () =>
     Effect.gen(function* () {
       const found = yield* setup
       const page = yield* found.providers.page(found.member)
@@ -93,13 +93,13 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         found.providers.updateModels(found.member, "ren", { models: [{ id: "ren/vendor/two", enabled: false }] }),
       ]
       for (const change of changes) expect((yield* Effect.flip(change))._tag).toBe("Primitive.Forbidden")
-      expect(yield* found.test.gateway.settings(found.organizationId)).toEqual({})
+      expect(yield* found.test.plugin.settings(found.organizationId)).toEqual({})
       expect(yield* found.test.keyOf("groq", found.organizationId)).toBeUndefined()
     }),
   )
 
   it.live(
-    "a refused key saves nothing; a saved key reaches only the gateway, and Ren keeps its last 4 characters",
+    "a refused key saves nothing; a saved key reaches only the inference service, and Ren keeps its last 4 characters",
     () =>
       Effect.gen(function* () {
         const found = yield* setup
@@ -152,7 +152,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         expect(yield* listener.collect).toEqual([`org:${found.organizationId}`])
 
         yield* found.providers.update(found.admin, "groq", { enabled: false })
-        expect((yield* found.test.gateway.settings(found.organizationId)).groq).toMatchObject({
+        expect((yield* found.test.plugin.settings(found.organizationId)).groq).toMatchObject({
           enabled: false,
           off: [],
           key: { last4: "9f2c" },
@@ -169,7 +169,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     Effect.gen(function* () {
       const found = yield* setup
       yield* found.providers.update(found.admin, "groq", { enabled: true })
-      expect((yield* found.test.gateway.settings(found.organizationId)).groq).toMatchObject({ enabled: true })
+      expect((yield* found.test.plugin.settings(found.organizationId)).groq).toMatchObject({ enabled: true })
       expect(providersOf(yield* found.lists.list(found.organizationId))).toEqual([
         ["ren", ["vendor/one", "vendor/two"]],
       ])
@@ -182,9 +182,9 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
       yield* found.test.setModels("groq", {
         revision: "2",
         models: [
-          { ...TestModelGateway.model("undated"), gateway: "groq/undated" },
-          { ...TestModelGateway.model("older"), gateway: "groq/older", released: "2025-01-23" },
-          { ...TestModelGateway.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
+          { ...TestInferencePlugin.model("undated"), gateway: "groq/undated" },
+          { ...TestInferencePlugin.model("older"), gateway: "groq/older", released: "2025-01-23" },
+          { ...TestInferencePlugin.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
         ],
       })
       const listed = yield* found.providers.models(found.member, "groq")
@@ -192,7 +192,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     }),
   )
 
-  it.live("a model switched off leaves only its organization's list, after the gateway heard it", () =>
+  it.live("a model switched off leaves only its organization's list, after the inference service heard it", () =>
     Effect.gen(function* () {
       const found = yield* setup
       yield* found.providers.updateModels(found.admin, "ren", { models: [{ id: "ren/vendor/two", enabled: false }] })
@@ -201,7 +201,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         ["ren/vendor/one", true],
         ["ren/vendor/two", false],
       ])
-      expect((yield* found.test.gateway.settings(found.organizationId)).ren).toEqual({
+      expect((yield* found.test.plugin.settings(found.organizationId)).ren).toEqual({
         enabled: true,
         off: ["ren/vendor/two"],
       })
@@ -213,25 +213,25 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     }),
   )
 
-  it.live("a model the provider does not list is refused, and the gateway hears nothing", () =>
+  it.live("a model the provider does not list is refused, and the inference service hears nothing", () =>
     Effect.gen(function* () {
       const found = yield* setup
       const refused = yield* Effect.flip(
         found.providers.updateModels(found.admin, "ren", { models: [{ id: "ren/vendor/gone", enabled: false }] }),
       )
       expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "Unknown models: ren/vendor/gone." })
-      expect(yield* found.test.gateway.settings(found.organizationId)).toEqual({})
+      expect(yield* found.test.plugin.settings(found.organizationId)).toEqual({})
     }),
   )
 
   it.live("a default model that is not <provider>/<model> stops Ren at start, not at each signup", () =>
     Effect.gen(function* () {
-      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const test = yield* TestInferencePlugin.make({ providers: [TestInferencePlugin.provider("ren")] })
       const built = yield* Effect.exit(
         Layer.build(
           ProviderSettings.layer.pipe(
             Layer.provideMerge(ModelLists.layer),
-            Layer.provideMerge(ModelGateway.layer([Effect.succeed(test.gateway)])),
+            Layer.provideMerge(InferencePlugin.layer([Effect.succeed(test.plugin)])),
             Layer.provideMerge(Access.layer),
             Layer.provide(RenInference.layerNone),
             Layer.provide(ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ REN_DEFAULT_MODEL: "default-model" }))),

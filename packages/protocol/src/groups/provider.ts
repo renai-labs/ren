@@ -46,7 +46,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
         identifier: "provider.test",
         summary: "Test a provider key",
         description:
-          "Send one small request with the fields, through the provider’s gateway, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
+          "Send one small request with the fields, through the provider’s inference service, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
       }),
     ),
   )
@@ -61,7 +61,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
         identifier: "provider.key.save",
         summary: "Save a provider key",
         description:
-          "Test the fields, then store them in the provider’s gateway. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
+          "Test the fields, then store them in the provider’s inference service. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
       }),
     ),
   )
@@ -75,7 +75,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
         identifier: "provider.key.remove",
         summary: "Remove a provider key",
         description:
-          "Remove the key from the provider’s gateway. The provider’s models leave pickers at the next push. Only admins and owners.",
+          "Remove the key from the provider’s inference service. The provider’s models leave pickers at the next push. Only admins and owners.",
       }),
     ),
   )

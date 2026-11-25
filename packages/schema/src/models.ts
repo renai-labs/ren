@@ -84,7 +84,7 @@ export const Info = Schema.Struct({
   ),
   protocol: ModelProtocol,
   gateway: Schema.optionalKey(Schema.NonEmptyString).annotate({
-    description: "The name the model gateway knows the model by. Absent: the id.",
+    description: "The name the inference service knows the model by. Absent: the id.",
   }),
   runtime: Schema.optionalKey(Runtime).annotate({ description: "Absent: `http`." }),
   price: Schema.optionalKey(Price).annotate({ description: "Absent for a model the organization pays itself." }),

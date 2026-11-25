@@ -24,7 +24,7 @@ export const Connection = Schema.Struct({
   label: Schema.String,
   providerName: Schema.String,
   providerId: Schema.optionalKey(Schema.String).annotate({
-    description: "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older gateway.",
+    description: "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older inference service.",
   }),
   iconUrl: Schema.String,
   status: Schema.Struct({ label: Schema.String, tone: Tone }),

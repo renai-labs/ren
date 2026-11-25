@@ -123,7 +123,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModelGateway.Changed"
+                "$ref": "#/components/schemas/InferencePlugin.Changed"
               }
             }
           },
@@ -158,6 +158,22 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
+      "InferencePlugin.Changed": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["provider", "organizationId"],
+        "additionalProperties": false,
+        "description": "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull."
+      },
       "InvalidRequestErrorEncoded": {
         "type": "object",
         "properties": {
@@ -181,22 +197,6 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
-      },
-      "ModelGateway.Changed": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "minLength": 1
-          },
-          "organizationId": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": ["provider", "organizationId"],
-        "additionalProperties": false,
-        "description": "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull."
       },
       "Space.ID": {
         "type": "string",

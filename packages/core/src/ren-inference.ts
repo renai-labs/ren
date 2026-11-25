@@ -3,7 +3,7 @@ export * as RenInference from "./ren-inference.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import { ModelGateway } from "@ren/schema/model-gateway"
+import { InferencePlugin } from "@ren/schema/inference-plugin"
 import { Models } from "@ren/schema/models"
 import type { Usage } from "@ren/schema/usage"
 import { RenInference } from "@ren/schema/ren-inference"
@@ -32,7 +32,7 @@ export interface SavedKey {
   readonly testedAt: DateTime.Utc
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers P29, §10: the organization's settings of each provider, as the gateway reads them from its LiteLLM team and credentials.
+// oxlint-disable-next-line ren/no-comments -- Providers P29, §10: the organization's settings of each provider, as the inference service reads them from its LiteLLM team and credentials.
 export const ProviderSettings = Schema.Record(
   Schema.String,
   Schema.Struct({
@@ -88,7 +88,7 @@ export interface Interface {
     actor: Actor.Info,
     input: RenInference.HarnessPlanInput,
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
-  readonly providers: Effect.Effect<ReadonlyArray<ModelGateway.Provider>, Failure>
+  readonly providers: Effect.Effect<ReadonlyArray<InferencePlugin.Provider>, Failure>
   readonly providerSettings: (organizationId: Auth.OrganizationID) => Effect.Effect<ProviderSettings, Failure>
   readonly updateProvider: (
     organizationId: Auth.OrganizationID,
@@ -115,12 +115,12 @@ export interface Interface {
   readonly models: (
     provider: string,
     organizationId?: Auth.OrganizationID,
-  ) => Effect.Effect<ModelGateway.Listed, Failure>
+  ) => Effect.Effect<InferencePlugin.Listed, Failure>
   readonly limits: (
     organizationId: Auth.OrganizationID,
     provider: string,
     query: { readonly model: string; readonly seat?: string },
-  ) => Effect.Effect<ReadonlyArray<ModelGateway.Limit>, Failure>
+  ) => Effect.Effect<ReadonlyArray<InferencePlugin.Limit>, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
@@ -136,7 +136,7 @@ const TestAnswer = Schema.Struct({ ok: Schema.Boolean, message: Schema.optional(
 
 const SavedAnswer = Schema.Struct({ last4: Schema.String, testedAt: Schema.DateTimeUtc })
 
-// oxlint-disable-next-line ren/no-comments -- Providers P17: the fields go to the gateway in this one body and nowhere else.
+// oxlint-disable-next-line ren/no-comments -- Providers P17: the fields go to the inference service in this one body and nowhere else.
 const revealed = (fields: KeyFields) =>
   Object.fromEntries(
     Object.keys(fields).flatMap((name) => {
@@ -503,7 +503,7 @@ export const layer = Layer.effect(
         })
         return answer.message ? { ok: answer.ok, message: answer.message } : { ok: answer.ok }
       }),
-      // oxlint-disable-next-line ren/no-comments -- The token names the member who saves the key; the gateway keeps it with the key.
+      // oxlint-disable-next-line ren/no-comments -- The token names the member who saves the key; the inference service keeps it with the key.
       saveKey: Effect.fn("RenInference.saveKey")(function* (organizationId, provider, fields, savedBy) {
         return yield* call(
           { org: organizationId, member: savedBy },
@@ -517,14 +517,14 @@ export const layer = Layer.effect(
         yield* send({ org: organizationId }, "DELETE", `${providerPath(provider)}/key`)
       }),
       providers: Effect.gen(function* () {
-        return yield* call({ org: renOrganization }, "GET", "/v1/providers", Schema.Array(ModelGateway.Provider))
+        return yield* call({ org: renOrganization }, "GET", "/v1/providers", Schema.Array(InferencePlugin.Provider))
       }).pipe(Effect.withSpan("RenInference.providers")),
       models: Effect.fn("RenInference.models")(function* (provider, organizationId) {
         return yield* call(
           { org: organizationId ?? renOrganization },
           "GET",
           `/v1/providers/${encodeURIComponent(provider)}/models`,
-          ModelGateway.Listed,
+          InferencePlugin.Listed,
         )
       }),
       // oxlint-disable-next-line ren/no-comments -- Providers §9.3, §10: the free cap of a free model, and the windows of the seat when it is the provider's.
@@ -534,7 +534,7 @@ export const layer = Layer.effect(
           { org: organizationId },
           "GET",
           `${providerPath(provider)}/limits?${search.toString()}`,
-          Schema.Array(ModelGateway.Limit),
+          Schema.Array(InferencePlugin.Limit),
         )
       }),
     })

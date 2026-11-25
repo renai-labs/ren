@@ -383,9 +383,9 @@ export type RenInferenceHarnessTarget =
   | { kind: "hermes-provider-configuration" }
   | { kind: "hermes-environment" }
 
-export type ModelGatewayPayer = "ren" | "customer"
+export type InferencePluginPayer = "ren" | "customer"
 
-export type ModelGatewayField = {
+export type InferencePluginField = {
   name: string
   label: string
   secret: boolean
@@ -1722,13 +1722,13 @@ export type ProviderInfo = {
   name: string
   mark: string
   logo?: string
-  payer: ModelGatewayPayer
+  payer: InferencePluginPayer
   builtIn: boolean
   added: boolean
   enabled: boolean
   method?: ModelsMethod
   methods: Array<ModelsMethod>
-  fields: Array<ModelGatewayField>
+  fields: Array<InferencePluginField>
   key: ProviderKey | null
   seats: Array<RenInferenceConnection>
   modelTypes: { [x: string]: number }

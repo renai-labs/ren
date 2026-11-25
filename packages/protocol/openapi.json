@@ -20279,6 +20279,35 @@
         "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$",
         "description": "A host name, or `*.<domain>` for its subdomains."
       },
+      "InferencePlugin.Field": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "secret": {
+            "type": "boolean"
+          },
+          "multiline": {
+            "type": "boolean"
+          },
+          "placeholder": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "label", "secret"],
+        "additionalProperties": false,
+        "description": "One field of a provider’s Connect form."
+      },
+      "InferencePlugin.Payer": {
+        "type": "string",
+        "enum": ["ren", "customer"]
+      },
       "Infra.Applied": {
         "type": "object",
         "properties": {
@@ -22884,35 +22913,6 @@
         "required": ["path", "content"],
         "additionalProperties": false
       },
-      "ModelGateway.Field": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "label": {
-            "type": "string",
-            "minLength": 1
-          },
-          "secret": {
-            "type": "boolean"
-          },
-          "multiline": {
-            "type": "boolean"
-          },
-          "placeholder": {
-            "type": "string"
-          }
-        },
-        "required": ["name", "label", "secret"],
-        "additionalProperties": false,
-        "description": "One field of a provider’s Connect form."
-      },
-      "ModelGateway.Payer": {
-        "type": "string",
-        "enum": ["ren", "customer"]
-      },
       "ModelTypes.Defaults": {
         "type": "object",
         "properties": {
@@ -23965,7 +23965,7 @@
             "description": "The address of the provider’s logo."
           },
           "payer": {
-            "$ref": "#/components/schemas/ModelGateway.Payer"
+            "$ref": "#/components/schemas/InferencePlugin.Payer"
           },
           "builtIn": {
             "type": "boolean",
@@ -23990,7 +23990,7 @@
           "fields": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ModelGateway.Field"
+              "$ref": "#/components/schemas/InferencePlugin.Field"
             }
           },
           "key": {

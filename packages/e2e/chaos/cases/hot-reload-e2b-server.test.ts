@@ -20,8 +20,8 @@ import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
 import { ModelLists } from "@ren/core/model-lists"
-import { ModelGateway } from "@ren/core/model-gateway"
-import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
+import { InferencePlugin } from "@ren/core/inference-plugin"
+import { RenInferencePlugin } from "@ren/core/inference-plugin/ren"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { SessionRunner } from "@ren/core/session/runner"
@@ -53,7 +53,7 @@ const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
 const small = "anthropic/claude-haiku-5-5"
 
-// oxlint-disable-next-line ren/no-comments -- The stand-in gateway's Ren card lists the one small model the LiteLLM key may call, under the name LiteLLM knows.
+// oxlint-disable-next-line ren/no-comments -- The stand-in inference service's Ren card lists the one small model the LiteLLM key may call, under the name LiteLLM knows.
 const smallModel: Models.Info = {
   id: small,
   name: "Small",
@@ -241,7 +241,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provide(
               Models.layer.pipe(
                 Layer.provideMerge(ModelLists.layer),
-                Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
+                Layer.provideMerge(InferencePlugin.layer([RenInferencePlugin.plugin])),
                 Layer.provide(RenInference.layer.pipe(Layer.provide([Signer.layerLocal, Access.layer]))),
               ),
             ),
