@@ -243,7 +243,7 @@ const mapped = {
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the channel reaches the ren agent." })),
   fallback: Schema.optionalKey(Schema.Boolean).annotate({
     description:
-      "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository.",
+      "Run a sender that Ren cannot match to a space member as the mapping’s fallback user. Apply keeps that user while they can act in the mapping’s space, and otherwise, as for a new mapping, uses the person who applies the spec. On by default, off by default for a public GitHub repository.",
   }),
   triggers: Schema.optionalKey(
     Schema.Record(TriggerID, Schema.Struct({ prompt: Schema.optionalKey(Schema.NonEmptyString) })).annotate({

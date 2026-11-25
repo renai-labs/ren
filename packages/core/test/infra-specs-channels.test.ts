@@ -12,6 +12,7 @@ import { InfraSpecs } from "../src/infra-specs.js"
 import { Space } from "../src/space.js"
 import { testEffect } from "./lib/effect.js"
 import { InfraFixture } from "./lib/infra.js"
+import { Seed } from "./lib/seed.js"
 
 const ready = {
   id: "pull_request_ready",
@@ -231,6 +232,61 @@ describe("InfraSpecs channels", () => {
         }),
       ])
       expect(yield* mappings(o.admin)).toMatchObject([{ space: { id: eng.id }, fallback: false }])
+    }),
+  )
+
+  it.live("an update keeps the fallback user, unless they cannot act in the space the mapping moves to", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const channelMappings = yield* ChannelMappings.Service
+      const o = yield* InfraFixture.org
+      const eng = yield* spaces.create(o.admin, { name: "Eng", slug: "eng" })
+      yield* spaces.create(o.admin, { name: "Ops", slug: "ops" })
+      const ada = yield* Seed.actor(o.organizationId, "member")
+      yield* Seed.join(o.home.id, ada.userId)
+      yield* Seed.join(eng.id, ada.userId)
+      const installId = yield* install(o.organizationId, "github")
+      yield* channelMappings.create(o.admin, {
+        installId,
+        place: "9001",
+        spaceId: o.home.id,
+        fallbackUserId: ada.userId,
+      })
+      const bound = { kind: "github", repository: "acme/web" }
+      const names = { home: "Home", eng: "Eng", ops: "Ops" }
+      const declared = (owner: keyof typeof names) =>
+        input(
+          o.bindings.organization,
+          {
+            ...Object.fromEntries(Object.entries(names).map((entry) => [entry[0], { name: entry[1] }])),
+            [owner]: {
+              name: names[owner],
+              channels: { "acme-web": { kind: "github", purpose: "Web", triggers: { pull_request_ready: {} } } },
+            },
+          },
+          { [owner]: { channels: { "acme-web": bound } } },
+        )
+
+      const updated = yield* apply(o.admin, declared("home"))
+
+      expect(updated.changes).toEqual([
+        InfraFixture.change("update", "channel", "spaces/home/channels/acme-web", { fields: ["triggers"] }),
+      ])
+      expect(yield* mappings(o.admin)).toMatchObject([
+        { fallback: true, fallbackUser: { id: ada.userId }, triggers: [{ id: "pull_request_ready" }] },
+      ])
+
+      const moved = yield* apply(o.admin, { lock: updated.lock, ...declared("eng") })
+
+      expect(moved.changes).toMatchObject([{ action: "update", fields: ["space"] }])
+      expect(yield* mappings(o.admin)).toMatchObject([{ space: { id: eng.id }, fallbackUser: { id: ada.userId } }])
+
+      const outside = yield* apply(o.admin, { lock: moved.lock, ...declared("ops") })
+
+      expect(outside.changes).toMatchObject([{ action: "update", fields: ["space"] }])
+      expect(yield* mappings(o.admin)).toMatchObject([
+        { space: { name: "Ops" }, fallback: true, fallbackUser: { id: o.admin.userId } },
+      ])
     }),
   )
 

@@ -11,8 +11,10 @@ import type { Space } from "@ren/schema/space"
 import { Slug } from "@ren/util/slug"
 import { and, asc, eq, isNull } from "drizzle-orm"
 import { Effect, Equal } from "effect"
+import { Access } from "../access.js"
 import { ChannelMappings } from "../channel-mappings.js"
 import { Primitive } from "../primitive.js"
+import { SpaceQueries } from "../space/queries.js"
 import { InfraPlan } from "./plan.js"
 
 type Provider = "github" | "slack"
@@ -26,6 +28,7 @@ export interface LiveMapping {
   readonly spaceId: Space.ID
   readonly agentId: Agent.ID | null
   readonly fallback: boolean
+  readonly fallbackUserId: Auth.UserID | null
   readonly triggers: ReadonlyArray<Channel.TriggerSetting>
 }
 
@@ -138,6 +141,7 @@ export const load = Effect.fnUntraced(function* (
           spaceId: row.mapping.space_id,
           agentId: row.agentOrganizationId ? row.mapping.agent_id : null,
           fallback: row.mapping.fallback,
+          fallbackUserId: row.mapping.fallback_user_id,
           triggers: row.mapping.triggers.map((trigger) =>
             trigger.prompt ? { id: trigger.id, prompt: trigger.prompt } : { id: trigger.id },
           ),
@@ -149,6 +153,8 @@ export const load = Effect.fnUntraced(function* (
 
 export const make = Effect.gen(function* () {
   const channelMappings = yield* ChannelMappings.Service
+  const database = yield* Database.Service
+  const access = yield* Access.Service
 
   const placeOf = (
     actor: InfraPlan.Context["actor"],
@@ -274,12 +280,20 @@ export const make = Effect.gen(function* () {
           (entry.target.kind === "github"
             ? yield* placeOf(context.actor, entry.install.id, entry.target.repository)
             : entry.target.channelId)
+        const fallbackUserId = current?.fallbackUserId
+        const kept =
+          fallbackUserId &&
+          (fallback === false ||
+            (yield* database.transaction((transaction) =>
+              SpaceQueries.actsIn(transaction, access, context.actor.organizationId, spaceId, fallbackUserId),
+            )))
         yield* channelMappings.create(context.actor, {
           installId: entry.install.id,
           place,
           spaceId,
           ...(agentId && { agentId }),
           ...(typeof fallback === "boolean" && { fallback }),
+          ...(kept && { fallbackUserId }),
           triggers,
         })
       })
