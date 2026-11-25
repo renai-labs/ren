@@ -1,6 +1,6 @@
 # OpenCode Console: what Ren copies
 
-The OpenCode Console (`opencode.ai/console`) is the model for Ren's Providers and Ren models pages. Observed on 22 Nov 2026. Its tabs: Activity, Go, Models, Providers, Controls, Settings.
+The OpenCode Console (`opencode.ai/console`) is the model for Ren's Providers and Ren models pages. Observed on 22 Nov 2026; providers checked again on 25 Nov 2026. Its tabs: Activity, Go, Models, Providers, Controls, Settings.
 
 ## Providers
 
@@ -8,7 +8,7 @@ The page says "Connect providers with your own keys. OpenCode's managed models a
 
 **Connect Provider** opens a searchable grid. Each card shows the logo, the name, "N models" (a link to models.dev), the AI SDK package and **Connect**. **Add Custom Provider** is at the top.
 
-The 35 providers: Anthropic, OpenAI, Google, Azure, AWS Bedrock, Google Vertex AI, xAI, Meta, Z.AI, DeepSeek, NVIDIA, MiniMax, Moonshot AI, Alibaba, Cohere, Baseten, Cerebras, Chutes, Cloudflare AI Gateway, Databricks, DeepInfra, DigitalOcean, Fireworks AI, Groq, Together AI, Thinking Machines, Hugging Face, Mistral, OpenRouter, Poolside, SiliconFlow, Vultr, Venice AI, Vercel AI Gateway, Xiaomi. LiteLLM is listed as a custom gateway.
+The 37 providers: Anthropic, OpenAI, Google, Azure, AWS Bedrock, Google Vertex AI, xAI, Meta, Z.AI, DeepSeek, NVIDIA, MiniMax, Moonshot AI, Alibaba, Cohere, Baseten, Cerebras, Chutes, Cloudflare AI Gateway, Cloudflare Workers AI, Databricks, DeepInfra, DigitalOcean, Fireworks AI, Groq, Together AI, Thinking Machines, Hugging Face, Mistral, Ollama Cloud, OpenRouter, Poolside, SiliconFlow, Vultr, Venice AI, Vercel AI Gateway, Xiaomi. LiteLLM and Portkey are listed as custom gateways: an address and a key, with no models.dev list.
 
 The Connect dialog: **Name** (prefilled with the provider name), **API Key**, **Who can use this?** (Everyone), **Test connection**, **Cancel**, **Save**.
 
@@ -32,8 +32,8 @@ The Console has no Claude or ChatGPT subscription. In OpenCode they are sign-ins
 
 | Console                                                                       | Ren v1                                                                  |
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Providers grid with search, 35 providers, Connect dialog with Test connection | Yes. One key per provider. No Name field and no "Who can use this?"     |
-| Add Custom Provider                                                           | No                                                                      |
+| Providers grid with search, 37 providers, Connect dialog with Test connection | Yes. One key per provider. No Name field and no "Who can use this?"     |
+| Add Custom Provider, LiteLLM and Portkey                                      | No. A separate task                                                     |
 | Several named keys per provider                                               | No                                                                      |
 | Who can use this?                                                             | No                                                                      |
 | Models page: Enabled switch per model                                         | Yes, for Ren's models                                                   |
