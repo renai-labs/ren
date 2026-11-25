@@ -24,7 +24,6 @@ import { SubscriptionLimits } from "../../components/subscription-limits.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
-import { ChatGptGuide } from "./chatgpt-guide.js"
 import { ConnectDialog } from "./connect-dialog.js"
 import { ModelTypes } from "./model-types.js"
 
@@ -309,7 +308,6 @@ function Subscriptions(props: {
           {signIn[provider.id] ?? `Connect ${provider.name}`}
         </Button>
       </div>
-      {provider.id === "openai" && provider.canManage ? <ChatGptGuide /> : null}
       {provider.seats.length === 0 ? (
         <p className="text-xs text-muted-foreground">No subscription yet. Any member can connect theirs.</p>
       ) : (
