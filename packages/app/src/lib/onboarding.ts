@@ -26,8 +26,8 @@ export interface Part {
   readonly step: string
   readonly title: string
   readonly mark:
-    | { readonly logo: string; readonly mono?: true }
-    | { readonly brand: "github" | "slack" }
+    | { readonly app: string }
+    | { readonly channel: ChannelProvider }
     | { readonly glyph: "import" | "plugin" }
   readonly action: Action
 }
@@ -83,25 +83,25 @@ export const personal: ReadonlyArray<Task> = [
       {
         step: "gmail.connected",
         title: "Gmail",
-        mark: { logo: "gmail" },
+        mark: { app: "gmail" },
         action: { kind: "app", label: "Connect", slug: "gmail" },
       },
       {
         step: "granola.connected",
         title: "Granola",
-        mark: { logo: "granola", mono: true },
+        mark: { app: "granola" },
         action: { kind: "app", label: "Connect", slug: "granola" },
       },
       {
         step: "github.app.connected",
         title: "GitHub",
-        mark: { brand: "github" },
+        mark: { app: "github" },
         action: { kind: "app", label: "Connect", slug: "github" },
       },
       {
         step: "drive.connected",
         title: "Google Drive",
-        mark: { logo: "google-drive" },
+        mark: { app: "google-drive" },
         action: { kind: "app", label: "Connect", slug: "google-drive" },
       },
     ],
@@ -145,13 +145,13 @@ export const organization: ReadonlyArray<Task> = [
       {
         step: "slack.connected",
         title: "Slack",
-        mark: { brand: "slack" },
+        mark: { channel: "slack" },
         action: { kind: "channel", label: "Connect", provider: "slack" },
       },
       {
         step: "github.connected",
         title: "GitHub",
-        mark: { brand: "github" },
+        mark: { channel: "github" },
         action: { kind: "channel", label: "Connect", provider: "github" },
       },
     ],

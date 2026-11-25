@@ -4,8 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { IconArrowUpRight, IconChevronRight } from "@tabler/icons-react"
 import { toast } from "@ren/ui/sonner"
+import { Item, ItemMedia } from "@ren/ui/item"
 import { Spinner } from "@ren/ui/spinner"
-import { cn } from "cn"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { InviteMembersDialog } from "../../components/invite-members-dialog.js"
 import { ProfileDialog } from "../../components/profile-dialog.js"
@@ -36,20 +36,15 @@ export function StepAction(props: Row & { action: Onboarding.Action }) {
 function RowButton(props: { row: Row; pending?: boolean; trail?: "open" | "external"; onClick: () => void }) {
   const Trail = props.trail === "external" ? IconArrowUpRight : IconChevronRight
   return (
-    <button
-      type="button"
+    <Item
+      render={<button type="button" aria-busy={props.pending} disabled={props.pending} onClick={props.onClick} />}
       className={props.row.className}
-      aria-busy={props.pending}
-      disabled={props.pending}
-      onClick={props.onClick}
     >
       {props.row.children}
-      {props.pending ? (
-        <Spinner className="my-0.5 size-4 shrink-0 text-muted-foreground" />
-      ) : (
-        <Trail aria-hidden className="my-0.5 size-4 shrink-0 text-muted-foreground" />
-      )}
-    </button>
+      <ItemMedia variant="icon" className="text-muted-foreground">
+        {props.pending ? <Spinner /> : <Trail aria-hidden />}
+      </ItemMedia>
+    </Item>
   )
 }
 
@@ -131,26 +126,27 @@ function AppAction(props: { slug: string; row: Row }) {
 
 function ChatAction(props: { prompt: string; row: Row }) {
   return (
-    <Link
-      to="/"
-      search={{ prompt: props.prompt }}
-      target="_blank"
-      rel="noopener"
-      className={cn(props.row.className, "hover:bg-muted/50")}
+    <Item
+      render={<Link to="/" search={{ prompt: props.prompt }} target="_blank" rel="noopener" />}
+      className={props.row.className}
     >
       {props.row.children}
       <span className="sr-only">(opens in a new tab)</span>
-      <IconArrowUpRight aria-hidden className="my-0.5 size-4 shrink-0 text-muted-foreground" />
-    </Link>
+      <ItemMedia variant="icon" className="text-muted-foreground">
+        <IconArrowUpRight aria-hidden />
+      </ItemMedia>
+    </Item>
   )
 }
 
 function PageAction(props: { to: "/automations/new"; row: Row }) {
   return (
-    <Link to={props.to} className={cn(props.row.className, "hover:bg-muted/50")}>
+    <Item render={<Link to={props.to} />} className={props.row.className}>
       {props.row.children}
-      <IconChevronRight aria-hidden className="my-0.5 size-4 shrink-0 text-muted-foreground" />
-    </Link>
+      <ItemMedia variant="icon" className="text-muted-foreground">
+        <IconChevronRight aria-hidden />
+      </ItemMedia>
+    </Item>
   )
 }
 

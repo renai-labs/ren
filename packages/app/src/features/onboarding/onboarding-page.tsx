@@ -6,30 +6,52 @@ import {
   IconCircleCheck,
   IconCircleDashed,
   IconDownload,
+  IconLink,
+  IconListCheck,
+  IconMessage,
+  IconPlus,
   IconPuzzle,
+  IconStar,
+  IconTerminal2,
+  IconUserPlus,
+  type Icon,
 } from "@tabler/icons-react"
 import { buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Progress } from "@ren/ui/progress"
 import { cn } from "cn"
+import { AppIcon } from "../../components/app-icon.js"
+import { ChannelMark } from "../../components/channel-mark.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { Page } from "../../components/page.js"
-import { GitHubMark, SlackMark } from "../../icons/brands.js"
+import { AppRegistryLists } from "../../lib/app-registry.js"
 import { Onboarding } from "../../lib/onboarding.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
 import { StepAction } from "./step-action.js"
 
 const row =
-  "flex w-full items-center gap-3 text-left outline-none transition-colors duration-150 ease-out focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset enabled:hover:bg-muted/50 disabled:cursor-progress motion-reduce:transition-none"
+  "flex-nowrap gap-3 rounded-none text-left focus-visible:ring-inset enabled:hover:bg-muted/50 disabled:cursor-progress [a]:hover:bg-muted/50"
 
-const taskRow = cn(row, "group/row min-h-16 items-start px-4 py-3")
+const taskRow = cn(row, "min-h-16 items-start px-4 py-3")
 
-const partRow = cn(row, "group/row min-h-10 py-2 pr-4 pl-11")
+const partRow = cn(row, "min-h-10 py-2 pr-4 pl-11")
 
 const glyphs = { import: IconDownload, plugin: IconPuzzle } as const
 
-const brands = { github: GitHubMark, slack: SlackMark } as const
+const actionIcons = {
+  external: IconStar,
+  app: IconLink,
+  channel: IconLink,
+  provider: IconLink,
+  "custom-app": IconPlus,
+  "import-memory": IconDownload,
+  invite: IconUserPlus,
+  chat: IconMessage,
+  page: IconPlus,
+  guide: IconTerminal2,
+} as const satisfies Record<Onboarding.Action["kind"], Icon>
 
 export function OnboardingPage() {
   const { api } = RouterContext.useRouterContext()
@@ -108,14 +130,14 @@ function Checklist(props: { tasks: ReadonlyArray<Onboarding.TaskState> }) {
 
 function StepMark(props: { done: boolean }) {
   return (
-    <>
+    <ItemMedia variant="icon">
       {props.done ? (
-        <IconCircleCheck aria-hidden className="my-0.5 size-4 shrink-0 text-chart-2" />
+        <IconCircleCheck aria-hidden className="text-chart-2" />
       ) : (
-        <IconCircleDashed aria-hidden className="my-0.5 size-4 shrink-0 text-muted-foreground" />
+        <IconCircleDashed aria-hidden className="text-muted-foreground" />
       )}
       <span className="sr-only">{props.done ? "Done:" : "To do:"}</span>
-    </>
+    </ItemMedia>
   )
 }
 
@@ -137,27 +159,28 @@ function Reward(props: { state: Onboarding.TaskState }) {
 
 function TaskText(props: { state: Onboarding.TaskState; count?: string | undefined }) {
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="flex flex-wrap items-baseline gap-x-2 text-sm leading-5 font-medium">
+    <ItemContent className="min-w-0 gap-0.5">
+      <ItemTitle className="leading-5">
         {props.state.task.title}
         {props.count ? <span className="font-normal text-muted-foreground tabular-nums">{props.count}</span> : null}
         <Reward state={props.state} />
-      </span>
-      <span className="text-xs text-pretty text-muted-foreground">{props.state.task.description}</span>
-    </span>
+      </ItemTitle>
+      <ItemDescription className="text-xs text-pretty">{props.state.task.description}</ItemDescription>
+    </ItemContent>
   )
 }
 
-function ActionHint(props: { children: ReactNode }) {
+function ActionHint(props: { icon: Icon; children: ReactNode }) {
   return (
     <span
       className={buttonVariants({
         variant: "secondary",
         size: "sm",
         className:
-          "pointer-events-none -my-0.75 shrink-0 transition-opacity duration-150 ease-out pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-visible/row:opacity-100 motion-reduce:transition-none",
+          "pointer-events-none -my-0.75 shrink-0 transition-opacity duration-150 ease-out pointer-fine:opacity-0 pointer-fine:group-hover/item:opacity-100 pointer-fine:group-focus-visible/item:opacity-100 motion-reduce:transition-none",
       })}
     >
+      <props.icon data-icon="inline-start" />
       {props.children}
     </span>
   )
@@ -176,14 +199,14 @@ function TaskRow(props: { state: Onboarding.TaskState }) {
     return (
       <StepAction action={action} className={taskRow}>
         {content}
-        <ActionHint>{action.label}</ActionHint>
+        <ActionHint icon={actionIcons[action.kind]}>{action.label}</ActionHint>
       </StepAction>
     )
   return (
-    <div className={taskRow}>
+    <Item className={taskRow}>
       {content}
-      <span className="size-4 shrink-0" />
-    </div>
+      <ItemMedia variant="icon" className="size-4" />
+    </Item>
   )
 }
 
@@ -195,18 +218,20 @@ function GroupRow(props: { state: Onboarding.TaskState }) {
       : undefined
   return (
     <Collapsible defaultOpen={!state.done}>
-      <CollapsibleTrigger className={cn(taskRow, "group/trigger")}>
+      <Item render={<CollapsibleTrigger />} className={taskRow}>
         <StepMark done={state.done} />
         <TaskText state={state} count={count} />
-        <ActionHint>
-          <span className="group-data-panel-open/trigger:hidden">Show steps</span>
-          <span className="hidden group-data-panel-open/trigger:inline">Hide steps</span>
+        <ActionHint icon={IconListCheck}>
+          <span className="group-data-panel-open/item:hidden">Show steps</span>
+          <span className="hidden group-data-panel-open/item:inline">Hide steps</span>
         </ActionHint>
-        <IconChevronDown
-          aria-hidden
-          className="my-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-data-panel-open/trigger:rotate-180 motion-reduce:transition-none"
-        />
-      </CollapsibleTrigger>
+        <ItemMedia variant="icon" className="text-muted-foreground">
+          <IconChevronDown
+            aria-hidden
+            className="transition-transform duration-200 ease-out group-data-panel-open/item:rotate-180 motion-reduce:transition-none"
+          />
+        </ItemMedia>
+      </Item>
       <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
         <ul aria-label={`Steps for ${state.task.title}`} className="pb-2">
           {state.parts.map((part) => (
@@ -221,21 +246,14 @@ function GroupRow(props: { state: Onboarding.TaskState }) {
 }
 
 function PartMark(props: { part: Onboarding.Part }) {
+  const { api } = RouterContext.useRouterContext()
+  const registry = useQuery(AppRegistryLists.bySlugs(api, Onboarding.appSlugs))
   const mark = props.part.mark
-  if ("logo" in mark)
-    return (
-      <img
-        src={`${import.meta.env.BASE_URL}icons/${mark.logo}.png`}
-        alt=""
-        aria-hidden
-        draggable={false}
-        className={cn("size-5 shrink-0 object-contain", mark.mono && "dark:invert")}
-      />
-    )
-  if ("brand" in mark) {
-    const Brand = brands[mark.brand]
-    return <Brand className="size-5 shrink-0 text-foreground" />
+  if ("app" in mark) {
+    const app = registry.data?.items.find((each) => each.slug === mark.app)
+    return <AppIcon name={app?.name ?? props.part.title} description={app?.description} icon={app?.icon} size="sm" />
   }
+  if ("channel" in mark) return <ChannelMark provider={mark.channel} className="size-5 shrink-0" />
   const Glyph = glyphs[mark.glyph]
   return <Glyph aria-hidden className="size-5 shrink-0 text-muted-foreground" />
 }
@@ -244,24 +262,28 @@ function PartRow(props: { part: Onboarding.Part; done: boolean }) {
   const part = props.part
   const content = (
     <>
-      <PartMark part={part} />
-      <span className={cn("min-w-0 flex-1 text-sm", props.done && "text-muted-foreground")}>{part.title}</span>
+      <ItemMedia>
+        <PartMark part={part} />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className={cn("font-normal", props.done && "text-muted-foreground")}>{part.title}</ItemTitle>
+      </ItemContent>
       {props.done ? (
         <span className="flex items-center gap-1 text-xs text-chart-2">
           <IconCheck aria-hidden className="size-3.5" />
           Done
         </span>
       ) : (
-        <ActionHint>{part.action.label}</ActionHint>
+        <ActionHint icon={actionIcons[part.action.kind]}>{part.action.label}</ActionHint>
       )}
     </>
   )
   if (props.done)
     return (
-      <div className={partRow}>
+      <Item className={partRow}>
         {content}
-        <span className="size-4 shrink-0" />
-      </div>
+        <ItemMedia variant="icon" className="size-4" />
+      </Item>
     )
   return (
     <StepAction action={part.action} className={partRow}>
