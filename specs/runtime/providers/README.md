@@ -52,7 +52,7 @@ Done when:
 | P3  | Each card has an on/off switch, Ren included. Ren off hides Ren's models, free models included                                                                                                          |
 | P4  | No automatic fallback and no fallback switch. After an error, the person picks another model and presses Continue                                                                                       |
 | P5  | The providers for own keys are the OpenCode Console's 35 providers ([`references/console.md`](references/console.md)). One key per provider per organization                                            |
-| P6  | Ren's card has a models list: one on/off switch per model, and a "New models on" switch. Not in v1: several keys per provider, "who can use this", custom providers, budgets and reservations           |
+| P6  | Ren's card has a models list: one on/off switch per model. A new model is always on. Not in v1: several keys per provider, "who can use this", custom providers, budgets and reservations               |
 | P7  | Admins and owners change cards, methods, keys and Ren's model switches. Any member connects their own seat. A member removes their own seats; admins remove any seat                                    |
 | P8  | Seats serve the whole organization. Several seats per vendor spread the load; a chat sticks to one seat. Keys: one per provider                                                                         |
 | P9  | models.dev is the source. Ren core is the only reader for pickers and brains. Every 5 min with an ETag; the last good copy is kept                                                                      |
@@ -155,7 +155,7 @@ Providers                                                                       
 
 ### 5.2 Ren models
 
-A table like the Console's Models page: name, id, price per 1M tokens (input, output, cache read, cache write), a "Free" tag and an on/off switch per model. Filters: All, On, Free. A side switch: **New models on** (default on). A new model from models.dev takes that state. Admins change it.
+A table like the Console's Models page: name, id, price per 1M tokens (input, output, cache read, cache write), a "Free" tag and an on/off switch per model. Filters: All, On, Free. A new model from models.dev is always on; an admin can switch it off after it arrives. Admins change the switches.
 
 ### 5.3 Picker
 
@@ -193,15 +193,15 @@ Facts on 21 Nov 2026: the v2 catalog had 327 providers and 11.8 MB. `canonical_i
 
 ### 6.2 Ren's models
 
-| Rule     | Value                                                                               |
-| -------- | ----------------------------------------------------------------------------------- |
-| Source   | Ren's upstream provider on models.dev (`REN_MODELS_UPSTREAM`)                       |
-| Kept     | type chat, tool calling, not deprecated, not in the block list (`REN_MODELS_BLOCK`) |
-| Id       | `ren/<canonical_id>`; without a `canonical_id`, `ren/<upstream id>`                 |
-| Free     | price 0 on models.dev                                                               |
-| Price    | the models.dev price; billing applies the markup                                    |
-| Switches | per model; a new model takes "New models on"                                        |
-| Runtime  | Claude models (`ren/anthropic/…`): `claude`. Others: HTTP                           |
+| Rule     | Value                                                                                                                                                                                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source   | Ren's upstream provider on models.dev (`REN_MODELS_UPSTREAM`)                                                                                                                                 |
+| Kept     | type chat, tool calling, not deprecated, not in the block list (`REN_MODELS_BLOCK`), not an alias (an upstream id that starts with `~`, such as OpenRouter's `~anthropic/claude-opus-latest`) |
+| Id       | `ren/<canonical_id>`; without a `canonical_id`, `ren/<upstream id>`                                                                                                                           |
+| Free     | price 0 on models.dev                                                                                                                                                                         |
+| Price    | the models.dev price; billing applies the markup                                                                                                                                              |
+| Switches | per model; a new model is on                                                                                                                                                                  |
+| Runtime  | Claude models (`ren/anthropic/…`): `claude`. Others: HTTP                                                                                                                                     |
 
 Ren core sends this list to the gateway (§10) before it notifies brains, so the gateway knows a model before a picker shows it.
 
@@ -278,7 +278,7 @@ New rules (P26):
 | Change                                                                           | Written to                                                                  | Notify                                  |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
 | Card on/off, method, key saved or removed                                        | `organization_provider`                                                     | `org:<id>`                              |
-| Ren model switch, "New models on"                                                | `organization_ren_model`, `organization_settings`                           | `org:<id>`                              |
+| Ren model switch                                                                 | `organization_ren_model`                                                    | `org:<id>`                              |
 | Seat connected, removed, or its models changed (the gateway tells Ren core, §10) | `organization_seat_models`                                                  | `org:<id>`                              |
 | models.dev changed                                                               | `model_catalog`, then `organization_model_list` only where the hash changed | `org:<id>` for those organizations only |
 
@@ -364,7 +364,7 @@ Gateway → Ren core: `POST /internal/inference/changed {organizationId}` when a
 | Package              | Work                                                                                                                                                                                                                                                                                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema`             | Provider settings shapes (card, method, key status, Ren model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                              |
-| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_seat_models`, `model_catalog`, `organization_model_list`; `organization_settings.ren_new_models`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                               |
+| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_seat_models`, `model_catalog`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                       |
 | `core`               | `ModelCatalog` and the list job; `Models.grant` and the pull from §6.5; `RenInference` client routes of §10; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; settings `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM`, `REN_MODELS_BLOCK` |
 | `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                         |
 | `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                              |
@@ -411,7 +411,7 @@ Only rules that the code does not show:
 
 ### 13.4 App (Playwright)
 
-1. Providers: add a key (bad, then good), turn a card off and on, change the method, connect a seat (stubbed page), Ren model switches and "New models on".
+1. Providers: add a key (bad, then good), turn a card off and on, change the method, connect a seat (stubbed page), Ren model switches.
 2. Chat: the chip for each kind; each banner step; the error card actions.
 
 ## 14. Removed and superseded

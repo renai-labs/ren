@@ -36,7 +36,8 @@ The Console has no Claude or ChatGPT subscription. In OpenCode they are sign-ins
 | Add Custom Provider                                                           | No                                                                      |
 | Several named keys per provider                                               | No                                                                      |
 | Who can use this?                                                             | No                                                                      |
-| Models page: Enabled switch per model, New models switch                      | Yes, for Ren's models                                                   |
+| Models page: Enabled switch per model                                         | Yes, for Ren's models                                                   |
+| New models switch                                                             | No. A new model is always on                                            |
 | Free models switch                                                            | No switch. Free models are always on, with a daily cap per organization |
 | Controls (reservations, budgets)                                              | No                                                                      |
 | Go                                                                            | No                                                                      |
