@@ -19,6 +19,7 @@ import { ScheduleTrigger } from "../src/schedule-trigger.js"
 import { ScheduleRuns } from "../src/schedule/runs.js"
 import { Schedules } from "../src/schedules.js"
 import { SessionRunner } from "../src/session/runner.js"
+import { Onboarding } from "../src/onboarding.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 
@@ -112,7 +113,7 @@ const it = testEffect(
     Layer.provideMerge(ScheduleTrigger.layerPostgres),
     Layer.provideMerge(runner),
     Layer.provideMerge(chats),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, DurableRunner.layerMemory)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, DurableRunner.layerMemory, Onboarding.layer)),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -211,6 +212,20 @@ describe("Schedules", () => {
         })
         expect((yield* rowOf(created.id)).next_run_at).toEqual(upcoming)
       }),
+  )
+
+  it.live("creating a schedule completes the organization's schedule.created onboarding step", () =>
+    Effect.gen(function* () {
+      const schedules = yield* Schedules.Service
+      const onboarding = yield* Onboarding.Service
+      const t = yield* team
+      yield* schedules.create(t.ada, decodeCreate({ spaceId: t.spaceId, name: "Daily", message: "Hi.", when: daily }))
+      expect(
+        (yield* onboarding.get(t.ada)).organization.steps.find(
+          (state) => state.step === Onboarding.steps.organization.scheduleCreated,
+        )?.completedAt,
+      ).not.toBeNull()
+    }),
   )
 
   it.live("two ticks at once insert one run and start one chat (S1)", () =>

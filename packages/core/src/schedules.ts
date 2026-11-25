@@ -21,6 +21,7 @@ import { ScheduleTime } from "./schedule/time.js"
 import { ScheduleTrigger } from "./schedule-trigger.js"
 import { SessionRunner } from "./session/runner.js"
 import { SpaceQueries } from "./space/queries.js"
+import { Onboarding } from "./onboarding.js"
 
 export type Interface = Primitive.Interface<typeof Schedule.definition> & {
   readonly runs: Primitive.Interface<typeof ScheduleRun.definition>["list"]
@@ -198,6 +199,7 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const trigger = yield* ScheduleTrigger.Service
+    const onboarding = yield* Onboarding.Service
 
     const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis))
 
@@ -695,6 +697,7 @@ export const layer = Layer.effect(
           }),
         )
         yield* trigger.changed(info.id)
+        yield* onboarding.record(actor.organizationId, Onboarding.steps.organization.scheduleCreated)
         return info
       }),
       update: Effect.fn("Schedules.update")(function* (

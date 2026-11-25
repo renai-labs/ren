@@ -36,6 +36,7 @@ import { SessionRunner } from "../../src/session/runner.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
 import { SpaceSettings } from "../../src/space/settings.js"
+import { Onboarding } from "../../src/onboarding.js"
 import { TestProvider } from "./hand-provider.js"
 import { Seed } from "./seed.js"
 
@@ -99,6 +100,7 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         Envelope.layerLocal,
         OAuthFetch.layerUnchecked,
         DurableRunner.layerMemory,
+        Onboarding.layer,
         machines,
         channels,
       ),
