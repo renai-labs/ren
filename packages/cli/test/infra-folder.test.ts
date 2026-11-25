@@ -119,6 +119,42 @@ describe("InfraFolder.validate", () => {
     ])
   })
 
+  test("reports each unknown key once, at the file and field that hold it", async () => {
+    const root = await folder({
+      "org.yaml": "settings:\n  permisions: []\n",
+      "environments.yaml": "Python:\n  provider: docker\n  config:\n    image: python:3.13\n    any: { nested: key }\n",
+      "deploy.yaml": "organization: acme\nspaces:\n  engineering:\n    chanels: {}\n  support:\n    timezone: UTC\n",
+      "spaces/engineering/space.yaml": "name: Engineering\nhand:\n  placement: none\n  enviroment: Python\n",
+      "spaces/engineering/agents/build/agent.yaml": "descripton: Writes the code.\n",
+      "spaces/engineering/apps/notes/app.yaml": "name: Notes\ndescription: Writes notes.\nrenamedFrom: [old]\n",
+      "spaces/engineering/apps/notes/mcps.yaml":
+        "docs:\n  name: Docs\n  description: Reads docs.\n  transport: { type: remote, url: 'https://acme.test/mcp', headers: {} }\n  auth: { type: none }\n",
+      "spaces/engineering/apps/notes/skills/write/SKILL.md":
+        "---\nname: write\ndescription: Writes.\nlicense: MIT\nallowed-tools: Read\nmetadata:\n  icon: https://acme.test/icon.svg\n---\nWrite.\n",
+      "spaces/engineering/schedules.yaml":
+        "nightly:\n  cron: '0 3 * * *'\n  timeZone: UTC\n  message: Build it.\n  enabeld: false\n",
+      "spaces/engineering/webhooks.yaml":
+        "pull-requests:\n  message: Review it.\n  treadKey: body.id\nreleases:\n  app: notes\n  preset: release\n  mesage: Hi.\n",
+      "spaces/engineering/channels.yaml": "ren:\n  kind: github\n  purpose: GitHub acme/ren\n  agnet: build\n",
+    })
+
+    const result = await InfraFolder.validate(root)
+
+    expect(result.problems.map(Output.formatProblem)).toEqual([
+      "deploy.yaml: spaces.engineering.chanels: Unknown key. Use channels or profiles.",
+      "deploy.yaml: spaces.support.timezone: A space has no time zone. Each schedule has its own.",
+      "org.yaml: settings.permisions: Unknown key. Use instructions, model, defaultModels, steps, permissions or references.",
+      "spaces/engineering/agents/build/agent.yaml: descripton: Unknown key. Use description, isSubagent, settings or renamedFrom.",
+      "spaces/engineering/apps/notes/app.yaml: renamedFrom: Ren cannot rename an app.",
+      "spaces/engineering/apps/notes/mcps.yaml: docs.transport.headers: Unknown key. Use type or url.",
+      "spaces/engineering/channels.yaml: ren.agnet: Unknown key. Use kind, purpose, agent, fallback or triggers.",
+      "spaces/engineering/schedules.yaml: nightly.enabeld: Unknown key. Use name, agent, cron, timeZone, message, until or enabled.",
+      "spaces/engineering/space.yaml: hand.enviroment: Unknown key. Use placement.",
+      "spaces/engineering/webhooks.yaml: pull-requests.treadKey: Unknown key. Use name, agent, message, signature, handshake, signedHandshake, filter, eventId, threadKey, title or mode.",
+      "spaces/engineering/webhooks.yaml: releases.mesage: Unknown key. Use app, preset, agent or mode.",
+    ])
+  })
+
   test("checks the rules across spaces once each file is valid", async () => {
     const root = await folder({
       "org.yaml": "settings: {}\n",
@@ -197,6 +233,7 @@ describe("InfraFolder.write", () => {
           name: "Engineering",
           description: "Builds.",
           brainScope: "session" as const,
+          brain: { environment: "Python" },
           hand: { placement: "remote" as const, environment: "Python" },
           settings: {
             instructions: "  Ship it.\n\n    indented()\n\nKeep lines short.  \n",
@@ -215,6 +252,7 @@ describe("InfraFolder.write", () => {
             tools: {
               name: "Tools",
               description: "The team’s tools.",
+              icon: "https://acme.test/tools.svg",
               requiredCredentials: [],
               environment: { packages: { apt: ["gh"] }, buildCommands: [] },
               skills: {
@@ -231,12 +269,33 @@ describe("InfraFolder.write", () => {
                   upstream: { url: "https://github.com/acme/skills", ref: "main", path: "style" },
                 },
               },
-              mcps: {},
+              mcps: {
+                docs: {
+                  name: "Docs",
+                  description: "Reads docs.",
+                  transport: { type: "local" as const, command: ["docs-mcp"] as const, env: { MODE: "read" } },
+                  auth: {
+                    type: "oauth" as const,
+                    tokenEndpointAuth: "none" as const,
+                    client: { clientId: "ren", redirectUri: "https://acme.test/callback" },
+                  },
+                  timeouts: { startup: 1000 },
+                  requiredCredentials: [],
+                },
+              },
               dependsOn: [],
             },
           },
           schedules: {
-            nightly: { agent: "build", cron: "0 3 * * *", timeZone: "UTC", message: "Run the nightly.", enabled: true },
+            nightly: {
+              name: "Nightly",
+              agent: "build",
+              cron: "0 3 * * *",
+              timeZone: "UTC",
+              message: "Run the nightly.",
+              until: "2027-01-01T00:00:00.000Z",
+              enabled: false,
+            },
           },
           webhooks: {
             "pull-requests": {
@@ -249,9 +308,19 @@ describe("InfraFolder.write", () => {
               },
               filter: 'headers["x-github-event"] == "pull_request"',
               threadKey: "body.pull_request.html_url",
+              mode: "live" as const,
+            },
+            releases: { app: "tools", preset: "release", agent: "build", mode: "listening" as const },
+          },
+          channels: {
+            ren: {
+              kind: "github" as const,
+              purpose: "GitHub acme/ren",
+              agent: "build",
+              fallback: false,
+              triggers: { pull_request_ready: { prompt: "Review it." } },
             },
           },
-          channels: { ren: { kind: "github" as const, purpose: "GitHub acme/ren", agent: "build", fallback: false } },
           memory: { "memory.md": "- Ship on Fridays.\n", "people/ana.md": "  Ana leads design.  \n\n" },
           uses: { agents: [] },
         },
@@ -281,6 +350,7 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/memory/people/ana.md",
       "spaces/engineering/schedules/nightly",
       "spaces/engineering/webhooks/pull-requests",
+      "spaces/engineering/webhooks/releases",
       "spaces/home",
       "spaces/home/uses/agents/build",
     ],
@@ -300,7 +370,9 @@ describe("InfraFolder.write", () => {
     expect(result.spec.org.settings).toEqual(pulled.spec.org.settings)
     expect(result.spec.memory).toEqual(pulled.spec.memory)
     expect(Schema.encodeSync(Infra.Spec)(result.spec).environments).toEqual(pulled.spec.environments)
-    expect(result.spec.spaces["engineering"]).toMatchObject(pulled.spec.spaces.engineering)
+    expect(Schema.encodeSync(Infra.Spec)(result.spec).spaces["engineering"]).toMatchObject(
+      pulled.spec.spaces.engineering,
+    )
     expect(result.spec.spaces["home"]).toMatchObject(pulled.spec.spaces.home)
     expect(await Bun.file(join(root, "spaces/engineering/agents/build/agent.yaml")).text()).toBe(
       "description: Writes code.\n",
@@ -371,6 +443,7 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/agents/build/agent.yaml",
       "spaces/engineering/agents/build/instructions.md",
       "spaces/engineering/apps/tools/app.yaml",
+      "spaces/engineering/apps/tools/mcps.yaml",
       "spaces/engineering/apps/tools/skills/review/SKILL.md",
       "spaces/engineering/apps/tools/skills/review/references/rules.md",
       "spaces/engineering/apps/tools/skills/style/skill.yaml",

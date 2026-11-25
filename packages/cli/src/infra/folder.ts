@@ -1,7 +1,7 @@
 export * as InfraFolder from "./folder.js"
 
 import { Infra } from "@ren/schema/infra"
-import { Predicate, Result, Schema, SchemaIssue } from "effect"
+import { Predicate, Result, Schema, SchemaAST, SchemaIssue } from "effect"
 import { existsSync } from "node:fs"
 import { mkdir, rm } from "node:fs/promises"
 import { join } from "node:path"
@@ -19,7 +19,34 @@ export type Validated =
 
 const records = ["schedules", "webhooks", "channels"] as const
 
-const formatter = SchemaIssue.makeFormatterStandardSchemaV1()
+const formatter = SchemaIssue.makeFormatterStandardSchemaV1({
+  leafHook: (issue) => {
+    if (issue._tag !== "UnexpectedKey") return SchemaIssue.defaultLeafHook(issue)
+    const names = SchemaAST.isObjects(issue.ast) ? issue.ast.propertySignatures.map((field) => String(field.name)) : []
+    return names.length > 0
+      ? `Unknown key. Use ${[names.slice(0, -1).join(", "), names.at(-1)].filter(Boolean).join(" or ")}.`
+      : "Unknown key."
+  },
+})
+
+const flatten = (
+  issue: SchemaIssue.Issue,
+  path: ReadonlyArray<PropertyKey>,
+): Array<{ readonly keys: Array<string>; readonly message: string }> => {
+  if (issue._tag === "Pointer") return flatten(issue.issue, [...path, ...issue.path])
+  if (issue._tag === "Encoding") return flatten(issue.issue, path)
+  if (issue._tag === "Composite") return issue.issues.flatMap((inner) => flatten(inner, path))
+  if (issue._tag === "AnyOf" && issue.issues.length > 0)
+    return issue.issues
+      .map((inner) => flatten(inner, path))
+      .reduce((closest, next) => (next.length < closest.length ? next : closest))
+  return formatter(issue).issues.map((formatted) => ({
+    keys: [...path, ...(formatted.path ?? [])].map((segment) =>
+      String(typeof segment === "object" ? segment.key : segment),
+    ),
+    message: formatted.message,
+  }))
+}
 
 const children = (files: ReadonlyArray<string>, prefix: string) =>
   [
@@ -237,23 +264,22 @@ export const validate = async (root: string): Promise<Validated> => {
         problem("deploy.yaml", ["spaces", slug, "timezone"], "A space has no time zone. Each schedule has its own."),
       ),
   )
-  const spec = Schema.decodeUnknownResult(Infra.Spec)(input, { errors: "all" })
+  const options = { errors: "all", onExcessProperty: "error" } as const
+  const spec = Schema.decodeUnknownResult(Infra.Spec)(input, options)
   const bindings = Predicate.isUndefined(deploy)
     ? undefined
-    : Schema.decodeUnknownResult(Infra.Bindings)(deploy, { errors: "all" })
+    : Schema.decodeUnknownResult(Infra.Bindings)(deploy, options)
   const issues = (result: Result.Result<unknown, Schema.SchemaError> | undefined) =>
-    result && Result.isFailure(result)
-      ? formatter(result.failure.issue).issues.map((issue) => ({
-          keys: (issue.path ?? []).map((segment) => String(typeof segment === "object" ? segment.key : segment)),
-          message: issue.message,
-        }))
-      : []
+    result && Result.isFailure(result) ? flatten(result.failure.issue, []) : []
+  const named = new Set(problems.flatMap((found) => (found.field ? [`${found.path}: ${found.field}`] : [])))
   const locked = await lock(root)
   const all = [
     ...problems,
     ...locked.problems,
-    ...issues(spec).map((issue) => problem(...locate(issue.keys), issue.message)),
-    ...issues(bindings).map((issue) => problem("deploy.yaml", issue.keys, issue.message)),
+    ...[
+      ...issues(spec).map((issue) => problem(...locate(issue.keys), issue.message)),
+      ...issues(bindings).map((issue) => problem("deploy.yaml", issue.keys, issue.message)),
+    ].filter((found) => !named.has(`${found.path}: ${found.field}`)),
   ].toSorted((left, right) => Output.formatProblem(left).localeCompare(Output.formatProblem(right)))
   if (all.length > 0 || Result.isFailure(spec) || (bindings && Result.isFailure(bindings)))
     return { kind: "invalid", problems: all }
