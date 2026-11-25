@@ -121,10 +121,7 @@ Tools can't add, change or remove a [secret](/docs/credentials/), and can't set 
 
 ## When it fails
 
-A tool error starts with the error's type, such as `NotFoundError: Space not found.`
-
 | What you see                                        | Fix                                                                                                                                                                                                         |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sign-in fails before your browser opens             | Your client doesn't support OAuth client ID metadata documents, and Ren doesn't support the older dynamic client registration. Update the client, try another one, or use the [CLI](/docs/developers/cli/). |
-| The client lists no Ren tools                       | Sign the client out of Ren and sign in again.                                                                                                                                                               |
 | `NotFoundError` for a space you can open in the app | The client is signed in to another organization. Sign in again and pick the organization of that space.                                                                                                     |

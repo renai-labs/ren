@@ -41,7 +41,7 @@ Without the `factory` key, the space has no factory, and its agents can hand tas
 
 ## Keys
 
-The factory has `maxHandoffs` and `agents`, a list of up to 64 agents. The order of the list doesn't matter: a task starts with whichever agent it's assigned to. Each item takes:
+The factory has `maxHandoffs` and `agents`, the list of agents. The order of the list doesn't matter: a task starts with whichever agent it's assigned to. Each item takes:
 
 | Key       | What it sets                                   |
 | --------- | ---------------------------------------------- |
@@ -101,7 +101,7 @@ factory:
           else: tester
 ```
 
-The `else` agent's `maxRuns` still applies. When a limit stops a task, the reason on it names the limit, such as `The task was handed off 20 of 20 times.` or `implementer ran 5 of 5 times.`
+The `else` agent's `maxRuns` still applies.
 
 ## Start new or continue
 
@@ -123,7 +123,3 @@ factory:
           max: 3
           start: continue
 ```
-
-## When an agent breaks a route
-
-If an agent tries a handoff its routes don't allow, Ren refuses and tells the agent why, such as `planner can hand off only to implementer.` or `implementer is not a last step: hand off to reviewer.` The agent then follows its routes or asks a person.

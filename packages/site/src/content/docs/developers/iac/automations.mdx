@@ -24,7 +24,7 @@ weekly-triage:
 | ---------- | -------- | ---------------------------------------------------------------------------------------- |
 | `cron`     | Yes      | When it runs, as a cron expression with five fields                                      |
 | `timeZone` | Yes      | The IANA time zone of the cron, such as `Europe/Berlin`                                  |
-| `message`  | Yes      | What the agent does each run, up to 20,000 characters                                    |
+| `message`  | Yes      | What the agent does each run                                                             |
 | `agent`    | No       | The agent of each chat. If you leave it out, the chat gets the space's default settings. |
 | `name`     | No       | The name in the app. Defaults to the slug.                                               |
 | `until`    | No       | The last time it runs, in UTC                                                            |
@@ -42,8 +42,6 @@ nightly-tests:
   until: "2027-03-31T23:59:00Z"
   enabled: false
 ```
-
-The spec only covers recurring schedules that start a new chat. One-time schedules, and schedules that post into an existing chat, stay in the app: pull skips them and apply leaves them alone.
 
 ## Webhooks
 
@@ -69,14 +67,14 @@ alerts:
   title: body.alert.title
 ```
 
-Only `message` is required, and `name` and `agent` work as they do for a schedule. The other four keys are rules: [CEL](https://cel.dev) expressions of up to 1,000 characters that read the request's `method`, `query`, `headers` and `body`. Write header names in lowercase.
+Only `message` is required, and `name` and `agent` work as they do for a schedule. The other four keys are rules: [CEL](https://cel.dev) expressions that read the request's `method`, `query`, `headers` and `body`. Write header names in lowercase.
 
-| Key         | In the app                   | What it returns                                                                                                                                               |
-| ----------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `filter`    | **Start a session when**     | A bool. Only a request where it is true starts or continues a chat. Without it, every request does.                                                           |
-| `threadKey` | **Session continuation key** | A string. Requests with the same value continue one chat.                                                                                                     |
-| `eventId`   | **Event identifier**         | A string unique to each delivery, such as a delivery-ID header. Ren ignores a value it has already seen, so a retry doesn't run twice. Don't use a timestamp. |
-| `title`     | **Session title**            | A string, used as the title of a new chat                                                                                                                     |
+| Key         | In the app                   | What it returns                                                                                                                        |
+| ----------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `filter`    | **Start a session when**     | A bool. Only a request where it is true starts or continues a chat. Without it, every request does.                                    |
+| `threadKey` | **Session continuation key** | A string. Requests with the same value continue one chat.                                                                              |
+| `eventId`   | **Event identifier**         | A string unique to each delivery, such as a delivery-ID header. Ren ignores a value it has already seen, so a retry doesn't run twice. |
+| `title`     | **Session title**            | A string, used as the title of a new chat                                                                                              |
 
 `signature` sets how Ren checks that a request really comes from the sender. Use `none` only when the sender can't sign its requests.
 
@@ -132,13 +130,3 @@ A webhook that checks a signature needs a signing secret before it can go live, 
 </Steps>
 
 A preset with `secret: ren` skips these steps. Ren generates its secret when apply turns it on, so you can declare it live right away.
-
-The webhook's URL isn't in the spec either. If it leaks, run `ren webhook rotate-url <webhook-id>` and paste the new one into the other service.
-
-## Who they run as
-
-An automation runs with its owner's access; see [Who an automation runs as](/docs/automations/#who-an-automation-runs-as). Apply runs as you, so you become the owner of each automation it creates, and of each one whose message, agent, time or rules it changes. Keep that in mind when you apply a teammate's change.
-
-## Change and remove
-
-Changing a key updates the automation, and removing its slug archives it. A slug can't be renamed: apply archives the old automation and creates a new one, and a new webhook has a new URL. You also can't switch a webhook between custom and preset, or to another preset; give the new webhook another slug.

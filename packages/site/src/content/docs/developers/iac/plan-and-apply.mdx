@@ -71,7 +71,7 @@ The last line is the plan's digest, a fingerprint of the plan. It changes when a
 
 ## Apply
 
-In a terminal, `ren infra apply` plans again, lists the changes and asks you to type the organization's slug from `deploy.yaml`. Then it makes the changes and writes `ren.lock`. If there's nothing to apply, it prints `Nothing to apply.` and still updates `ren.lock`.
+In a terminal, `ren infra apply` plans again, lists the changes and asks you to type the organization's slug from `deploy.yaml`. Then it makes the changes and writes `ren.lock`.
 
 Apply makes the changes one at a time. If one fails, the error names that change's path. The changes before it stay in place and `ren.lock` isn't updated, so fix the cause, then plan and apply again.
 
@@ -130,20 +130,11 @@ renamedFrom: [plan]
 ~ update agent spaces/engineering/agents/planner (from spaces/engineering/agents/plan): name
 ```
 
-Without `renamedFrom`, the plan archives `plan` and creates a new `planner`. You can delete `renamedFrom` after the apply. Apps can't be renamed.
+Without `renamedFrom`, the plan archives `plan` and creates a new `planner`. Apps can't be renamed.
 
 To move an agent to another space, move its folder. The plan shows it as an update to the agent's owner.
 
-To remove a resource, delete it from the spec, and apply archives it in Ren. A few deletions do something gentler:
-
-| You delete                                        | Apply                                                               |
-| ------------------------------------------------- | ------------------------------------------------------------------- |
-| An agent from `uses.agents`                       | Removes the agent from that space only                              |
-| A channel                                         | Unmaps its Slack channel or GitHub repository from the space        |
-| A shared profile from a space in `deploy.yaml`    | Removes the profile from that space. Apply never deletes a profile. |
-| A shared profile from `profiles` in `deploy.yaml` | Leaves it in Ren as it is                                           |
-
-Apply only archives what's in `ren.lock`. Something that was created in Ren and never pulled shows as `new in Ren`, and apply leaves it alone.
+To remove a resource, delete it from the spec, and apply archives it in Ren. Apply only archives what's in `ren.lock`, so something created in the app that you never pulled is left alone.
 
 ## In scripts and CI
 

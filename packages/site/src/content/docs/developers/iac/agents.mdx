@@ -28,7 +28,7 @@ You need at least one of the two files. The agent's instructions add to the orga
 | `description` | What the agent does. A subagent needs one.                                                                                          |
 | `isSubagent`  | `true` makes it a [subagent](/docs/agents/#agents-and-subagents). The default is `false`.                                           |
 | `settings`    | The agent's model, steps, permissions and repositories. See [Organization → Settings](/docs/developers/iac/organization/#settings). |
-| `renamedFrom` | Earlier names. See [Rename, move or remove an agent](#rename-move-or-remove-an-agent).                                              |
+| `renamedFrom` | Earlier names. See [Rename, move and remove](/docs/developers/iac/plan-and-apply/#rename-move-and-remove).                          |
 
 This agent gets more steps, can never force-push, and reads the example app's `develop` branch:
 
@@ -56,7 +56,7 @@ isSubagent: true
 
 ## Names
 
-An agent's name is a [slug](/docs/developers/iac/configuration/#names) that's unique in the organization, so two spaces can't both own a `reviewer`. To use one agent in two spaces, [share it](#share-an-agent). The names `ren`, `general`, `explore`, `compaction`, `title` and `summary` are reserved.
+An agent's name is a [slug](/docs/developers/iac/configuration/#names) that's unique in the organization, so two spaces can't both own a `reviewer`. To use one agent in two spaces, [share it](#share-an-agent).
 
 ## Share an agent
 
@@ -73,11 +73,3 @@ uses:
 The agent's folder stays in the space that owns it. In each space that uses the agent, its settings and instructions combine with that space's. To take the agent out of a space, remove its name from `uses.agents`.
 
 A space's [automations](/docs/developers/iac/automations/), [channels](/docs/developers/iac/channels/) and [factory](/docs/developers/iac/factory/) can name any agent the space owns or uses, as long as it isn't a subagent.
-
-## Rename, move or remove an agent
-
-To rename an agent, rename its folder and add the old name to `renamedFrom`, so it keeps its chats and history. Then update every `uses.agents` that lists the old name. [Plan and apply](/docs/developers/iac/plan-and-apply/#rename-move-and-remove) has an example.
-
-To give an agent to another space, move its folder there. The old space keeps using it only if you add it to that space's `uses.agents`.
-
-To remove an agent, delete its folder, and the plan archives it. [Archive an agent](/docs/agents/#archive-an-agent) explains what happens to its chats and automations.

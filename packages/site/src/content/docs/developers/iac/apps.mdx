@@ -30,7 +30,7 @@ When apply creates an app, Ren also creates its first shared [profile](/docs/dev
 
 | Field in `app.yaml`   | What it sets                                                                  |
 | --------------------- | ----------------------------------------------------------------------------- |
-| `name`                | Required. The name shown in Ren. It can't be the name of the owner space.     |
+| `name`                | Required. The name shown in Ren.                                              |
 | `description`         | Required. What the app does.                                                  |
 | `icon`                | An `https://` address of the app's logo                                       |
 | `dependsOn`           | Slugs of apps it includes. See [Dependencies](#dependencies).                 |
@@ -116,7 +116,7 @@ upstream:
 
 With a branch, a tag or no `ref`, the skill follows new commits without an apply: Ren checks for them at most every 5 minutes. To freeze a skill until you decide to update it, set `ref` to a commit.
 
-Ren reads skills from GitHub only. A public repository needs no setup. For a private one, [connect GitHub](/docs/channels/github/#connect-github) for your organization and give the Ren app access to the repository. If Ren can't read the repository, it keeps the last version it read, and chats go without the skill until it has read one.
+Ren reads skills from GitHub only. A public repository needs no setup. For a private one, [connect GitHub](/docs/channels/github/#connect-github) for your organization and give the Ren app access to the repository.
 
 ## Secrets
 
@@ -165,7 +165,7 @@ description: Review and release tools for acme/example-app.
 dependsOn: [release-tools]
 ```
 
-A dependency can be one of your organization's apps or one from the registry. A skill or MCP server belongs to one app only, so to share one between two apps, move it into a third app that both depend on.
+A dependency can be one of your organization's apps or one from the registry.
 
 ## Setup packages
 
@@ -211,11 +211,3 @@ A preset takes the same keys as a [custom webhook](/docs/developers/iac/automati
 | `setup`       | Required. The steps to follow after turning it on, in Markdown                                                                                                    |
 
 A space turns a preset on in its `webhooks.yaml`; see [App presets](/docs/developers/iac/automations/#app-presets). The preset stays in the app, so when you change it, every space that uses it gets the change.
-
-## Change, move or remove an app
-
-When you change any file of the app, apply replaces the app's whole definition, and spaces get it in their next chat. To give the app to another space, move its folder there.
-
-An app can't be renamed. If you rename its folder, apply archives the app and creates a new one.
-
-Deleting the folder archives the app. Every space that uses it loses its tools and skills, and its profiles stop working.

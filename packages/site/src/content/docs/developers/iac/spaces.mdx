@@ -26,7 +26,7 @@ Everything else the space has goes in the same folder: its instructions, memory,
 | `brainScope`, `brain`, `hand` | Where the space's chats run. See [Runtime](#runtime).                                                                               |
 | `uses`                        | Agents of other spaces that this space uses. See [Agents](/docs/developers/iac/agents/#share-an-agent).                             |
 | `factory`                     | The space's factory. See [Factory](/docs/developers/iac/factory/).                                                                  |
-| `renamedFrom`                 | Earlier slugs. See [Rename or remove a space](#rename-or-remove-a-space).                                                           |
+| `renamedFrom`                 | Earlier slugs. See [Rename, move and remove](/docs/developers/iac/plan-and-apply/#rename-move-and-remove).                          |
 
 ```yaml title="spaces/engineering/space.yaml"
 name: Engineering
@@ -62,12 +62,10 @@ hand:
 
 A runtime change takes effect when the brain next starts. [Compute](/docs/compute/#apply-a-change) explains when that is, and how to shut the space down to apply the change now.
 
-## Rename or remove a space
+## Remove a space
 
-To change the name shown in Ren, edit `name`. To change the slug, rename the folder and add the old slug to `renamedFrom`, so the space keeps its chats and history. Without it, Ren archives the old space and creates an empty one. [Plan and apply](/docs/developers/iac/plan-and-apply/#rename-move-and-remove) has an example.
-
-To remove a space, delete its folder. The plan archives the space along with its agents, apps, automations and channels. The first space of the organization is the exception: Ren never archives it.
+Deleting a space's folder archives the space along with its agents, apps, automations and channels. The organization's first space is the exception: Ren never archives it.
 
 ## Personal spaces
 
-The spec covers shared spaces only, so pull leaves personal spaces out. They still share names with the rest of the organization: a shared space can't take a personal space's slug, and an agent can't take the name of an agent in one. If a plan says a slug is taken and you can't see by what, this is the likely cause.
+The spec covers shared spaces only, so pull leaves personal spaces out. They still share names with the rest of the organization: a shared space can't take a personal space's slug, and an agent can't take the name of an agent in one.

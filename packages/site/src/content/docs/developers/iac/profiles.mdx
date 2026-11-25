@@ -23,7 +23,7 @@ profiles:
 | `name`      | Required. The profile's name in Ren.                                                  |
 | `allSpaces` | `true` shares the profile with every space. Without it, only the spaces that list it. |
 
-A profile's slug can be at most 32 characters, and you can't change it once Ren creates the profile. The app doesn't have to be in your spec: it can also be one from the registry.
+The app doesn't have to be in your spec: it can also be one from the registry.
 
 ## Choose the spaces that use it
 
@@ -64,7 +64,7 @@ spaces:
       engineering-tools: [engineering]
 ```
 
-When you add more profiles of the app to that space, keep `engineering` in the list. Leaving it out would take the profile away from its only space, and the plan stops you.
+When you add more profiles of the app to that space, keep `engineering` in the list.
 
 ## Connect a profile
 
@@ -78,17 +78,8 @@ A new profile shows **Not connected** until someone gives it what the app needs:
 
 </Steps>
 
-When a sign-in expires, the profile shows **Needs sign-in**. Select **Reconnect** to sign in again.
-
 To do it from the CLI, find the profile's ID with `ren app profile list --app engineering-tools`. Then run `ren credential create` to set a secret, or `ren credential connect` to sign in to an MCP server.
 
-## Change or remove a profile
+## Remove a profile
 
-Most changes do what you'd expect: a new `name` renames the profile, and adding or removing a slug in a space's list starts or stops that space using it. Two rules protect a profile's secrets:
-
-- A profile always needs at least one space. Apply won't remove it from its last space, or turn off `allSpaces` while no space lists it.
-- Apply never deletes a profile, even when you remove it from `profiles`. To delete one, open its `⋯` on the app's page and select **Delete**.
-
-You can't rename a slug. Changing it creates a new profile and leaves the old one as it is.
-
-Pull writes shared profiles only, so personal profiles stay out of the spec.
+Apply never deletes a profile or its secrets, even when you remove it from `deploy.yaml`. To delete one, open its `⋯` on the app's page and select **Delete**.

@@ -39,7 +39,7 @@ Each provider has its own config. To see the providers you can use and the confi
 ren environment provider list
 ```
 
-The examples on this page use `e2b`. `ren infra validate` only checks the shape of `environments.yaml`. The provider's own config is checked by `ren infra plan`.
+The examples on this page use `e2b`.
 
 ## Network access
 
@@ -68,7 +68,7 @@ Node build:
 | `allowMcpServers`      | The MCP servers of the space's apps                                     |
 | `allowedHosts`         | Host names such as `api.example.com`, or `*.example.com` for subdomains |
 
-A limited machine can always reach the hosts that the space's [secrets](/docs/credentials/) are for. Not every provider can limit hosts, and the plan tells you when yours can't.
+A limited machine can always reach the hosts that the space's [secrets](/docs/credentials/) are for.
 
 ## Assign machines to a space
 
@@ -104,28 +104,11 @@ A provider such as `e2b` has to build an image for each new machine, and again w
 
 </Steps>
 
-If a build fails, `ren environment template get` shows its log in `buildError`. Fix the config and apply it, or retry the same config with the machine's ID:
+If a build fails, `ren environment template get` shows its log in `buildError`. Fix the config and apply again.
 
-```sh
-ren environment template retry-build tpl_01JX4M2T9V8K3N6P5Q7R2S4W1Y
-```
+## Remove a machine
 
-While a changed config builds, the machine keeps running its last good image.
-
-## Change or archive a machine
-
-Changing `config`, `networking`, `description` or `sessionsPerEnvironment` updates the machine, and a new `config` starts a build. Two changes aren't updates:
-
-- A machine can't change its `provider`. Declare the new machine under another name.
-- Renaming a machine creates one with the new name and archives the old one.
-
-Removing a machine archives it and deletes its running machines and their files. Every space has to stop using it first:
-
-- Move each space in the spec to another machine.
-- For a space that isn't in the spec, such as a personal space, change its machine on its **Compute** page.
-- If a space still has chats running on the machine, select **Shut down space** on its **Compute** page.
-
-To see which spaces use a machine or still run on it:
+Deleting a machine from `environments.yaml` archives it, along with its running machines and their files. Move every space off it first. To see which spaces still use it:
 
 ```sh
 ren environment template affected-spaces tpl_01JX4M2T9V8K3N6P5Q7R2S4W1Y
