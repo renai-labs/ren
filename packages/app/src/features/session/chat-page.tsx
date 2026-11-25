@@ -120,7 +120,7 @@ function UndoneAlert(props: { chat: Chat }) {
 function ChatComposer(props: {
   chat: Chat
   dock?: ReactNode
-  onComposer: (node: HTMLTextAreaElement | null) => void
+  onComposer: (node: HTMLElement | null) => void
   onDock: (node: HTMLDivElement | null) => void
 }) {
   const chat = props.chat

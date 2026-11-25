@@ -7,7 +7,7 @@ const dockControls =
   'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
 
 function focus(
-  refs: { readonly composer: HTMLTextAreaElement | null; readonly dock: HTMLElement | null },
+  refs: { readonly composer: HTMLElement | null; readonly dock: HTMLElement | null },
   event: KeyboardEvent,
   options: { readonly dock: boolean },
 ) {
@@ -16,7 +16,7 @@ function focus(
   if (!control) return
   if (options.dock) event.preventDefault()
   control.focus()
-  field?.setSelectionRange(field.value.length, field.value.length)
+  if (field instanceof HTMLTextAreaElement) field.setSelectionRange(field.value.length, field.value.length)
 }
 
 function scroll(transcript: RefObject<TranscriptHandle | null>, event: KeyboardEvent, action: ChatKeys.Capture) {
@@ -27,7 +27,7 @@ function scroll(transcript: RefObject<TranscriptHandle | null>, event: KeyboardE
 }
 
 export function useChatKeys() {
-  const composer = useRef<HTMLTextAreaElement>(null)
+  const composer = useRef<HTMLElement>(null)
   const dock = useRef<HTMLDivElement>(null)
   const transcript = useRef<TranscriptHandle>(null)
   Keyboard.useKeyDown((event) => {
@@ -41,7 +41,7 @@ export function useChatKeys() {
   })
   return {
     transcript,
-    composer: (node: HTMLTextAreaElement | null) => {
+    composer: (node: HTMLElement | null) => {
       composer.current = node
     },
     dock: (node: HTMLDivElement | null) => {

@@ -298,40 +298,6 @@ describe("Composer suggestions", () => {
     expect(Composer.trigger(row.text, row.cursor ?? row.text.length)).toEqual(row.result)
   })
 
-  const press = (key: string, ctrlKey = false) => ({ key, ctrlKey, isComposing: false })
-
-  test("loops active popover items with arrow keys", () => {
-    expect(Composer.suggestionKey(press("ArrowDown"), ["first", "second"], "second")).toEqual({
-      type: "move",
-      active: "first",
-    })
-    expect(Composer.suggestionKey(press("ArrowUp"), ["first", "second"], "first")).toEqual({
-      type: "move",
-      active: "second",
-    })
-    expect(Composer.suggestionKey(press("n", true), ["first", "second"], "first")).toEqual({
-      type: "move",
-      active: "second",
-    })
-  })
-
-  test("closes a popover with ctrl-g before stopping a run", () => {
-    expect(Composer.suggestionKey(press("g", true), ["first"], "first")).toEqual({ type: "close" })
-    expect(Composer.suggestionKey(press("Escape"), ["first"], "first")).toEqual({ type: "close" })
-  })
-
-  test("selects the active item with Tab or Enter, but not while an IME composes", () => {
-    expect(Composer.suggestionKey(press("Enter"), ["first"], "first")).toEqual({ type: "select", id: "first" })
-    expect(Composer.suggestionKey(press("Tab"), ["first"], "first")).toEqual({ type: "select", id: "first" })
-    expect(Composer.suggestionKey({ ...press("Enter"), isComposing: true }, ["first"], "first")).toBeUndefined()
-  })
-
-  test("keeps the active item while it is still listed, otherwise the first item becomes active", () => {
-    expect(Composer.activeSuggestion(["first", "second"], "second")).toBe("second")
-    expect(Composer.activeSuggestion(["first", "second"], "gone")).toBe("first")
-    expect(Composer.activeSuggestion([], "gone")).toBeUndefined()
-  })
-
   const commands = [{ name: "deploy" }, { name: "review/nested" }]
 
   test.each([

@@ -6,9 +6,10 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type Ref,
-  type RefObject,
 } from "react"
-import { Composer, ComposerHistory, Mentions, type ChatSession } from "@ren/chat"
+import { Composer, ComposerHistory, ComposerTokens, Mentions, type ChatSession } from "@ren/chat"
+import { createTokenInputController } from "@ui-sdk/react/token-input"
+import { createTriggerMenuController } from "@ui-sdk/react/trigger-menu"
 import { Drive } from "@ren/schema/drive"
 import { Session } from "@ren/schema/session"
 import { Search } from "@ren/schema/search"
@@ -22,7 +23,6 @@ import {
   IconArrowUp,
   IconChevronDown,
   IconChevronRight,
-  IconFolder,
   IconGitBranch,
   IconQuote,
   IconLoader2,
@@ -30,23 +30,12 @@ import {
   IconPlayerPlay,
   IconPlayerStopFilled,
   IconPlus,
-  IconTerminal2,
   IconX,
 } from "@tabler/icons-react"
 import { AttachmentGroup } from "@ren/ui/attachment"
 import { Avatar } from "@ren/ui/avatar"
-import { FileIcon } from "@ren/ui/file-icon"
 import { Separator } from "@ren/ui/separator"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandShortcut,
-} from "@ren/ui/command"
-import { Spinner } from "@ren/ui/spinner"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@ren/ui/command"
 import { useUploads, type Target } from "../../lib/use-uploads.js"
 import { formatBytes, plural } from "../../lib/format.js"
 import { UploadChips } from "./attachments.js"
@@ -54,7 +43,7 @@ import { DropOverlay } from "../../components/drop-overlay.js"
 import { PastedChip } from "./pasted-chip.js"
 import { ImageSet } from "../../components/image-set.js"
 import { MentionOverlay } from "@ren/ui/mention-overlay"
-import { Artifacts } from "../../lib/artifacts.js"
+import type { Artifacts } from "../../lib/artifacts.js"
 import { AppAvatarFallback, AppAvatarImage, AppIcon } from "../../components/app-icon.js"
 import { Button } from "@ren/ui/button"
 import {
@@ -79,13 +68,11 @@ import { errorMessage } from "../../lib/errors.js"
 import { connectTarget, useSpaceApps } from "./use-space-apps.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { useCountdown } from "../../lib/use-countdown.js"
-import { useHeld } from "../../lib/use-held.js"
-import { AgentIcon, ChatIcon, mentionIcons, RepositoryIcon, TaskIcon } from "../../components/mention-icon.js"
-import { useRoom } from "../../lib/use-room.js"
 import { Drafts } from "../../lib/drafts.js"
 import type { ShellHistory } from "../../lib/use-shell-history.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { ChatKeys } from "./chat-keys.js"
+import { TokenComposer } from "./token-composer.js"
 
 function AddMenu(props: {
   onAttach: () => void
@@ -513,105 +500,6 @@ function QuoteChips(props: {
   )
 }
 
-const categoryIcons = {
-  tasks: <TaskIcon />,
-  chats: <ChatIcon />,
-  apps: <IconApps />,
-  agents: <AgentIcon />,
-  files: <IconFolder />,
-  repos: <RepositoryIcon />,
-}
-
-function SuggestionIcon(props: { item: Suggest["items"][number] }) {
-  const item = props.item
-  if (item.kind === "app") return <AppIcon name={item.label} icon={item.icon} size="sm" className="size-4 rounded-sm" />
-  if (item.kind === "category") return item.category ? categoryIcons[item.category] : null
-  if (item.kind === "command") return <IconTerminal2 />
-  if (item.kind === "repository") return <RepositoryIcon />
-  if (item.kind === "folder") return <IconFolder />
-  if (item.kind === "file") return <FileIcon name={item.label} />
-  return mentionIcons[item.kind] ?? <AgentIcon />
-}
-
-function SuggestionMenu(props: {
-  suggest: Suggest
-  anchor: RefObject<HTMLElement | null>
-  below: boolean
-  onChoose: (value: string) => void
-}) {
-  const suggest = props.suggest
-  const choose = props.onChoose
-  const room = useRoom(props.anchor, { open: suggest.open, prefer: props.below ? "below" : "above", want: 304 })
-  // oxlint-disable-next-line ren/no-comments -- While a search runs, the menu keeps the last results it showed, hidden under Searching…, so it holds its height instead of following each half-finished query.
-  const items = useHeld(suggest.items, {
-    holding: suggest.searching,
-    key: (list) => list.map((item) => item.value).join("\n"),
-  })
-  if (!suggest.open) return null
-  const listed = [...new Set(items.map((item) => item.group))].map((heading) => ({
-    heading,
-    items: items.filter((item) => item.group === heading),
-  }))
-  return (
-    <Command
-      value={suggest.active ?? ""}
-      shouldFilter={false}
-      className={cn(
-        "absolute inset-x-0 z-20 flex h-auto w-full flex-col rounded-xl bg-popover shadow-overlay",
-        (room?.below ?? props.below) ? "top-full mt-2" : "bottom-full mb-2",
-        suggest.searching && "min-h-11",
-      )}
-      // oxlint-disable-next-line react/forbid-component-props -- the menu is only as tall as the room its pane leaves it
-      style={room ? { maxHeight: room.height } : undefined}
-    >
-      {suggest.searching ? (
-        <output className="absolute inset-x-0 top-0 z-10 flex animate-in items-center gap-2 px-3.5 py-3 text-sm text-muted-foreground delay-100 duration-150 fade-in-0 fill-mode-backwards motion-reduce:animate-none">
-          <Spinner aria-hidden className="size-3.5" />
-          Searching…
-        </output>
-      ) : null}
-      <CommandList
-        className={cn(
-          "max-h-72 min-h-0 flex-1 transition-opacity duration-150 ease-out motion-reduce:transition-none",
-          suggest.searching && "opacity-0",
-        )}
-        label={suggest.label}
-        inert={suggest.searching}
-      >
-        {listed.map((group) => (
-          <CommandGroup key={group.heading ?? ""} heading={group.heading}>
-            {group.items.map((item) => (
-              <CommandItem
-                key={item.value}
-                value={item.value}
-                onMouseDown={(event) => event.preventDefault()}
-                onSelect={() => choose(item.value)}
-              >
-                <SuggestionIcon item={item} />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium text-foreground">{item.label}</span>
-                  {item.description ? <span className="text-muted-foreground"> {item.description}</span> : null}
-                </span>
-                {item.status ? (
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <StatusDot status={item.status} />
-                    {statusLabel[item.status]}
-                  </span>
-                ) : null}
-                {item.kind === "category" || item.kind === "folder" ? (
-                  <CommandShortcut className="-mr-1 flex">
-                    <IconChevronRight stroke={2.75} />
-                  </CommandShortcut>
-                ) : null}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-      </CommandList>
-    </Command>
-  )
-}
-
 function SendIcon(props: { sending: boolean; stop: boolean; shell: boolean }) {
   if (props.sending) return <IconLoader2 className="animate-spin" />
   if (props.stop) return <IconPlayerStopFilled />
@@ -728,21 +616,6 @@ function composerState(
   }
 }
 
-function suggestionKey(suggest: Suggest, event: KeyboardEvent<HTMLTextAreaElement>, choose: (value: string) => void) {
-  if (!suggest.open || event.nativeEvent.isComposing) return false
-  const opens =
-    event.key === "ArrowRight" &&
-    suggest.items.some((item) => item.value === suggest.active && (item.kind === "category" || item.kind === "folder"))
-  if ((event.key === "Enter" || event.key === "Tab" || opens) && suggest.active && !event.shiftKey) {
-    event.preventDefault()
-    choose(suggest.active)
-    return true
-  }
-  if (!suggest.onKey({ key: event.key, ctrlKey: event.ctrlKey, isComposing: false })) return false
-  event.preventDefault()
-  return true
-}
-
 function ComposerToolbar(props: {
   spaceId: string | undefined
   onAttach: () => void
@@ -820,7 +693,7 @@ function useShellMode(input: {
   locked: boolean
   uploading: boolean
   onChange: (draft: Composer.Draft) => void
-  textarea: RefObject<HTMLTextAreaElement | null>
+  focus: () => void
   suggest: Suggest | undefined
 }) {
   const history = input.history
@@ -835,7 +708,7 @@ function useShellMode(input: {
     input.onChange(Composer.withMode(input.draft, active ? "prompt" : "shell"))
     history.reset()
     input.suggest?.onClose()
-    input.textarea.current?.focus()
+    requestAnimationFrame(input.focus)
   }
   Keyboard.useKeyDown((event) => {
     if (!ChatKeys.toggleShell(event)) return
@@ -849,7 +722,7 @@ function useShellMode(input: {
   }
 }
 
-function pasteKind(event: ClipboardEvent<HTMLTextAreaElement>) {
+function pasteKind(event: ClipboardEvent<HTMLElement>) {
   const data = event.clipboardData
   return Composer.paste(
     { types: [...data.types], kinds: [...data.items].map((item) => item.kind), text: data.getData("text/plain") },
@@ -858,7 +731,7 @@ function pasteKind(event: ClipboardEvent<HTMLTextAreaElement>) {
 }
 
 export function PromptInput(props: {
-  textareaRef?: Ref<HTMLTextAreaElement | null> | undefined
+  textareaRef?: Ref<HTMLElement | null> | undefined
   value: Composer.Draft
   onChange: (draft: Composer.Draft) => void
   onSubmit: (options: { readonly alternative: boolean }) => void
@@ -883,7 +756,14 @@ export function PromptInput(props: {
   alternative?: string | undefined
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null)
-  useImperativeHandle<HTMLTextAreaElement | null, HTMLTextAreaElement | null>(props.textareaRef, () => textarea.current)
+  const editor = useRef<HTMLDivElement>(null)
+  const [tokens] = useState(createTokenInputController)
+  const [menu] = useState(createTriggerMenuController)
+  const [editorRef] = useState(() => (node: HTMLDivElement | null) => {
+    editor.current = node
+    if (node) requestAnimationFrame(() => tokens.focus({ at: "end" }))
+  })
+  useImperativeHandle<HTMLElement | null, HTMLElement | null>(props.textareaRef, () => editor.current ?? textarea.current)
   const [repositories, setRepositories] = useState(false)
   const draft = props.value
   const uploads = useUploads(props.files, draft)
@@ -898,7 +778,7 @@ export function PromptInput(props: {
     locked: props.sending === true,
     uploading,
     onChange: props.onChange,
-    textarea,
+    focus: () => (editor.current ? tokens.focus({ at: "end" }) : textarea.current?.focus()),
     suggest: props.suggest,
   })
   const shell = shellMode.active
@@ -945,22 +825,23 @@ export function PromptInput(props: {
     )
   const place = (next: string, cursor: number) =>
     requestAnimationFrame(() => {
+      if (editor.current) return tokens.focus({ at: cursor === 0 ? "start" : "end" })
       const node = textarea.current
       if (!node || node.value !== next) return
       node.focus()
       node.setSelectionRange(cursor, cursor)
     })
-  const browse = (node: HTMLTextAreaElement, direction: "up" | "down") => {
-    if (node.selectionStart !== node.selectionEnd) return false
-    const moved = ComposerHistory.navigate(browsing, direction, history.read(), draft, node.selectionStart)
+  const browse = (cursor: number | undefined, direction: "up" | "down") => {
+    if (cursor === undefined) return false
+    const moved = ComposerHistory.navigate(browsing, direction, history.read(), draft, cursor)
     if (!moved) return false
     setBrowsing(moved.browsing)
     change(Composer.fromHistory(draft, moved.entry))
     place(moved.entry.text, moved.cursor === "start" ? 0 : moved.entry.text.length)
     return true
   }
-  const act = (action: ChatKeys.Action | "swallow", node: HTMLTextAreaElement) => {
-    if (action === "historyUp" || action === "historyDown") return browse(node, action === "historyUp" ? "up" : "down")
+  const act = (action: ChatKeys.Action | "swallow", cursor: number | undefined) => {
+    if (action === "historyUp" || action === "historyDown") return browse(cursor, action === "historyUp" ? "up" : "down")
     if (action === "send" || action === "sendOther") {
       if (!blank) submit({ alternative: action === "sendOther" })
       return true
@@ -976,43 +857,47 @@ export function PromptInput(props: {
     change(Composer.withText(draft, entry.text))
     place(entry.text, entry.cursor === "start" ? 0 : entry.text.length)
   }
-  const choose = (value: string) => {
-    const result = props.suggest?.onChoose(value, text, textarea.current?.selectionStart ?? text.length)
-    if (!result) return
-    const next = Composer.withText(draft, result.text)
-    const picked = result.picked ? Composer.withPicked(next, result.picked) : next
-    const mentioned = result.mention ? Composer.withMention(picked, result.mention) : picked
-    change(result.file ? Composer.withFile(mentioned, result.file) : mentioned)
-    if (result.focus !== false) place(result.text, result.cursor)
-  }
   const suggest = shellMode.suggest
   const root = useRef<HTMLDivElement | null>(null)
   ComposerMotion.useComposer(root, { placement: props.placement })
-  const artifact = props.artifact
-  const ranges = Artifacts.mentionRanges(text, artifact)
-  const mentioned = [
-    ...(suggest?.marks(text) ?? [])
-      .filter((mark) => !ranges.some((range) => mark.start < range.end && mark.end > range.start))
-      // oxlint-disable-next-line oxc/no-map-spread -- a draft has a few marks, and each one gets its kind's icon
-      .map((mark) => ({ ...mark, glyph: mentionIcons[mark.kind] })),
-    ...ranges.map((range) => ({
-      start: range.start,
-      end: range.end,
-      label: artifact?.title ?? "",
-      icon: null,
-      color: "var(--primary)",
-      file: false,
-    })),
-  ]
-  const marks = [
-    ...mentioned,
-    ...linksOf(text).filter((link) => !mentioned.some((mark) => link.start < mark.end && link.end > mark.start)),
-  ].toSorted((a, b) => a.start - b.start)
+  const marks = linksOf(text)
+  const intent = (event: KeyboardEvent<HTMLElement>) =>
+    ChatKeys.intent(
+      {
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        isComposing: event.nativeEvent.isComposing,
+      },
+      { apple: ChatKeys.apple, running: Boolean(props.running) },
+    )
+  const caret = () => {
+    const range = tokens.editor.selection()
+    if (!range || range.start !== range.end) return undefined
+    return range.start >= ComposerTokens.length(tokens.getValue()) ? text.length : range.start
+  }
+  const paste = (event: ClipboardEvent<HTMLElement>) => {
+    const data = event.clipboardData
+    const pasted = data.getData("text/plain")
+    const kind = pasteKind(event)
+    if (kind === "text" || (shell && kind === "block")) return
+    event.preventDefault()
+    if (shell) return
+    if (kind === "attachment")
+      attach(
+        data.files.length > 0
+          ? [...data.files]
+          : [...data.items].flatMap((item) => (item.kind === "file" ? (item.getAsFile() ?? []) : [])),
+      )
+    else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
+  }
   const attachments =
     Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
   return (
     <div ref={root} className="relative flex flex-col gap-2">
-      {suggest ? <SuggestionMenu suggest={suggest} anchor={root} below={home} onChoose={choose} /> : null}
       <DropOverlay
         title="Drop files to attach"
         detail={`Up to ${Session.maxDriveFiles} files, ${formatBytes(Drive.maxUploadBytes)} each`}
@@ -1043,9 +928,7 @@ export function PromptInput(props: {
           const path = event.dataTransfer.getData(Mentions.fileDragType)
           if (!suggest || !path) return
           event.preventDefault()
-          const result = Mentions.insertFile(text, path, textarea.current?.selectionStart ?? text.length)
-          change(Composer.withText(draft, result.text))
-          place(result.text, result.cursor)
+          tokens.insert([ComposerTokens.fromItem(Mentions.fromFile({ path, type: "file" })), " "], { at: "caret" })
         }}
       >
         {attachments ? (
@@ -1080,84 +963,69 @@ export function PromptInput(props: {
           </InputGroupAddon>
         ) : null}
         {status ? <PromptInputStatus boot={status} onRetry={props.onRetry} onRetryNow={props.onRetryNow} /> : null}
-        <MentionOverlay textarea={textarea} text={text} marks={marks} labelClassName="bg-card" />
-        <InputGroupTextarea
-          dir="auto"
-          value={text}
-          onChange={(event) => {
-            const next = event.target.value
-            setBrowsing(ComposerHistory.idle)
-            if (shell) {
-              props.history?.reset()
-              change(Composer.withText(draft, next))
-              return
-            }
-            if (startsShell(draft, next, { history: props.history, suggestOpen: props.suggest?.open === true })) {
-              change(Composer.withMode(draft, "shell"))
-              return
-            }
-            change(Composer.withText(draft, next))
-            props.suggest?.onCursor(next, event.target.selectionStart)
-          }}
-          onBlur={() => props.suggest?.onClose()}
-          onPaste={(event) => {
-            const data = event.clipboardData
-            const pasted = data.getData("text/plain")
-            const kind = pasteKind(event)
-            if (kind === "text" || (shell && kind === "block")) return
-            event.preventDefault()
-            if (shell) return
-            if (kind === "attachment")
-              attach(
-                data.files.length > 0
-                  ? [...data.files]
-                  : [...data.items].flatMap((item) => (item.kind === "file" ? (item.getAsFile() ?? []) : [])),
-              )
-            else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
-          }}
-          ref={textarea}
-          onKeyDown={(event) => {
-            if (shell) {
-              if (shellKey(event, { running: props.running === true, text, leave: toggleShell })) return
-              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                recall(event.key === "ArrowUp" ? "up" : "down", event)
-                return
-              }
-            }
-            if (suggest && suggestionKey(suggest, event, choose)) return
-            const removed = suggest?.unmention(text, {
-              key: event.key,
-              selectionStart: event.currentTarget.selectionStart,
-              selectionEnd: event.currentTarget.selectionEnd,
-            })
-            if (removed) {
-              event.preventDefault()
-              change(Composer.withText(draft, removed.text))
-              place(removed.text, removed.cursor)
-              return
-            }
-            const action = ChatKeys.intent(
-              {
-                key: event.key,
-                metaKey: event.metaKey,
-                ctrlKey: event.ctrlKey,
-                shiftKey: event.shiftKey,
-                altKey: event.altKey,
-                repeat: event.repeat,
-                isComposing: event.nativeEvent.isComposing,
-              },
-              { apple: ChatKeys.apple, running: Boolean(props.running) },
-            )
-            if (action && act(action, event.currentTarget)) event.preventDefault()
-          }}
-          placeholder={placeholder({ status, shell })}
-          aria-label={shell ? "Command" : "Message"}
-          readOnly={state.sending}
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
-          autoFocus
-          rows={1}
-          className={textareaClass({ home, marked: marks.length > 0, shell })}
-        />
+        {suggest ? (
+          <TokenComposer
+            draft={draft}
+            onDraft={(next) => {
+              setBrowsing(ComposerHistory.idle)
+              if (startsShell(draft, next.text, { history: props.history, suggestOpen: menu.isOpen() }))
+                return change(Composer.withMode(draft, "shell"))
+              change(next)
+            }}
+            suggest={suggest}
+            tokens={tokens}
+            menu={menu}
+            anchor={root}
+            below={home}
+            editorRef={editorRef}
+            label="Message"
+            placeholder={placeholder({ status, shell })}
+            readOnly={state.sending}
+            className={home ? "max-h-80 min-h-24" : "max-h-60 min-h-16"}
+            onPaste={paste}
+            onKeyDown={(event) => {
+              if (event.defaultPrevented || menu.isOpen()) return
+              const action = intent(event)
+              if (action && act(action, caret())) event.preventDefault()
+            }}
+          />
+        ) : (
+          <>
+            <MentionOverlay textarea={textarea} text={text} marks={marks} labelClassName="bg-card" />
+            <InputGroupTextarea
+              dir="auto"
+              value={text}
+              onChange={(event) => {
+                const next = event.target.value
+                setBrowsing(ComposerHistory.idle)
+                if (shell) props.history?.reset()
+                change(Composer.withText(draft, next))
+              }}
+              onPaste={paste}
+              ref={textarea}
+              onKeyDown={(event) => {
+                if (shell) {
+                  if (shellKey(event, { running: props.running === true, text, leave: toggleShell })) return
+                  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                    recall(event.key === "ArrowUp" ? "up" : "down", event)
+                    return
+                  }
+                }
+                const node = event.currentTarget
+                const action = intent(event)
+                const cursor = node.selectionStart === node.selectionEnd ? node.selectionStart : undefined
+                if (action && act(action, cursor)) event.preventDefault()
+              }}
+              placeholder={placeholder({ status, shell })}
+              aria-label={shell ? "Command" : "Message"}
+              readOnly={state.sending}
+              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer is the page’s one input, as in Ren
+              autoFocus
+              rows={1}
+              className={textareaClass({ home, marked: marks.length > 0, shell })}
+            />
+          </>
+        )}
         <ShellPrefix active={shell} />
         <ComposerToolbar
           spaceId={props.spaceId}

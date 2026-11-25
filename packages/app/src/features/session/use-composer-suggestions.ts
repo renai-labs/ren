@@ -5,8 +5,7 @@ import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { AsyncResult } from "effect/reactivity"
 import { Debounce, MentionSources } from "@ren/client/react"
-import { isBundle, mentionColor, type Status } from "../../lib/apps.js"
-import type { MentionMark } from "@ren/ui/mention-overlay"
+import { isBundle, type Status } from "../../lib/apps.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useSpaceApps } from "./use-space-apps.js"
 import {
@@ -42,9 +41,7 @@ export interface Suggest {
   readonly label: string
   readonly searching: boolean
   readonly items: ReadonlyArray<SuggestionItem>
-  readonly active: string | undefined
   readonly onCursor: (text: string, cursor: number) => void
-  readonly onKey: (press: Composer.SuggestionPress) => boolean
   readonly onChoose: (
     value: string,
     text: string,
@@ -60,12 +57,9 @@ export interface Suggest {
       }
     | undefined
   readonly onClose: () => void
-  readonly marks: (text: string) => ReadonlyArray<MentionMark & { readonly kind: Mentions.Kind }>
+  readonly tokens: (text: string) => ReadonlyArray<Mentions.Token>
+  readonly iconOf: (item: Mentions.Item) => string | null
   readonly mentioned: (text: string) => ReadonlyArray<Composer.MentionedApp>
-  readonly unmention: (
-    text: string,
-    press: { key: string; selectionStart: number; selectionEnd: number },
-  ) => { text: string; cursor: number } | undefined
 }
 
 const itemOf = (entry: Entry) => entry.item
@@ -197,8 +191,6 @@ const commandItems = (runnable: ReadonlyArray<ClientCommand.Suggestion>) =>
     group: "Commands",
   }))
 
-const held = (press: Composer.SuggestionPress) => ["Enter", "Tab", "ArrowUp", "ArrowDown"].includes(press.key)
-
 // oxlint-disable-next-line ren/no-comments -- Every source searches one settled query, so the menu shows each query's results all at once rather than as each source answers. The menu right after @ or a category needs no search.
 function useSettledQuery(trigger: Composer.Trigger | undefined) {
   const typed = trigger?.kind === "mention" ? trigger.query : undefined
@@ -206,7 +198,7 @@ function useSettledQuery(trigger: Composer.Trigger | undefined) {
   const now = scope?.query === ""
   const later = Debounce.useValue(typed, now ? 0 : searchDelay)
   const settled = now ? typed : later
-  return { scope, searched: scopeOf(settled), pending: typed !== undefined && typed !== settled }
+  return { searched: scopeOf(settled), pending: typed !== undefined && typed !== settled }
 }
 
 function useSuggestions(input: {
@@ -218,9 +210,7 @@ function useSuggestions(input: {
   onClient: (id: ClientCommand.ID, text: string) => void
 }) {
   const [trigger, setTrigger] = useState<Composer.Trigger>()
-  const [active, setActive] = useState<string>()
   const query = useSettledQuery(trigger)
-  const scope = query.scope
   const searched = query.searched
   const { api } = RouterContext.useRouterContext()
   const apps = MentionSources.useApps(api, { query: appQuery(searched), mentions: input.mentions })
@@ -262,8 +252,6 @@ function useSuggestions(input: {
     trigger?.kind === "command"
       ? commandItems(runnable)
       : [...opened.before, ...pickable.map(mentionItem), ...opened.after]
-  const ids = items.map((item) => item.value)
-  const current = Composer.activeSuggestion(ids, active)
   const known = [...appEntries, ...repositories, ...sources.agents, ...recent.entries].map((entry) => entry.item)
   const tokens = (text: string) =>
     Mentions.tokens(
@@ -274,13 +262,9 @@ function useSuggestions(input: {
       ],
       input.picked,
     )
-  const close = () => {
-    setTrigger(undefined)
-    setActive(undefined)
-  }
+  const close = () => setTrigger(undefined)
   const settle = <A extends { readonly text: string; readonly cursor: number }>(next: A) => {
     setTrigger(Composer.trigger(next.text, next.cursor))
-    setActive(undefined)
     return next
   }
   const command = (value: string) => {
@@ -298,19 +282,7 @@ function useSuggestions(input: {
     label: trigger?.kind === "command" ? "Commands" : "Mentions",
     searching,
     items,
-    active: searching ? undefined : current,
-    onCursor: (text, cursor) => {
-      setTrigger(Composer.trigger(text, cursor))
-      setActive(undefined)
-    },
-    onKey: (press) => {
-      if (searching && trigger?.kind === "mention" && held(press)) return true
-      if (trigger === undefined || ids.length === 0) return false
-      const pressed = Composer.suggestionKey(press, ids, current)
-      if (pressed?.type === "close") close()
-      if (pressed?.type === "move") setActive(pressed.active)
-      return pressed !== undefined && pressed.type !== "select"
-    },
+    onCursor: (text, cursor) => setTrigger(Composer.trigger(text, cursor)),
     onChoose: (value, text, cursor) => {
       if (trigger?.kind === "command") return command(value)
       if (trigger?.kind !== "mention") return
@@ -329,19 +301,8 @@ function useSuggestions(input: {
       })
     },
     onClose: close,
-    marks: (text) =>
-      tokens(text).map((token) => {
-        const app = appById.get(token.item.id)
-        return {
-          start: token.start,
-          end: token.end,
-          label: token.item.label,
-          icon: app?.icon ?? null,
-          color: mentionColor,
-          file: token.item.kind === "file",
-          kind: token.item.kind,
-        }
-      }),
+    tokens,
+    iconOf: (item) => appById.get(item.id)?.icon ?? null,
     mentioned: (text) => [
       ...new Map(
         tokens(text).flatMap((token) => {
@@ -350,21 +311,6 @@ function useSuggestions(input: {
         }),
       ).values(),
     ],
-    unmention: (text, press) => {
-      const back =
-        trigger?.kind === "mention" &&
-        scope?.category &&
-        press.key === "Backspace" &&
-        press.selectionStart === press.selectionEnd &&
-        text.slice(trigger.start, press.selectionStart) === `@${scope.category.prefix}:`
-      if (back)
-        return settle({
-          text: text.slice(0, trigger.start + 1) + text.slice(press.selectionStart),
-          cursor: trigger.start + 1,
-        })
-      const removed = Mentions.remove(text, tokens(text), press)
-      return removed && settle(removed)
-    },
   }
   return {
     suggest,
