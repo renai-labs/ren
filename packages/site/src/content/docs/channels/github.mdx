@@ -1,0 +1,62 @@
+---
+title: GitHub
+icon: Github
+description: Mention @renagent on GitHub issues and pull requests, choose the space each repository works in, let Ren review pull requests, and link pull requests to tasks.
+summary: Ask Ren for work on GitHub
+---
+
+Mention `@renagent` in an issue, a pull request, a comment or a review comment. Each issue or pull request is one chat.
+
+<Screenshot
+  shot="channels/github-thread"
+  frame="detail"
+  alt="A pull request with Ren's task card for RENAI-21, a reviewer comment that asks @renagent to move inline HTML into a separate file, and Ren's reply that the change is done in commit bc5fd87"
+  caption="A reviewer mentions @renagent on a pull request, and Ren pushes the change and replies."
+/>
+
+## Connect GitHub
+
+1. Open **Settings → Channels**, then **GitHub**.
+2. Select **Connect GitHub**, approve Ren on your GitHub organization, and choose the repositories Ren can see.
+
+Then [link each repository to a space](/docs/channels/#link-a-place-to-a-space). To add a repository later, give the Ren app access to it on GitHub.
+
+## Where Ren works
+
+| Message from                                              | Space                                                           |
+| --------------------------------------------------------- | --------------------------------------------------------------- |
+| An issue or pull request linked to a [task](/docs/tasks/) | The space of the task                                           |
+| A linked repository                                       | The linked space                                                |
+| Any other repository                                      | The oldest space of the organization, such as **General Space** |
+
+## Who Ren runs as
+
+Ren matches the sender by the GitHub account they signed in to Ren with, or by the public email on their GitHub profile. When it cannot, it uses the [fallback user](/docs/channels/#who-ren-runs-as):
+
+| Message from                              | Fallback user                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| A linked repository                       | The person in **Run unknown senders as**. For a public repository, it starts as **Nobody**. |
+| Any other private repository              | The person who connected GitHub                                                             |
+| Any other public repository               | None: only Ren members                                                                      |
+| An issue or pull request linked to a task | None: only Ren members                                                                      |
+
+## Review pull requests
+
+On a linked repository, turn on **Review pull requests when ready**. Ren reviews each pull request when it is opened, or when it is marked ready for review.
+
+## Link pull requests to tasks
+
+Write a task's number, such as `REN-12`, or paste its link in an issue or a pull request. Ren links it to that [task](/docs/tasks/) and posts a card with the task's title and status.
+
+When a linked pull request is merged, Ren marks its open tasks as done.
+
+## GitHub in chats
+
+Chats can use `git` and the `gh` command on GitHub when your organization connected GitHub, or when you signed in to Ren with GitHub. Ren uses the first of these tokens:
+
+| Token                                          | Commits and pull requests show as |
+| ---------------------------------------------- | --------------------------------- |
+| Yours, when you signed in to Ren with GitHub   | You                               |
+| The Ren app's, for the repositories it can see | `renagent[bot]`                   |
+
+To have a space work on a repository, add it on the space's [Repositories](/docs/repositories/) page.

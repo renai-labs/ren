@@ -1,0 +1,67 @@
+---
+title: Channels
+icon: AtSign
+description: Link a space to a Slack channel or a GitHub repository, so your team can ask Ren for work where they already communicate.
+summary: Ask Ren for work where your team talks
+---
+
+A channel links a [space](/docs/spaces/) to a place where your team already communicates, such as a Slack channel or a GitHub repository.
+
+| Channel                          | A space links to    | One chat is                |
+| -------------------------------- | ------------------- | -------------------------- |
+| [Slack](/docs/channels/slack/)   | A Slack channel     | A Slack thread             |
+| [GitHub](/docs/channels/github/) | A GitHub repository | An issue or a pull request |
+
+## How a channel works
+
+1. Someone mentions Ren in a linked place.
+2. Ren starts a chat in the linked space, with the apps, repositories and instructions of that space.
+3. Ren replies in the same thread, issue or pull request. A reply there continues the chat.
+
+Each chat also shows in the app, so you can continue it there. Its header links back to the conversation.
+
+## Link a place to a space
+
+First connect Slack or GitHub in **Settings → Channels**. Then link places in one of two ways.
+
+### From a space
+
+Use this to link places to a space you are a member of.
+
+1. Open the space, then **Channels**, and select **Add channel**.
+2. Pick the Slack channels or repositories, then link them.
+
+### From settings
+
+Use this to see every place and its space in one list. An admin can link places to any shared space.
+
+1. Open **Settings → Channels**, then Slack or GitHub, and select **Add channel** or **Add repo**.
+2. Pick the places and the space, then select **Link**.
+
+Each place links to one space.
+
+## Who Ren runs as
+
+Ren runs each message as a Ren member, so it uses that member's access. It picks the member in this order:
+
+1. **The sender.** Ren matches the sender by the Slack or GitHub account they signed in to Ren with, or by the email on their Slack or GitHub profile. The sender must be able to work in the space.
+2. **The fallback user.** When Ren cannot match the sender, or the sender cannot work in the space, Ren runs as the person in **Run unknown senders as**. Select `✎` on a linked place to change it.
+3. **Nobody.** When the fallback user is **Nobody**, or has left the space, Ren does not run the message. It replies with the reason.
+
+Each channel's page lists where it has a fallback user by default.
+
+| Ren replies                                                      | Why                                                        | Fix                                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Link your account to Ren so I can respond here.**              | Ren cannot match the sender, and there is no fallback user | Sign in to Ren with Slack or GitHub, or use the same email on both |
+| **You need access to this channel's space in Ren.**              | The sender is a member, but not of the space               | Ask a space member to invite you                                   |
+| **I can't respond here until this channel's access is updated.** | The fallback user cannot work in the space anymore         | Pick another person in **Run unknown senders as**                  |
+
+## Unlink or disconnect
+
+- To stop Ren answering in one place, open `⋯` on its row and select **Unlink**.
+- To disconnect Slack or GitHub, open it in **Settings → Channels** and select **Disconnect**. This unlinks every place. Only an admin or the person who connected it can disconnect.
+
+## Good to know
+
+- A chat from a channel cannot ask you to approve an action. Allow what it needs in [permissions](/docs/permissions/).
+- To give Ren tools in a service, such as reading code on GitHub, add an [app](/docs/apps/). A channel only lets people ask Ren for work.

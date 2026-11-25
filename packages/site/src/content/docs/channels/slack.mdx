@@ -1,0 +1,47 @@
+---
+title: Slack
+icon: Slack
+description: Mention @Ren in a Slack channel or send it a direct message, choose the space each Slack channel works in, and follow Ren's progress with reactions.
+summary: Ask Ren for work in Slack
+---
+
+Mention `@Ren` in a Slack channel, or send Ren a direct message. Each Slack thread is one chat.
+
+## Connect Slack
+
+1. Open **Settings → Channels**, then **Slack**.
+2. Select **Connect Slack** and approve Ren in your Slack workspace.
+
+Then [link each Slack channel to a space](/docs/channels/#link-a-place-to-a-space). If a channel is missing from the list, run `/invite @Ren` in it.
+
+## Where Ren works
+
+| Message from                              | Space                                                           |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| A thread linked to a [task](/docs/tasks/) | The space of the task                                           |
+| A linked Slack channel                    | The linked space                                                |
+| Any other Slack channel                   | The oldest space of the organization, such as **General Space** |
+| A direct message                          | Your personal space                                             |
+
+## Who Ren runs as
+
+Ren matches the sender by the Slack account they signed in to Ren with, or by the email on their Slack profile. When it cannot, it uses the [fallback user](/docs/channels/#who-ren-runs-as):
+
+| Message from              | Fallback user                                |
+| ------------------------- | -------------------------------------------- |
+| A linked Slack channel    | The person in **Run unknown senders as**     |
+| Any other Slack channel   | The person who connected Slack               |
+| A thread linked to a task | None: only Ren members                       |
+| A direct message          | None: only Ren members with a personal space |
+
+## Slack tools
+
+Connecting Slack also gives Ren Slack tools, such as sending a message or searching a channel, in each space from [Where Ren works](#where-ren-works). Ren posts as its own Slack bot.
+
+## Task cards
+
+When you paste the link of a [task](/docs/tasks/) in Slack, Ren shows a card with its title and status. In a thread linked to a task, the card stays up to date. Its buttons act as the person who selects them.
+
+## Good to know
+
+- Ren reads the files in your message, up to 32 MB each.
