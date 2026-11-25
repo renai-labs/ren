@@ -1,0 +1,161 @@
+---
+title: Plan and apply
+icon: Checklist
+description: Validate a Ren spec, read its plan, apply it, pull changes made in Ren, resolve conflicts, rename and remove resources, and apply from a script.
+summary: Review and apply configuration changes
+---
+
+`ren infra plan` compares your [spec](/docs/developers/iac/) with your organization in Ren and lists what would change, and `ren infra apply` makes those changes.
+
+## Commands
+
+| Command              | What it does                                                         |
+| -------------------- | -------------------------------------------------------------------- |
+| `ren infra validate` | Checks the spec's files. It works offline and needs no sign-in.      |
+| `ren infra plan`     | Lists what apply would change in Ren. It changes nothing.            |
+| `ren infra apply`    | Makes the changes, then writes `ren.lock`                            |
+| `ren infra pull`     | Writes the changes made in Ren into the spec, then writes `ren.lock` |
+
+To plan, apply or pull, you need to be an **Owner** or **Admin** of the organization. To change a shared space, you also need to be a member of it.
+
+A change usually goes like this:
+
+1. Run `ren infra pull` and commit, so the spec starts from what is in Ren.
+2. Edit the files on a branch, and add the output of `ren infra plan` to the pull request.
+3. After the merge, run `ren infra apply` and commit the `ren.lock` it writes.
+
+## Validate
+
+`ren infra validate` checks each file's keys and values, and that every name a file refers to exists. It reports each problem with its file, its field and what's wrong.
+
+```sh
+ren infra validate
+```
+
+```text
+The folder is valid.
+```
+
+Plan and apply validate the spec first, so you don't have to. Validate on its own is useful while you edit, because it's fast and works offline.
+
+## Read a plan
+
+This plan adds `planner` and a line to the instructions of `implementer`:
+
+```text
++ create agent spaces/engineering/agents/planner
+~ update agent spaces/engineering/agents/implementer: settings
+    settings.instructions:
+        …
+        Run the tests.
+      + Open a pull request.
+
+Digest: 2c73d84bea6437703a0c05383617fb5186ce31b01adc63d65ee3c177300ac37e
+```
+
+Each line shows what apply would do, the kind of resource and its path. Ren uses [`ren.lock`](/docs/developers/iac/configuration/#renlock) to work out whether you changed something, someone changed it in Ren, or both:
+
+| Line               | Means                                                  | Apply                    |
+| ------------------ | ------------------------------------------------------ | ------------------------ |
+| `+ create`         | It's in the spec and not in Ren                        | Creates it               |
+| `~ update`         | You changed it in the spec. It names the fields.       | Changes it               |
+| `- archive`        | You deleted it from the spec                           | Archives it              |
+| `! conflict`       | It changed in the spec and in Ren since `ren.lock`     | Only with `--force`      |
+| `< changed in Ren` | Someone changed or archived it in Ren since `ren.lock` | Skips it; pull writes it |
+| `< new in Ren`     | It's in Ren and not in `ren.lock`                      | Skips it; pull writes it |
+
+Under an update or a conflict, `-` lines are Ren's value and `+` lines are the spec's. `…` stands for lines that didn't change.
+
+A plan also checks what the spec alone can't show, such as a name that's already taken in Ren. If it finds problems, it prints them after the changes, and you can't apply until you fix them.
+
+The last line is the plan's digest, a fingerprint of the plan. It changes when anything in the plan changes, in the spec or in Ren.
+
+## Apply
+
+In a terminal, `ren infra apply` plans again, lists the changes and asks you to type the organization's slug from `deploy.yaml`. Then it makes the changes and writes `ren.lock`. If there's nothing to apply, it prints `Nothing to apply.` and still updates `ren.lock`.
+
+Apply makes the changes one at a time. If one fails, the error names that change's path. The changes before it stay in place and `ren.lock` isn't updated, so fix the cause, then plan and apply again.
+
+| Option            | What it does                                                          |
+| ----------------- | --------------------------------------------------------------------- |
+| `--plan <digest>` | Applies only if the plan still has this digest. Required in a script. |
+| `--allow-archive` | Lets apply archive resources when it runs in a script                 |
+| `--force`         | Applies the spec over each conflict                                   |
+
+## Pull and resolve conflicts
+
+`ren infra pull` brings the changes made in Ren into the spec. It writes what changed only in Ren, deletes what Ren archived and you didn't change, and keeps your own edits.
+
+```sh
+ren infra pull
+```
+
+```text
+Pulled 2 changes into /Users/ada/acme/.ren.
+```
+
+If a resource changed both in the spec and in Ren since your last pull or apply, pull writes nothing and shows each conflict:
+
+```text
+Pull wrote nothing. These changed in your folder and in Ren (- in Ren, + in your folder):
+! conflict update agent spaces/engineering/agents/reviewer: settings
+    settings.instructions:
+      - Review for bugs.
+      + Review for bugs and style.
+
+To merge them with git, pull on the commit of your last pull, then merge it:
+  git switch -c ren-live a1b2c3d
+  ren infra pull .ren
+  git add -A .ren
+  git commit -m "pull from Ren"
+  git switch -
+  git merge ren-live
+
+Or keep your folder and pass --force to ren infra apply.
+```
+
+To keep both changes, run the git commands it prints. They pull Ren's version onto a branch from your last pull (the last commit that changed `ren.lock`), then merge it into your spec, where git shows any lines that clash.
+
+To keep your version instead, run `ren infra plan --force` to see the values in Ren that apply would overwrite, then `ren infra apply --force`.
+
+## Rename, move and remove
+
+To rename a space or an agent, rename its folder and list the old name in `renamedFrom`. Apply then renames it in Ren, so its history stays with it.
+
+```yaml title="spaces/engineering/agents/planner/agent.yaml"
+description: Breaks a request into steps.
+renamedFrom: [plan]
+```
+
+```text
+~ update agent spaces/engineering/agents/planner (from spaces/engineering/agents/plan): name
+```
+
+Without `renamedFrom`, the plan archives `plan` and creates a new `planner`. You can delete `renamedFrom` after the apply. Apps can't be renamed.
+
+To move an agent to another space, move its folder. The plan shows it as an update to the agent's owner.
+
+To remove a resource, delete it from the spec, and apply archives it in Ren. A few deletions do something gentler:
+
+| You delete                                        | Apply                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| An agent from `uses.agents`                       | Removes the agent from that space only                              |
+| A channel                                         | Unmaps its Slack channel or GitHub repository from the space        |
+| A shared profile from a space in `deploy.yaml`    | Removes the profile from that space. Apply never deletes a profile. |
+| A shared profile from `profiles` in `deploy.yaml` | Leaves it in Ren as it is                                           |
+
+Apply only archives what's in `ren.lock`. Something that was created in Ren and never pulled shows as `new in Ren`, and apply leaves it alone.
+
+## In scripts and CI
+
+In a terminal, apply asks you to type the organization's slug. A script or a coding agent can't do that, so it passes the digest of the plan you reviewed with `--plan`. If anything changed since that plan, in the spec or in Ren, apply stops with `The plan has changed`, and you plan again. If the plan archives anything, also pass `--allow-archive`.
+
+When you pipe or redirect it, `ren infra plan` prints the plan as JSON, so a script can read the digest:
+
+```sh
+ren infra plan > plan.json
+jq -r .digest plan.json
+ren infra apply --plan 2c73d84bea6437703a0c05383617fb5186ce31b01adc63d65ee3c177300ac37e
+```
+
+Ren has no long-lived tokens yet, so an unattended CI job can't sign in. For now, run these commands on a computer where someone has run `ren login`.

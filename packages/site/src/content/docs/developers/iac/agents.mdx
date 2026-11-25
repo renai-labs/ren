@@ -1,0 +1,84 @@
+---
+title: Agents
+icon: Agent
+description: Declare each agent in a folder of the space that owns it, give it settings and instructions, and share it with other spaces.
+summary: Declare agents and share them across spaces
+---
+
+Each [agent](/docs/agents/) is a folder in `agents/` of the space that owns it. The folder's name is the agent's name.
+
+## Declare an agent
+
+Put the agent's settings in `agent.yaml` and its instructions in `instructions.md`:
+
+```yaml title="spaces/engineering/agents/planner/agent.yaml"
+description: Breaks a request into small tasks.
+```
+
+```md title="spaces/engineering/agents/planner/instructions.md"
+Split each request into tasks that one pull request can close.
+Name the files each task changes.
+```
+
+You need at least one of the two files. The agent's instructions add to the organization's and the space's; see [Instructions and memory](/docs/developers/iac/instructions-memory/).
+
+## Fields
+
+| Key           | What it sets                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | What the agent does. A subagent needs one.                                                                                          |
+| `isSubagent`  | `true` makes it a [subagent](/docs/agents/#agents-and-subagents). The default is `false`.                                           |
+| `settings`    | The agent's model, steps, permissions and repositories. See [Organization → Settings](/docs/developers/iac/organization/#settings). |
+| `renamedFrom` | Earlier names. See [Rename, move or remove an agent](#rename-move-or-remove-an-agent).                                              |
+
+This agent gets more steps, can never force-push, and reads the example app's `develop` branch:
+
+```yaml title="spaces/engineering/agents/implementer/agent.yaml"
+description: Writes the code for one task and opens a pull request.
+settings:
+  steps: 300
+  permissions:
+    - action: shell
+      resource: git push --force*
+      effect: deny
+  references:
+    - alias: example-app
+      repository: https://github.com/acme/example-app
+      branch: develop
+      description: The Acme web app, its API and its tests.
+```
+
+A subagent is one that other agents call. They read its description to decide when, so it needs a clear one:
+
+```yaml title="spaces/engineering/agents/tester/agent.yaml"
+description: Runs the test suite on a pull request and reports failures.
+isSubagent: true
+```
+
+## Names
+
+An agent's name is a [slug](/docs/developers/iac/configuration/#names) that's unique in the organization, so two spaces can't both own a `reviewer`. To use one agent in two spaces, [share it](#share-an-agent). The names `ren`, `general`, `explore`, `compaction`, `title` and `summary` are reserved.
+
+## Share an agent
+
+To use an agent that another space owns, list it in `uses.agents` of your space's `space.yaml`. Here Mobile uses Engineering's reviewer and tester:
+
+```yaml title="spaces/mobile/space.yaml"
+name: Mobile
+uses:
+  agents:
+    - reviewer
+    - tester
+```
+
+The agent's folder stays in the space that owns it. In each space that uses the agent, its settings and instructions combine with that space's. To take the agent out of a space, remove its name from `uses.agents`.
+
+A space's [automations](/docs/developers/iac/automations/), [channels](/docs/developers/iac/channels/) and [factory](/docs/developers/iac/factory/) can name any agent the space owns or uses, as long as it isn't a subagent.
+
+## Rename, move or remove an agent
+
+To rename an agent, rename its folder and add the old name to `renamedFrom`, so it keeps its chats and history. Then update every `uses.agents` that lists the old name. [Plan and apply](/docs/developers/iac/plan-and-apply/#rename-move-and-remove) has an example.
+
+To give an agent to another space, move its folder there. The old space keeps using it only if you add it to that space's `uses.agents`.
+
+To remove an agent, delete its folder, and the plan archives it. [Archive an agent](/docs/agents/#archive-an-agent) explains what happens to its chats and automations.

@@ -1,0 +1,95 @@
+---
+title: Profiles
+icon: Key
+description: Declare your organization's shared profiles in deploy.yaml, choose the spaces that use each one, and connect their sign-ins and secrets in the app or the CLI.
+summary: Declare shared profiles and their spaces
+---
+
+A profile is one set of sign-ins and secrets for an app, such as the platform team's account on a deploy service. The Ren app calls it an [account](/docs/apps/#apps-and-accounts). You declare shared profiles in `deploy.yaml` and say which spaces use each one. The spec holds only their names, so you still connect each profile in Ren.
+
+## Declare a shared profile
+
+Under `profiles`, list profiles by app slug, then by profile slug:
+
+```yaml title="deploy.yaml"
+organization: acme
+profiles:
+  engineering-tools:
+    platform:
+      name: Platform
+```
+
+| Key         | What it sets                                                                          |
+| ----------- | ------------------------------------------------------------------------------------- |
+| `name`      | Required. The profile's name in Ren.                                                  |
+| `allSpaces` | `true` shares the profile with every space. Without it, only the spaces that list it. |
+
+A profile's slug can be at most 32 characters, and you can't change it once Ren creates the profile. The app doesn't have to be in your spec: it can also be one from the registry.
+
+## Choose the spaces that use it
+
+Under `spaces`, list the profiles each space uses, by app. Each key is a space folder, and a space can use more than one profile of the same app.
+
+```yaml title="deploy.yaml"
+organization: acme
+profiles:
+  engineering-tools:
+    platform:
+      name: Platform
+spaces:
+  engineering:
+    profiles:
+      engineering-tools: [platform]
+  support:
+    profiles:
+      engineering-tools: [platform]
+```
+
+A space's list for an app is the full set. If Engineering uses `platform` today and you leave it off the list, apply takes it away. A space with no list for an app keeps whatever profiles it has.
+
+A profile with `allSpaces: true` already reaches every space, so leave it out of the lists.
+
+## The first profile
+
+You don't declare an app's first profile. When apply creates an app, Ren creates a shared profile for it, named after the owner space, and the owner space uses it. For `engineering-tools` in `engineering`, the next `ren infra pull` writes:
+
+```yaml title="deploy.yaml"
+organization: acme
+profiles:
+  engineering-tools:
+    engineering:
+      name: Engineering
+spaces:
+  engineering:
+    profiles:
+      engineering-tools: [engineering]
+```
+
+When you add more profiles of the app to that space, keep `engineering` in the list. Leaving it out would take the profile away from its only space, and the plan stops you.
+
+## Connect a profile
+
+A new profile shows **Not connected** until someone gives it what the app needs: a sign-in for each MCP server that has one, and a value for each [secret the app declares](/docs/developers/iac/apps/#secrets).
+
+<Steps>
+
+1. Open **Apps** in the sidebar, and open the app.
+2. Under **Accounts**, select the profile.
+3. Select **Connect**, then sign in or paste each value.
+
+</Steps>
+
+When a sign-in expires, the profile shows **Needs sign-in**. Select **Reconnect** to sign in again.
+
+To do it from the CLI, find the profile's ID with `ren app profile list --app engineering-tools`. Then run `ren credential create` to set a secret, or `ren credential connect` to sign in to an MCP server.
+
+## Change or remove a profile
+
+Most changes do what you'd expect: a new `name` renames the profile, and adding or removing a slug in a space's list starts or stops that space using it. Two rules protect a profile's secrets:
+
+- A profile always needs at least one space. Apply won't remove it from its last space, or turn off `allSpaces` while no space lists it.
+- Apply never deletes a profile, even when you remove it from `profiles`. To delete one, open its `⋯` on the app's page and select **Delete**.
+
+You can't rename a slug. Changing it creates a new profile and leaves the old one as it is.
+
+Pull writes shared profiles only, so personal profiles stay out of the spec.

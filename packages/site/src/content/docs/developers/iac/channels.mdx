@@ -1,0 +1,98 @@
+---
+title: Channels
+icon: Channels
+description: Declare the channels of a space in Ren as code, and bind each one to a Slack channel or a GitHub repository in deploy.yaml.
+summary: Connect Slack and GitHub to spaces as files
+---
+
+A [channel](/docs/channels/) connects a Slack channel or a GitHub repository to a space, so a mention there starts a chat. In the spec it takes two entries: `channels.yaml` in the space says what the channel does, and `deploy.yaml` says which Slack channel or repository it is.
+
+## Before you start
+
+A spec can't install the Slack or GitHub app for you. Connect them in **Settings → Channels** first; see [Slack](/docs/channels/slack/#connect-slack) or [GitHub](/docs/channels/github/#connect-github). For GitHub, give the Ren app access to each repository you want to use.
+
+## Add a channel
+
+Declare the channel in the space. Its key is the channel's slug:
+
+```yaml title="spaces/engineering/channels.yaml"
+example-app:
+  kind: github
+  purpose: Issues and pull requests of acme/example-app
+  agent: reviewer
+```
+
+Then bind the same slug to the repository in `deploy.yaml`:
+
+```yaml title="deploy.yaml"
+organization: acme
+spaces:
+  engineering:
+    channels:
+      example-app:
+        kind: github
+        repository: acme/example-app
+```
+
+After you apply, a mention of `@renagent` in `acme/example-app` starts a chat in Engineering with the reviewer.
+
+A Slack channel works the same way, with `kind: slack` in both files and the Slack channel's ID in `deploy.yaml`:
+
+```yaml title="deploy.yaml"
+organization: acme
+spaces:
+  engineering:
+    channels:
+      eng:
+        kind: slack
+        channelId: C0123ABCD
+```
+
+If your organization already has channels, `ren infra pull` writes each one to both files, with a slug made from its name, such as `acme-example-app`. Channels of personal spaces stay out of the spec.
+
+## Keys
+
+These go in `channels.yaml`:
+
+| Key        | Required | What it sets                                                                                |
+| ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `kind`     | Yes      | `slack` or `github`                                                                         |
+| `purpose`  | Yes      | A note for people who read the spec. Ren doesn't use it.                                    |
+| `agent`    | No       | The agent that answers. Defaults to `ren`.                                                  |
+| `fallback` | No       | Whether Ren answers people it can't match to a member. See [Fallback user](#fallback-user). |
+| `triggers` | No       | Events that run the agent without a mention. See [Triggers](#triggers).                     |
+
+## Fallback user
+
+Ren runs each chat as the member who wrote the message. With `fallback` on, a message from someone Ren can't match to a member runs as the channel's [fallback user](/docs/channels/#who-ren-runs-as). With `fallback: false`, Ren doesn't run those messages.
+
+Fallback is on by default, and off for a public GitHub repository. If you leave the key out, apply keeps the channel's current setting.
+
+For a new channel, apply makes you the fallback user. For an existing one, it keeps the current fallback user as long as they can still work in the space, and otherwise switches to you.
+
+## Triggers
+
+A trigger runs the agent when something happens, without a mention. GitHub has one, `pull_request_ready` (**Review pull requests when ready** in the app). It runs the agent when a pull request is opened or marked ready for review, but not for a draft or on each push. Slack has none.
+
+```yaml title="spaces/engineering/channels.yaml"
+example-app:
+  kind: github
+  purpose: Issues and pull requests of acme/example-app
+  agent: reviewer
+  triggers:
+    pull_request_ready:
+      prompt: Review this pull request against its task.
+```
+
+The agent gets `prompt` as its message. To use the default prompt, `Review this pull request.`, write `pull_request_ready: {}`.
+
+## Change and remove
+
+Changing `agent`, `fallback` or `triggers` updates the channel. To move a channel to another space, move both its entries. To disconnect it, remove both.
+
+## When it fails
+
+| Message                                                                                        | Fix                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `This Slack place is mapped to a space that the folder does not manage. Unmap it there first.` | The Slack channel is connected to a personal space. Select **Unlink** in that space, then plan again. |
+| `Ren can’t reach this place on Slack.`                                                         | Check `channelId`. For a private Slack channel, run `/invite @Ren` in it.                             |

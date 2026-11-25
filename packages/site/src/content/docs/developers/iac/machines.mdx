@@ -1,0 +1,133 @@
+---
+title: Machines
+icon: Cpu
+description: Declare your organization's machines as environment templates in environments.yaml, and choose the machines each space's brain and hand run on.
+summary: Declare machines and assign them to spaces
+---
+
+`environments.yaml` declares your organization's [machines](/docs/machines/), and each space's `space.yaml` picks the ones it runs on. The CLI and its messages call a machine an environment template.
+
+## Declare a machine
+
+The key is the machine's name. Under it, say which provider runs the machine and how to configure it:
+
+```yaml title="environments.yaml"
+Node build:
+  description: Node 22 with the GitHub CLI.
+  provider: e2b
+  config:
+    cpuCount: 4
+    memoryMiB: 4096
+    packages:
+      apt: [gh]
+      npm: [pnpm]
+    buildCommands:
+      - corepack enable
+```
+
+| Field                    | Default        | What it sets                                                               |
+| ------------------------ | -------------- | -------------------------------------------------------------------------- |
+| `provider`               | Required       | Where the machine runs                                                     |
+| `config`                 | Required       | The provider's settings, such as size, packages and build commands         |
+| `sessionsPerEnvironment` | `8`            | How many chats run on one machine before Ren starts another, from 1 to 100 |
+| `networking`             | `unrestricted` | The hosts the machine can reach. See [Network access](#network-access).    |
+
+## Provider config
+
+Each provider has its own config. To see the providers you can use and the config each one takes, run:
+
+```sh
+ren environment provider list
+```
+
+The examples on this page use `e2b`. `ren infra validate` only checks the shape of `environments.yaml`. The provider's own config is checked by `ren infra plan`.
+
+## Network access
+
+A machine can reach any host unless you limit it. A limited machine needs all three of these fields:
+
+```yaml title="environments.yaml"
+Node build:
+  provider: e2b
+  config:
+    cpuCount: 2
+    memoryMiB: 2048
+    packages: {}
+    buildCommands: []
+  networking:
+    type: limited
+    allowPackageManagers: true
+    allowMcpServers: true
+    allowedHosts:
+      - github.com
+      - "*.githubusercontent.com"
+```
+
+| Field                  | Allows                                                                  |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `allowPackageManagers` | npm, PyPI, the Debian and Ubuntu mirrors and the Go module proxy        |
+| `allowMcpServers`      | The MCP servers of the space's apps                                     |
+| `allowedHosts`         | Host names such as `api.example.com`, or `*.example.com` for subdomains |
+
+A limited machine can always reach the hosts that the space's [secrets](/docs/credentials/) are for. Not every provider can limit hosts, and the plan tells you when yours can't.
+
+## Assign machines to a space
+
+A space has a brain, which runs the agent, and a hand, which runs its file and shell tools. Most often you want the machine you declared for the hand, so the tools find the packages you installed on it. Make the hand `remote` and name the machine:
+
+```yaml title="spaces/engineering/space.yaml"
+name: Engineering
+hand:
+  placement: remote
+  environment: Node build
+```
+
+To run the brain on it too, name the machine and its provider. `ren environment provider brains` lists the providers that can run brains.
+
+```yaml title="spaces/engineering/space.yaml"
+name: Engineering
+brain:
+  provider: e2b
+  environment: Node build
+```
+
+[Spaces → Runtime](/docs/developers/iac/spaces/#runtime) covers the other runtime keys, and when a change takes effect.
+
+## Builds
+
+A provider such as `e2b` has to build an image for each new machine, and again whenever its config changes. A space can't move to a machine until its first build is ready, so adding one takes two applies:
+
+<Steps>
+
+1. Add the machine to `environments.yaml` and run `ren infra apply`. Leave `space.yaml` unchanged.
+2. Run `ren environment template list` until the machine's `buildStatus` is `ready`.
+3. Name the machine in `space.yaml` and run `ren infra apply` again.
+
+</Steps>
+
+If a build fails, `ren environment template get` shows its log in `buildError`. Fix the config and apply it, or retry the same config with the machine's ID:
+
+```sh
+ren environment template retry-build tpl_01JX4M2T9V8K3N6P5Q7R2S4W1Y
+```
+
+While a changed config builds, the machine keeps running its last good image.
+
+## Change or archive a machine
+
+Changing `config`, `networking`, `description` or `sessionsPerEnvironment` updates the machine, and a new `config` starts a build. Two changes aren't updates:
+
+- A machine can't change its `provider`. Declare the new machine under another name.
+- Renaming a machine creates one with the new name and archives the old one.
+
+Removing a machine archives it and deletes its running machines and their files. Every space has to stop using it first:
+
+- Move each space in the spec to another machine.
+- For a space that isn't in the spec, such as a personal space, change its machine on its **Compute** page.
+- If a space still has chats running on the machine, select **Shut down space** on its **Compute** page.
+
+To see which spaces use a machine or still run on it:
+
+```sh
+ren environment template affected-spaces tpl_01JX4M2T9V8K3N6P5Q7R2S4W1Y
+```

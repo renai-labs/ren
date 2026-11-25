@@ -1,0 +1,130 @@
+---
+title: Factory
+icon: Factory
+description: Declare a space's factory in Ren as code, with the routes each agent can hand a task to, the limits on handoffs and runs, and the agents that can finish a task.
+summary: Declare agent handoffs and limits
+---
+
+A space's [factory](/docs/factory/) goes under the `factory` key of its `space.yaml`. It lists the agents, who each one can hand a [task](/docs/tasks/) to, and how far a task can go before a person has to decide.
+
+## A working factory
+
+In this factory, the planner hands each task to the implementer, the implementer to the reviewer, and the reviewer to the tester or back to the implementer. The tester finishes the task, or sends it back:
+
+```yaml title="spaces/engineering/space.yaml"
+name: Engineering
+factory:
+  maxHandoffs: 20
+  agents:
+    - agent: planner
+      to:
+        - agent: implementer
+          start: new
+    - agent: implementer
+      maxRuns: 5
+      to:
+        - agent: reviewer
+    - agent: reviewer
+      to:
+        - agent: implementer
+          max: 3
+          else: tester
+          start: continue
+        - agent: tester
+    - agent: tester
+      finish: true
+      to:
+        - agent: implementer
+          max: 2
+```
+
+Without the `factory` key, the space has no factory, and its agents can hand tasks to any agent with no limits. To remove a factory, delete the key and apply.
+
+## Keys
+
+The factory has `maxHandoffs` and `agents`, a list of up to 64 agents. The order of the list doesn't matter: a task starts with whichever agent it's assigned to. Each item takes:
+
+| Key       | What it sets                                   |
+| --------- | ---------------------------------------------- |
+| `agent`   | An agent of the space, or `ren`                |
+| `to`      | The agents it can hand the task to             |
+| `finish`  | `true` lets an agent with `to` finish the task |
+| `maxRuns` | How many times the agent can run on one task   |
+
+Each route in `to` takes:
+
+| Key     | What it sets                                                           |
+| ------- | ---------------------------------------------------------------------- |
+| `agent` | The agent that gets the task                                           |
+| `max`   | How many times the task can take this route                            |
+| `else`  | The agent that gets the task in its place once the route reaches `max` |
+| `start` | Whether the receiving agent starts a new chat or continues one         |
+
+## Routes and finishing
+
+An agent with `to` can hand the task only to those agents, and only while it holds the task. It can finish the task only with `finish: true`. An agent without `to` can hand the task to any agent, and finish it.
+
+When an agent finishes the task, the factory's work is done, and the task waits for a person or for its pull request to merge. With `to: []`, an agent hands off to nobody, so it finishes or asks a person:
+
+```yaml title="spaces/engineering/space.yaml"
+factory:
+  agents:
+    # ...
+    - agent: tester
+      finish: true
+      to: []
+```
+
+A person can assign the task to any agent at any time.
+
+## Limits and fallback
+
+Limits keep agents from passing a task back and forth forever. When a task hits one, it stops and goes to a person under **Needs review**:
+
+| Limit           | Counts                                       | Range | Default |
+| --------------- | -------------------------------------------- | ----- | ------- |
+| `maxHandoffs`   | The handoffs of the task by agents with `to` | 1–100 | 20      |
+| A route's `max` | The handoffs of the task on that route       | 1–10  | None    |
+| `maxRuns`       | The runs of that agent on the task           | 1–20  | None    |
+
+The counts start again when a person decides, with a review decision or by assigning the task.
+
+When a route reaches its `max`, `else` gives the task to another agent instead of a person. Here, the reviewer sends the task back to the implementer up to 3 times, and the fourth time the tester gets it:
+
+```yaml title="spaces/engineering/space.yaml"
+factory:
+  agents:
+    # ...
+    - agent: reviewer
+      to:
+        - agent: implementer
+          max: 3
+          else: tester
+```
+
+The `else` agent's `maxRuns` still applies. When a limit stops a task, the reason on it names the limit, such as `The task was handed off 20 of 20 times.` or `implementer ran 5 of 5 times.`
+
+## Start new or continue
+
+A route's `start` sets which chat the receiving agent works in. With `new`, it starts a fresh chat. With `continue`, the default, it picks up its latest chat on this task, or starts one if there is none. The agent that hands off can choose for itself, and the route's `start` applies when it doesn't.
+
+Here, the implementer starts each task in a new chat from the plan, and continues that chat with its earlier work when the reviewer sends the task back:
+
+```yaml title="spaces/engineering/space.yaml"
+factory:
+  agents:
+    - agent: planner
+      to:
+        - agent: implementer
+          start: new
+    # ...
+    - agent: reviewer
+      to:
+        - agent: implementer
+          max: 3
+          start: continue
+```
+
+## When an agent breaks a route
+
+If an agent tries a handoff its routes don't allow, Ren refuses and tells the agent why, such as `planner can hand off only to implementer.` or `implementer is not a last step: hand off to reviewer.` The agent then follows its routes or asks a person.

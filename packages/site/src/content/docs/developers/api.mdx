@@ -1,0 +1,188 @@
+---
+title: API reference
+icon: Globe
+description: Call the Ren API over HTTP with an OAuth access token, and find its paths, pagination, errors and OpenAPI document.
+summary: Authentication, conventions and the OpenAPI document
+---
+
+The Ren API is the HTTP API that the Ren app, the [CLI](/docs/developers/cli/) and the [MCP server](/docs/developers/mcp/) call. Its base URL is:
+
+```text
+https://api.useren.ai
+```
+
+## Authentication
+
+Ren has no API keys. Your program signs a person in with OAuth, then calls the API as that person, with the access they have in the app.
+
+If you're scripting for yourself, the [CLI](/docs/developers/cli/) is quicker. It signs you in and has a command for every API operation.
+
+To sign people in from your own program:
+
+<Steps>
+
+1. Publish a client metadata document. Ren has no form for registering an OAuth client. You host a small JSON file at an HTTPS URL instead, and that URL is your client ID:
+
+   ```json title="https://app.acme.example/ren-client.json"
+   {
+     "client_id": "https://app.acme.example/ren-client.json",
+     "client_name": "Acme release bot",
+     "redirect_uris": ["https://app.acme.example/callback"],
+     "token_endpoint_auth_method": "none",
+     "grant_types": ["authorization_code", "refresh_token"],
+     "response_types": ["code"]
+   }
+   ```
+
+2. Send the person to Ren's authorization endpoint, with a PKCE challenge:
+
+   ```text
+   https://api.useren.ai/auth/oauth2/authorize
+     ?response_type=code
+     &client_id=https://app.acme.example/ren-client.json
+     &redirect_uri=https://app.acme.example/callback
+     &scope=openid offline_access ren
+     &resource=https://api.useren.ai/mcp
+     &code_challenge=<challenge>
+     &code_challenge_method=S256
+     &state=<random value>
+   ```
+
+   They sign in, pick the **Organization** and click **Allow**. Ren sends them back to your redirect URI with a `code`.
+
+3. Exchange the code for tokens:
+
+   ```sh
+   curl https://api.useren.ai/auth/oauth2/token \
+     -d grant_type=authorization_code \
+     -d code=<code> \
+     -d code_verifier=<verifier> \
+     -d redirect_uri=https://app.acme.example/callback \
+     -d client_id=https://app.acme.example/ren-client.json \
+     -d resource=https://api.useren.ai/mcp
+   ```
+
+4. Send the access token with each request:
+
+   ```text
+   Authorization: Bearer <access token>
+   ```
+
+</Steps>
+
+Most OAuth libraries do steps 2 and 3 for you from these settings:
+
+| Setting                | Value                                                                     |
+| ---------------------- | ------------------------------------------------------------------------- |
+| Discovery              | `https://api.useren.ai/.well-known/oauth-protected-resource`              |
+| Authorization endpoint | `https://api.useren.ai/auth/oauth2/authorize`                             |
+| Token endpoint         | `https://api.useren.ai/auth/oauth2/token`                                 |
+| Revocation endpoint    | `https://api.useren.ai/auth/oauth2/revoke`                                |
+| Grant                  | Authorization code with PKCE (`S256`), then `refresh_token`               |
+| Scope                  | `ren`. Add `offline_access` to get a refresh token                        |
+| Resource               | `https://api.useren.ai/mcp`, in both the authorization and token requests |
+| Lifetime               | Access tokens last 1 hour; refresh tokens last 30 days                    |
+
+The API only accepts tokens issued for that resource with the `ren` scope, so copy the resource value exactly, `/mcp` included.
+
+A token works in one organization: the one the person picked when they clicked **Allow**. To work in another, sign in again and pick it. If the person leaves the organization, the token stops working and Ren answers `401`.
+
+## First request
+
+With the access token in `REN_TOKEN`, ask who it acts as:
+
+```sh
+curl https://api.useren.ai/me -H "Authorization: Bearer $REN_TOKEN"
+```
+
+```json
+{
+  "user": {
+    "id": "usr_01JZ7K2M4N6P8Q0R2S4T6V8W0X",
+    "name": "Ada Lovelace",
+    "email": "ada@acme.com",
+    "emailVerified": true,
+    "image": null
+  },
+  "organization": {
+    "id": "org_01JZ7K3A5B7C9D1E3F5G7H9J1K",
+    "name": "Acme",
+    "slug": "acme",
+    "logo": null
+  }
+}
+```
+
+## Paths
+
+Most resources follow the same pattern. For spaces:
+
+| Operation | Request                      | Returns                  |
+| --------- | ---------------------------- | ------------------------ |
+| List      | `GET /spaces`                | One page of spaces       |
+| Get       | `GET /spaces/{idOrSlug}`     | The space                |
+| Create    | `POST /spaces`               | The new space            |
+| Update    | `PATCH /spaces/{id}`         | The changed space        |
+| Archive   | `DELETE /spaces/{id}`        | The archived space       |
+| Action    | `POST /spaces/{id}/shutdown` | The result of the action |
+
+You can get a space, an agent, an app or a task by its slug, such as `/spaces/engineering`, or by its ID. A task's slug is its number, such as `/tasks/ENG-12`. Every other operation needs the ID, such as `/spaces/spc_01JZ8Q2N4M7XK3V9T6R5B1C0DE`.
+
+Send a body as JSON. Fields that point to another resource, such as `spaceId` and `agentId`, take its ID:
+
+```sh
+curl https://api.useren.ai/tasks \
+  -H "Authorization: Bearer $REN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"spaceId": "spc_01JZ8Q2N4M7XK3V9T6R5B1C0DE", "title": "Fix the build"}'
+```
+
+## Pagination
+
+A list takes `page` and `pageSize` in the query and returns one page:
+
+```sh
+curl "https://api.useren.ai/tasks?spaceId=spc_01JZ8Q2N4M7XK3V9T6R5B1C0DE&page=2&pageSize=20" \
+  -H "Authorization: Bearer $REN_TOKEN"
+```
+
+```text
+{ "items": [ …14 tasks… ], "page": 2, "pageSize": 20, "total": 34 }
+```
+
+`page` starts at 1. `pageSize` is at most 100; without it, most lists return 50. To read every item, ask for the next page until `page × pageSize` reaches `total`.
+
+## Errors
+
+An error has a status and a JSON body with its type in `_tag` and a `message`:
+
+```json
+{ "_tag": "NotFoundError", "message": "Space not found." }
+```
+
+| `_tag`                | Status | Other fields   | Meaning                                                                 |
+| --------------------- | ------ | -------------- | ----------------------------------------------------------------------- |
+| `InvalidRequestError` | 400    | `field`        | Ren refused a value, and `field` names it when it can                   |
+| `UnauthorizedError`   | 401    |                | The token is missing, expired or refused                                |
+| `ForbiddenError`      | 403    |                | The person's role doesn't allow it, or they have no organization        |
+| `NotFoundError`       | 404    | `resource`     | The resource doesn't exist or the person can't see it                   |
+| `ConflictError`       | 409    | `resource`     | The change clashes with the current state, such as a slug that is taken |
+| `TooLargeError`       | 413    |                | The body or file is too large                                           |
+| `UnavailableError`    | 503    | `retryAfterMs` | Ren can't answer now. Ask again after `retryAfterMs` milliseconds       |
+
+Two responses are less obvious:
+
+- A `404` for something the person can open in the app usually means the token belongs to another organization.
+- A `400` with an empty body means the path, query or body doesn't match the operation's schema. Check the request against the OpenAPI document.
+
+## OpenAPI
+
+The API serves its OpenAPI 3.1 document at:
+
+```text
+https://api.useren.ai/openapi.json
+```
+
+It lists each operation with its parameters, body, responses and errors. Schemas are named after the resource, such as `Space.Info` and `Space.Page`.
+
+Each operation has an ID, such as `space.list`. Its [MCP tool](/docs/developers/mcp/#tools) has the same name with underscores, `space_list`, and most [CLI commands](/docs/developers/cli-commands/) follow it, such as `ren space list`.

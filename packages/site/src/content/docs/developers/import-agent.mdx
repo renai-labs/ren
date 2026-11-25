@@ -1,0 +1,180 @@
+---
+title: Import your agent setup
+icon: Download
+description: Copy a prompt into claude.ai, ChatGPT, Claude Code, Codex or OpenCode, and it moves your instructions, agents, repositories and skills into Ren after you confirm the plan.
+summary: Bring your agent setup to Ren
+---
+
+Paste one of the prompts on this page into the AI tool you already use, and it brings your instructions, agents, repositories and skills into a Ren space.
+
+## Choose a path
+
+| You work in                    | The tool uses                                        | It reads                                                | Your setup ends up                                   |
+| ------------------------------ | ---------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| claude.ai or chatgpt.com       | [Ren MCP](/docs/developers/mcp/)                     | What you tell it or paste into the chat                 | In Ren                                               |
+| Claude Code, Codex or OpenCode | The [CLI](/docs/developers/cli/) and a `.ren` folder | Your repositories, instruction files and skills on disk | In Ren, and as [files in Git](/docs/developers/iac/) |
+
+Neither path needs a plugin. Either way, the tool shows you the setup it proposes and waits for your yes before it changes anything in Ren.
+
+## What carries over
+
+| On your side                             | In Ren                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------- |
+| A GitHub repository you work in          | A repository reference of the space                                  |
+| An instruction file, such as `AGENTS.md` | The instructions of the space or of an agent                         |
+| An agent or subagent                     | An [agent](/docs/agents/) of the space                               |
+| A skill                                  | A skill of an app that the space owns, such as `engineering-tools`   |
+| An MCP server or a service you use       | An [app](/docs/apps/): one from Ren's registry, or one you make      |
+| A token, an API key or a sign-in         | Nothing. You add [profiles and secrets](/docs/credentials/) yourself |
+
+A skill that already lives in a GitHub repository stays there, and Ren reads it from GitHub, so you keep editing it in one place. A skill that exists only on your computer is copied into the app. See [Skills from GitHub](/docs/developers/iac/apps/#skills-from-github).
+
+## From claude.ai or ChatGPT
+
+[Connect Ren MCP](/docs/ren-mcp/) to your tool first. Then start a chat and paste:
+
+```text
+Help me bring my agent setup into Ren with the Ren tools you have. You can't see my computer, so work only with what I tell you or paste here.
+
+1. Call me_get and tell me which account and organization you are working in. Call space_list and ask me which space to use, or whether to create a new one.
+
+2. Ask me, one topic at a time, for:
+   - the GitHub repositories I work in: the URL of each and what it holds;
+   - my instructions, such as the contents of my AGENTS.md or CLAUDE.md files;
+   - the agents or roles I use, and what each one does;
+   - my skills: for a skill that lives in a GitHub repository, its repository URL and folder; for one that doesn't, its pasted SKILL.md;
+   - the MCP servers and services I use, by name.
+   Never ask me for passwords, tokens or API keys.
+
+3. Read what Ren already has:
+   - space_get for the space, then space_settings_get with the space's ID (spc_…), not its slug;
+   - agent_list and app_list with the space's ID;
+   - repository_list, for the repositories Ren's GitHub App can read;
+   - app_registry_list, for a Ren app for each service I named.
+
+4. Propose the setup in a short table:
+   - the space;
+   - each agent, with its name (lowercase, with hyphens), description and instructions;
+   - each repository reference, with an alias and a description of what it holds;
+   - one app for my skills, and each skill in it, marked as a GitHub reference or as copied content. For a GitHub reference, say whether it follows a branch (new commits reach Ren without me doing anything) or is pinned to a commit (it never changes until I change it);
+   - each change to something that already exists in Ren.
+   Then list what I must do myself: connect the profiles of registry apps in the Ren app, add secrets, and give Ren's GitHub App access to each private repository that repository_list doesn't show.
+   Ask me to confirm. Change nothing until I say yes.
+
+5. Apply only what I confirmed:
+   - space_create for a new space;
+   - space_settings_update with the settings from space_settings_get plus the new references and instructions. It replaces every setting, so keep the ones that are there;
+   - agent_create for each new agent, with ownerSpaceId set to the space's ID, and agent_update for an existing one;
+   - app_create with ownerSpaceId, a slug, a name, a description and the skills. A GitHub skill is {"type": "upstream", "upstream": {"url": "https://github.com/<owner>/<repo>", "path": "<folder of SKILL.md, or .>", "ref": "<branch, tag or 40-character commit>"}}; leave out ref to follow the default branch. A pasted skill is {"type": "content", "description": "<its description>", "instructions": "<SKILL.md without its frontmatter>"}.
+   If a tool returns an error, show it to me and stop.
+
+6. Check the result: call space_settings_get, agent_list and app_skills_get, and show me that each matches what I confirmed.
+
+7. If you can remember things across our chats, offer to save a note: my Ren organization and space, and that you should propose each new agent or skill for Ren before you make it. Save it only if I agree.
+```
+
+This path changes Ren one resource at a time. To keep your setup as files in Git, use the next path.
+
+## From Claude Code, Codex or OpenCode
+
+Open the tool in your main repository and paste:
+
+```text
+Help me move my agent setup to Ren (useren.ai) as infrastructure as code. Work in this order, and stop where I have to decide.
+
+1. Install and sign in
+   - If `ren --version` fails, install the CLI with:
+       curl -fsSL https://useren.ai/install | bash -s -- --no-init
+     It installs into ~/.ren/bin. If `ren` is not on PATH yet, use ~/.ren/bin/ren.
+   - Run `ren login`. It opens my browser: tell me to sign in, pick the organization and click Allow. If no browser can open, run `ren login --no-browser` and give me the link.
+   - Run `ren whoami` and ask me to confirm the account and organization. Pulling, planning and applying need an admin of the organization.
+
+2. Take inventory, read only
+   Ask me which GitHub repositories I work in, starting with this one. In each of them and in my home folder, look where you load instructions, agents and skills from, and list:
+   - each repository: its GitHub URL, default branch and one line on what it holds;
+   - each instruction file, such as AGENTS.md or CLAUDE.md, and whether it applies everywhere or to one repository;
+   - each agent or subagent, and its role;
+   - each skill and its folder, and where it comes from: (a) a public GitHub repository, (b) a GitHub repository of mine, committed and pushed, or (c) only this computer. Use git remote, git log and git status to tell them apart;
+   - each MCP server, by name and URL.
+   Never read, print or copy a secret value: tokens, API keys, passwords or .env files. Write down only the names of the secrets something needs.
+
+3. Map it to Ren, and ask me
+   Propose: the space for my work (an existing one from `ren space list`, or a new one); an agent for each role, with its instructions; one app for my skills; a repository reference for each repository. For the skills:
+   - (a) and (b) become GitHub references: a skill.yaml with the upstream url, the path of the folder that holds SKILL.md, and an optional ref;
+   - for each (c), ask me: copy it into the Ren app as SKILL.md, or push it to a GitHub repository first and reference it there;
+   - for each reference, ask me: follow a branch (new commits reach Ren without an apply) or pin a 40-character commit (fixed until I change the ref).
+   Then ask me where the configuration lives: `.ren/` in this repository, or a separate `ren-setup/.ren/` folder. Call it <folder> below.
+
+4. Write the configuration
+   - Read https://useren.ai/llms.txt and follow Ren's infrastructure-as-code docs for the folder's files.
+   - If <folder> has no org.yaml yet, run `ren infra pull <folder>` first, so it starts from what Ren already has. The plan archives what Ren has and the folder leaves out, such as a shared space or an agent.
+   - Don't overwrite or delete a file there without asking me. Add only what I approved, and put instructions in instructions.md files.
+   - Run `ren infra validate <folder>` and fix each problem it names, until it prints "The folder is valid."
+   - For each private repository, check that `ren repository list` shows it. If it doesn't, tell me to give Ren's GitHub App access to it before we apply.
+
+5. Show me the plan
+   Run `ren infra plan <folder> --output pretty`. In this chat, summarize the spaces, agents, repository references, apps, which skills are referenced and which are copied, and every update or archive of something Ren already has. List the profiles and secrets I must add myself. Ask me to confirm. Don't apply until I say yes.
+
+6. Apply and check
+   - Run `ren infra apply <folder> --plan <digest>` with the digest from the plan. Add --allow-archive or --force only if I approved those exact changes.
+   - Run `ren infra plan <folder>` again. It should print "No changes."
+   - Run `ren space agent list <space>` and `ren app skills <app>`, and show me that they match the plan.
+   - Commit <folder>, including ren.lock, on a new branch, and show me the diff.
+
+7. Save guidance
+   Propose a short "Ren" section for this repository's AGENTS.md (CLAUDE.md for Claude Code) with: the organization, <folder>, the loop (edit, validate, plan, apply only after I confirm), to offer to add a new reusable skill or agent to <folder>, and to offer long work to Ren with `ren task create --space <space>`. Write it only if I agree.
+```
+
+### The folder it makes
+
+For `acme`, with the `engineering` space and its four agents, the folder looks like this:
+
+```text
+ren-setup/.ren/
+├── deploy.yaml
+├── org.yaml
+└── spaces/engineering/
+    ├── space.yaml
+    ├── instructions.md
+    ├── agents/
+    │   ├── planner/
+    │   │   ├── agent.yaml
+    │   │   └── instructions.md
+    │   ├── implementer/
+    │   ├── reviewer/
+    │   └── tester/
+    └── apps/engineering-tools/
+        ├── app.yaml
+        └── skills/
+            ├── release-notes/skill.yaml
+            ├── code-review/skill.yaml
+            └── triage/SKILL.md
+```
+
+Pull and apply also add `ren.lock`, which you commit with the folder. For what each file holds, see [Configuration files](/docs/developers/iac/configuration/).
+
+## Before you say yes
+
+The tool shows you a plan before it applies anything. Look for three things in it:
+
+- Each archive. The plan archives whatever Ren has and the spec leaves out.
+- Each update to an agent, app or space that already exists.
+- Which skills it copies and which it reads from GitHub.
+
+[Plan and apply](/docs/developers/iac/plan-and-apply/) explains how to read a plan. Once the tool has applied it, start a chat in the space and ask which skills it has. A skill that Ren can't read is missing from the list.
+
+## What you do yourself
+
+The tool never handles your secrets or sign-ins, so a few steps stay with you:
+
+| Step                                    | How                                                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Sign in to Ren                          | In your browser, when the tool runs `ren login` or first calls Ren MCP                              |
+| Pull, plan and apply                    | You need to be an owner or admin of the organization                                                |
+| Connect a profile                       | On the app's page in Ren. See [Apps](/docs/apps/#add-an-app-to-a-space)                             |
+| Add a secret                            | In **Settings → Credentials → Secrets**, or with `ren credential create`. Ren MCP can't add secrets |
+| Give Ren access to a private repository | **Connect GitHub** in **Settings → Channels → GitHub**, or give the Ren app access to it on GitHub  |
+
+## Saved guidance
+
+Each prompt ends by offering to save a note for later chats, so the tool remembers your Ren organization and space and offers to add new agents and skills to Ren. A coding agent writes it as a "Ren" section in the repository's `AGENTS.md`, or `CLAUDE.md` for Claude Code. A web tool keeps it in its own memory. Edit or delete it there whenever you like.
