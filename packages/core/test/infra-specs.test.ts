@@ -231,6 +231,45 @@ describe("InfraSpecs", () => {
       }),
   )
 
+  it.live("a space declares its brain scope and its brain's template, and pull writes them back", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const infra = yield* InfraSpecs.Service
+      const o = yield* org
+      const input = {
+        ...(yield* InfraFixture.pulled(o.admin)),
+        spec: spec(
+          { home: { name: "Home", brainScope: "session", brain: { environment: "Python" } } },
+          {},
+          {},
+          {
+            Python: { provider: "test", config: { label: "python" } },
+          },
+        ),
+      }
+
+      const plan = yield* infra.plan(o.admin, input)
+
+      expect(plan.problems).toEqual([])
+      expect(InfraFixture.withoutValues(plan.changes)).toEqual([
+        change("create", "environment", "environments/Python"),
+        change("update", "space", "spaces/home", { fields: ["brainScope", "brain"] }),
+      ])
+      yield* infra.apply(o.admin, { ...input, digest: plan.digest })
+      const home = yield* spaces.get(o.admin, o.home.id)
+      expect(home).toMatchObject({
+        brainScope: "session",
+        brain: { provider: "test" },
+        hand: { placement: "colocated" },
+      })
+      expect(home.brain.environmentTemplateId).not.toBeNull()
+      const pulled = yield* infra.pull(o.admin, {})
+      expect(pulled.spec.spaces["home"]).toMatchObject({ brainScope: "session", brain: { environment: "Python" } })
+      expect(pulled.spec.spaces["home"]).not.toHaveProperty("hand")
+      expect(yield* infra.plan(o.admin, yield* replan(pulled))).toMatchObject({ changes: [], problems: [] })
+    }),
+  )
+
   it.live("renamedFrom keeps the row of a renamed space or agent, and moving an agent's folder transfers it", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service

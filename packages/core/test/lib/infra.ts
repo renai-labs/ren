@@ -51,10 +51,22 @@ const runner = Layer.succeed(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Brains and hands of provider "test", whose templates are ready at once.
+// oxlint-disable-next-line ren/no-comments -- Brains and hands of provider "test", whose templates are ready at once; templates of provider "built" stay in their first build.
 const machines = Layer.mergeAll(
   BrainProvider.layer([Effect.map(TestProvider.make({ canColocate: true }), (each) => each.provider)]),
-  HandProvider.layer([Effect.map(TestProvider.make(), (each) => each.provider)]),
+  HandProvider.layer([
+    Effect.map(TestProvider.make(), (each) => each.provider),
+    Effect.map(
+      TestProvider.make({
+        id: "built",
+        build: {
+          start: (config) => Effect.succeed({ _tag: "Building", id: config.label }),
+          status: (id) => Effect.succeed({ _tag: "Building", id }),
+        },
+      }),
+      (each) => each.provider,
+    ),
+  ]),
 )
 
 export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>

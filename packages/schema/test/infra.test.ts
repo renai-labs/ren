@@ -92,6 +92,28 @@ describe("Infra.Spec", () => {
     )
   })
 
+  test("a space's brain and hand name environment templates that the spec declares", () => {
+    const runtime = (environments: Record<string, unknown>) =>
+      Schema.decodeUnknownExit(Infra.Spec)({
+        org: { settings: {} },
+        environments,
+        spaces: {
+          engineering: {
+            name: "Engineering",
+            brain: { environment: "Python" },
+            hand: { placement: "remote", environment: "Node" },
+          },
+        },
+      })
+    const declared = { provider: "docker", config: { image: "python:3.13" } }
+    expect(Exit.isSuccess(runtime({ Python: declared, Node: declared }))).toBe(true)
+    const exit = runtime({ Python: declared })
+    expect(String(exit)).toContain(
+      'The hand of space "engineering" names environment template "Node", which the spec does not declare.',
+    )
+    expect(String(exit)).not.toContain('"Python"')
+  })
+
   test("a factory names the agents of its space, ren included", () => {
     const factory = (agents: ReadonlyArray<unknown>) =>
       decode({

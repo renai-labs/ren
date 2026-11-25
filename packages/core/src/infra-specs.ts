@@ -2,13 +2,15 @@ export * as InfraSpecs from "./infra-specs.js"
 
 import { Database } from "@ren/db/database"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
+import type { Brain } from "@ren/schema/brain"
 import type { ChannelMapping } from "@ren/schema/channel-mapping"
 import { Factory } from "@ren/schema/factory"
 import { Infra } from "@ren/schema/infra"
 import { Settings } from "@ren/schema/settings"
+import type { MachineProvider } from "@ren/schema/machine-provider"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { Context, Effect, Layer, Option, Predicate, Schema, Struct } from "effect"
+import { Context, Effect, Equal, Layer, Option, Predicate, Schema, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
@@ -54,6 +56,7 @@ interface LiveSpace {
   readonly settings: Settings.Info
   readonly factory: Factory.Info
   readonly isMember: boolean
+  readonly brainScope: Brain.Scope
   readonly brain: SpaceSchema.BrainMachine
   readonly hand: SpaceSchema.Hand
 }
@@ -81,6 +84,12 @@ interface Live {
   readonly profiles: InfraProfiles.Live
   readonly memory: InfraMemory.Live
   readonly environments: InfraEnvironments.Live
+}
+
+interface Runtime {
+  readonly brainScope: Brain.Scope
+  readonly brain: { readonly provider: MachineProvider.ID | null; readonly environment?: string }
+  readonly hand: Infra.SpaceHand
 }
 
 type Step = InfraPlan.Step
@@ -221,6 +230,43 @@ export const layer = Layer.effect(
         ? Effect.void
         : Effect.fail(new Primitive.Forbidden({ message: "Only organization admins can use the org spec." }))
 
+    const runtimeOf = (runtime: Runtime) => ({
+      ...(runtime.brainScope !== "space" && { brainScope: runtime.brainScope }),
+      ...((runtime.brain.provider !== deploymentProvider || runtime.brain.environment) && {
+        brain: {
+          ...(runtime.brain.provider &&
+            runtime.brain.provider !== deploymentProvider && { provider: runtime.brain.provider }),
+          ...(runtime.brain.environment && { environment: runtime.brain.environment }),
+        },
+      }),
+      ...(runtime.hand.placement !== "colocated" && { hand: runtime.hand }),
+    })
+
+    const declaredRuntime = (declaration: Infra.SpaceDeclaration): Runtime => ({
+      brainScope: declaration.brainScope ?? "space",
+      brain: {
+        provider: declaration.brain?.provider ?? deploymentProvider,
+        ...(declaration.brain?.environment && { environment: declaration.brain.environment }),
+      },
+      hand: declaration.hand ?? { placement: "colocated" },
+    })
+
+    const liveRuntime = (space: LiveSpace, live: Live): Runtime => {
+      const names = new Map<string, string>(live.environments.templates.map((template) => [template.id, template.name]))
+      const name = (id: string) => names.get(id) ?? id
+      return {
+        brainScope: space.brainScope,
+        brain: {
+          provider: space.brain.provider,
+          ...(space.brain.environmentTemplateId && { environment: name(space.brain.environmentTemplateId) }),
+        },
+        hand:
+          space.hand.placement === "remote"
+            ? { placement: "remote", environment: name(space.hand.environmentTemplateId) }
+            : space.hand,
+      }
+    }
+
     const load = (actor: Actor.Info, input?: Infra.PlanInput) =>
       database
         .transaction((transaction) =>
@@ -316,6 +362,7 @@ export const layer = Layer.effect(
                   settings: decoded.settings,
                   factory: row.space.factory,
                   isMember: Boolean(row.membershipId),
+                  brainScope: row.space.brain_scope,
                   ...SpaceQueries.machines(row.space, deploymentProvider),
                 })),
               ),
@@ -394,6 +441,7 @@ export const layer = Layer.effect(
               {
                 name: space.name,
                 ...(Predicate.isNotNull(space.description) && { description: space.description }),
+                ...runtimeOf(liveRuntime(space, live)),
                 settings: space.settings,
                 ...factoryOf(space.factory),
                 agents: Object.fromEntries(
@@ -443,7 +491,12 @@ export const layer = Layer.effect(
           org: spec.org,
           memory: spec.memory,
           environments: spec.environments,
-          spaces: spec.spaces,
+          spaces: Object.fromEntries(
+            Object.entries(spec.spaces).map(([slug, space]) => [
+              slug,
+              { ...Struct.omit(space, ["brainScope", "brain", "hand"]), ...runtimeOf(declaredRuntime(space)) },
+            ]),
+          ),
           bindings: bindings.spaces,
         },
         live,
@@ -578,7 +631,100 @@ export const layer = Layer.effect(
           })),
       )
 
-      const spaceSteps = spaceMatches.flatMap((match): Array<Step> => {
+      const runtimes = spaceMatches.map((match) => {
+        const wanted = declaredRuntime(match.declaration)
+        const folderRuntime = runtimeOf(wanted)
+        const renRuntime = match.live ? runtimeOf(liveRuntime(match.live, live)) : {}
+        const fields = changed({
+          brainScope: !Equal.equals(folderRuntime.brainScope, renRuntime.brainScope),
+          brain: !Equal.equals(folderRuntime.brain, renRuntime.brain),
+          hand: !Equal.equals(folderRuntime.hand, renRuntime.hand),
+        })
+        return {
+          match,
+          wanted,
+          fields,
+          input: Effect.gen(function* () {
+            return {
+              ...(fields.includes("brainScope") && { brainScope: wanted.brainScope }),
+              ...(fields.includes("brain") && {
+                brain: {
+                  provider: wanted.brain.provider,
+                  environmentTemplateId: wanted.brain.environment
+                    ? yield* environments.templateId(wanted.brain.environment)
+                    : null,
+                },
+              }),
+              ...(fields.includes("hand") && {
+                hand:
+                  wanted.hand.placement === "remote"
+                    ? {
+                        placement: "remote" as const,
+                        environmentTemplateId: yield* environments.templateId(wanted.hand.environment),
+                      }
+                    : wanted.hand,
+              }),
+            }
+          }),
+        }
+      })
+      const machines = runtimes
+        .filter((runtime) => runtime.fields.includes("brain") || runtime.fields.includes("hand"))
+        .map((runtime) => ({
+          path: `spaces/${runtime.match.slug}`,
+          wanted: runtime.wanted,
+          brain: Option.flatMap(Option.fromNullishOr(runtime.wanted.brain.provider), brainProviders.get),
+        }))
+      problems.push(
+        ...machines.flatMap((machine) =>
+          machine.wanted.brain.provider && Option.isNone(machine.brain)
+            ? [
+                {
+                  path: `${machine.path}/brain`,
+                  message: `This deployment has no brain provider “${machine.wanted.brain.provider}”.`,
+                },
+              ]
+            : [],
+        ),
+        ...machines.flatMap((machine) => {
+          const template = machine.wanted.brain.environment
+            ? spec.environments[machine.wanted.brain.environment]
+            : undefined
+          return template && template.provider !== machine.wanted.brain.provider
+            ? [
+                {
+                  path: `${machine.path}/brain`,
+                  message: machine.wanted.brain.provider
+                    ? `The brain needs an environment template of its provider “${machine.wanted.brain.provider}”, and “${machine.wanted.brain.environment}” is one of “${template.provider}”.`
+                    : "This deployment runs brains in cells, so a brain cannot name an environment template.",
+                },
+              ]
+            : []
+        }),
+        ...machines.flatMap((machine) =>
+          machine.wanted.hand.placement === "colocated" &&
+          Option.exists(machine.brain, (found) => !found.info.canColocate)
+            ? [
+                {
+                  path: `${machine.path}/hand`,
+                  message: `The brain provider “${machine.wanted.brain.provider}” cannot run tools on the brain’s machine. Pick a remote hand or none.`,
+                },
+              ]
+            : [],
+        ),
+        ...machines.flatMap((machine) => {
+          const unready = machine.wanted.brain.environment && environments.unready(machine.wanted.brain.environment)
+          return unready ? [{ path: `${machine.path}/brain`, message: unready }] : []
+        }),
+        ...machines.flatMap((machine) => {
+          const hand = machine.wanted.hand
+          const unready = hand.placement === "remote" && environments.unready(hand.environment)
+          return unready ? [{ path: `${machine.path}/hand`, message: unready }] : []
+        }),
+      )
+
+      const spaceSteps = runtimes.flatMap((runtime): Array<Step> => {
+        const match = runtime.match
         const path = `spaces/${match.slug}`
         const declaration = match.declaration
         const current = match.live
@@ -597,15 +743,19 @@ export const layer = Layer.effect(
                 spaceIds.set(match.slug, created.id)
                 if (!sameSettings(declaration.settings, { permissions: [], references: [] }))
                   yield* spaceSettings.update(actor, created.id, { settings: declaration.settings })
+                if (runtime.fields.length > 0) yield* spaces.update(actor, created.id, yield* runtime.input)
               }),
             ),
           ]
-        const fields = changed({
-          slug: current.slug !== match.slug,
-          name: current.name !== declaration.name,
-          description: current.description !== (declaration.description ?? null),
-          settings: !sameSettings(current.settings, declaration.settings),
-        })
+        const fields = [
+          ...changed({
+            slug: current.slug !== match.slug,
+            name: current.name !== declaration.name,
+            description: current.description !== (declaration.description ?? null),
+            settings: !sameSettings(current.settings, declaration.settings),
+          }),
+          ...runtime.fields,
+        ]
         if (fields.length === 0) return []
         touched.push(current.id)
         return [
@@ -615,10 +765,11 @@ export const layer = Layer.effect(
             path,
             Effect.gen(function* () {
               if (fields.includes("slug")) yield* spaces.changeSlug(actor, current.id, match.slug)
-              if (fields.includes("name") || fields.includes("description"))
+              if (fields.includes("name") || fields.includes("description") || runtime.fields.length > 0)
                 yield* spaces.update(actor, current.id, {
                   ...(fields.includes("name") && { name: declaration.name }),
                   ...(fields.includes("description") && { description: declaration.description ?? null }),
+                  ...(yield* runtime.input),
                 })
               if (fields.includes("settings"))
                 yield* spaceSettings.update(actor, current.id, { settings: declaration.settings })

@@ -30,6 +30,9 @@ export interface Source {
       {
         readonly name: string
         readonly description?: string
+        readonly brainScope?: Infra.SpaceDeclaration["brainScope"]
+        readonly brain?: Infra.SpaceBrain
+        readonly hand?: Infra.SpaceHand
         readonly settings: Settings.Info
         readonly factory?: Infra.FactoryDeclaration
         readonly agents: Readonly<Record<string, Agent.Declaration>>
@@ -89,6 +92,9 @@ export const resources = (source: Source, live?: Resources): Resources => {
         value: {
           name: space.name,
           ...(Predicate.isString(space.description) && { description: space.description }),
+          ...(space.brainScope && { brainScope: space.brainScope }),
+          ...(space.brain && { brain: space.brain }),
+          ...(space.hand && { hand: space.hand }),
           settings: space.settings,
           ...(space.factory && !isDefault(space.factory) && { factory: space.factory }),
         },
