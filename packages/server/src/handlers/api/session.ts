@@ -12,5 +12,6 @@ export const SessionHandler = HttpApiBuilder.group(Api, "session", (handlers) =>
       .handle("session.get", Primitive.get(sessions.get))
       .handle("session.create", Primitive.create(sessions.create))
       .handle("session.archive", Primitive.archive(sessions.archive))
+      .handle("session.import", Primitive.update(sessions.import))
   }),
 )

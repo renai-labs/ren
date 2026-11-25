@@ -1032,11 +1032,31 @@ type SessionArchiveInput = { readonly id: SessionArchiveRequest["params"]["id"] 
 const EndpointSessionArchive = (raw: RawClient["session"]) => (input: SessionArchiveInput) =>
   raw["session.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type SessionImportRequest = Parameters<RawClient["session"]["session.import"]>[0]
+type SessionImportInput = {
+  readonly id: SessionImportRequest["params"]["id"]
+  readonly spaceId: SessionImportRequest["payload"]["spaceId"]
+  readonly harness: SessionImportRequest["payload"]["harness"]
+  readonly model?: SessionImportRequest["payload"]["model"]
+  readonly transcript: SessionImportRequest["payload"]["transcript"]
+}
+const EndpointSessionImport = (raw: RawClient["session"]) => (input: SessionImportInput) =>
+  raw["session.import"]({
+    params: { id: input["id"] },
+    payload: {
+      spaceId: input["spaceId"],
+      harness: input["harness"],
+      model: input["model"],
+      transcript: input["transcript"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupSession = (raw: RawClient["session"]) => ({
   list: EndpointSessionList(raw),
   get: EndpointSessionGet(raw),
   create: EndpointSessionCreate(raw),
   archive: EndpointSessionArchive(raw),
+  import: EndpointSessionImport(raw),
 })
 
 type ChatAccessRequest = Parameters<RawClient["chat"]["chat.access"]>[0]

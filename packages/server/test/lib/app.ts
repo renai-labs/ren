@@ -143,7 +143,7 @@ export const services = Layer.mergeAll(
   SlackTaskCard.layerNone,
   AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
   SignupGuard.layer,
-  TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
+  TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages, imported: OpenCodeTranscript.imported } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
   BillingEnrollment.layer.pipe(Layer.provide(DurableRunner.layerMemory), Layer.provideMerge(Billing.layerNone)),

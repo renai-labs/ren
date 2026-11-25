@@ -52,13 +52,20 @@ export type ID = Session.ID
 export const MessageID = Session.MessageID
 export type MessageID = Session.MessageID
 
+export const maxImportBytes = Session.maxImportBytes
+
 export class Busy extends Schema.TaggedError<Busy>()("Session.Busy", { message: Schema.String }) {}
 
 export class PageTooLarge extends Schema.TaggedError<PageTooLarge>()("Session.PageTooLarge", {
   message: Schema.String,
 }) {}
 
-export type Interface = Primitive.Interface<typeof Session.definition> & {
+export type Interface = Omit<Primitive.Interface<typeof Session.definition>, "import"> & {
+  readonly import: (
+    actor: Actor.Info,
+    id: Session.ID,
+    input: Session.ImportInput,
+  ) => Effect.Effect<Session.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
   readonly access: (
     actor: Actor.Info,
     id: Session.ID,
@@ -380,6 +387,69 @@ export const layer = Layer.effect(
       )
     })
 
+    // oxlint-disable-next-line ren/no-comments -- A chat is created once; a second call by its creator in its space, with the same origin, starts its brain again.
+    const started = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      owner: { readonly spaceId: Space.ID; readonly origin: Session.Origin },
+      start: Omit<Session.StartInput, "hand">,
+      transcript?: SessionRunner.Transcript,
+    ) {
+      yield* sessions
+        .create(
+          {
+            organizationId: actor.organizationId,
+            spaceId: owner.spaceId,
+            createdBy: actor.userId,
+            origin: owner.origin,
+          },
+          start,
+          transcript && { transcript },
+        )
+        .pipe(
+          Effect.catchTag("SessionRunner.AlreadyExists", () =>
+            Effect.gen(function* () {
+              const existing = yield* sessions.get(start.sessionId).pipe(Effect.orDie)
+              if (
+                existing.createdBy !== actor.userId ||
+                existing.spaceId !== owner.spaceId ||
+                existing.origin !== owner.origin
+              )
+                return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
+              const stored = yield* Schema.decodeUnknownEffect(Session.StartInput)(
+                (yield* read(actor, start.sessionId)).session.start_input ?? {
+                  sessionId: start.sessionId,
+                  harness: "opencode",
+                },
+              ).pipe(Effect.orDie)
+              return yield* brain.start(
+                { ...start, hand: stored.hand },
+                { organizationId: actor.organizationId, spaceId: owner.spaceId, brainId: existing.brainId },
+              )
+            }),
+          ),
+          Effect.catchTags({
+            BrainRejectedError: Effect.die,
+            "SessionRunner.NotFound": Effect.die,
+          }),
+        )
+    })
+
+    const offered = Effect.fnUntraced(function* (actor: Actor.Info, model: SessionModel.Ref | undefined) {
+      if (!model) return {}
+      if (
+        !(yield* choices(actor)).some(
+          (item) =>
+            item.id === model.id &&
+            item.providerID === model.providerID &&
+            (!model.variant || item.variants.some((variant) => variant.id === model.variant)),
+        )
+      )
+        return yield* modelNotFound
+      return {
+        model: { endpointId: model.providerID, modelId: model.id, ...(model.variant && { variant: model.variant }) },
+      }
+    })
+
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
         return yield* database.transaction((transaction) =>
@@ -424,29 +494,13 @@ export const layer = Layer.effect(
       }),
       create: Effect.fn("Session.create")(function* (actor: Actor.Info, input: Session.CreateInput) {
         yield* visibleSpace(actor, input.spaceId)
-        const model = input.model
-        if (
-          model &&
-          !(yield* choices(actor)).some(
-            (item) =>
-              item.id === model.id &&
-              item.providerID === model.providerID &&
-              (!model.variant || item.variants.some((variant) => variant.id === model.variant)),
-          )
-        )
-          return yield* modelNotFound
+        const model = yield* offered(actor, input.model)
         const start: Omit<Session.StartInput, "hand"> = {
           sessionId: input.id,
           harness: "opencode",
           interactive: true,
           ...(input.defaultModels && { defaultModels: input.defaultModels }),
-          ...(model && {
-            model: {
-              endpointId: model.providerID,
-              modelId: model.id,
-              ...(model.variant && { variant: model.variant }),
-            },
-          }),
+          ...model,
           ...(input.message && {
             initialMessage: {
               messageId: Session.MessageID.make(input.message.id),
@@ -455,36 +509,24 @@ export const layer = Layer.effect(
             },
           }),
         }
-        yield* sessions
-          .create(
-            { organizationId: actor.organizationId, spaceId: input.spaceId, createdBy: actor.userId, origin: "chat" },
-            start,
-          )
-          .pipe(
-            Effect.catchTag("SessionRunner.AlreadyExists", () =>
-              Effect.gen(function* () {
-                const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
-                if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
-                  return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
-                const stored = yield* Schema.decodeUnknownEffect(Session.StartInput)(
-                  (yield* read(actor, input.id)).session.start_input ?? { sessionId: input.id, harness: "opencode" },
-                ).pipe(Effect.orDie)
-                return yield* brain.start(
-                  { ...start, hand: stored.hand },
-                  {
-                    organizationId: actor.organizationId,
-                    spaceId: input.spaceId,
-                    brainId: existing.brainId,
-                  },
-                )
-              }),
-            ),
-            Effect.catchTags({
-              BrainRejectedError: Effect.die,
-              "SessionRunner.NotFound": Effect.die,
-            }),
-          )
+        yield* started(actor, { spaceId: input.spaceId, origin: "chat" }, start)
         return toInfo(yield* read(actor, input.id))
+      }),
+      import: Effect.fn("Session.import")(function* (actor: Actor.Info, id: Session.ID, input: Session.ImportInput) {
+        yield* visibleSpace(actor, input.spaceId)
+        const model = yield* offered(actor, input.model)
+        const transcript = yield* codecs
+          .get(input.harness)
+          .imported(id, input.transcript)
+          .pipe(Effect.mapError((error) => new Primitive.Invalid({ message: error.message, field: "transcript" })))
+        const title = transcript.session.title
+        yield* started(
+          actor,
+          { spaceId: input.spaceId, origin: "opencode" },
+          { sessionId: id, harness: input.harness, interactive: true, ...(title && { title }), ...model },
+          transcript,
+        )
+        return toInfo(yield* read(actor, id))
       }),
       archive: Effect.fn("Session.archive")(function* (actor: Actor.Info, id: Session.ID) {
         return yield* database.transaction((transaction) =>

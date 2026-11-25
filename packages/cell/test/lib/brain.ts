@@ -4,9 +4,14 @@ import { OpenCode } from "@opencode/client/effect"
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { Plugin } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
+import { HandConnections } from "@ren/brain/hand/connections"
+import { TestAccess } from "@ren/brain/testing"
+import { TestHand } from "@ren/executor/testing"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
+import { Hand } from "@ren/schema/hand"
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import {
@@ -23,7 +28,7 @@ import {
   Semaphore,
   Stream,
 } from "effect"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -47,6 +52,7 @@ import { ModelStore } from "../../src/model-store.js"
 import { CodeUpdate } from "../../src/code-update.js"
 import { Restore } from "../../src/restore.js"
 import { Sync } from "../../src/sync.js"
+import { RenWorkspaceDriver } from "../../src/harness/opencode/workspace-driver.js"
 import { ModelsTest } from "./models.js"
 import { OpenCodeDriver } from "./opencode-driver.js"
 import { Shared } from "./shared.js"
@@ -73,6 +79,7 @@ export const make = Effect.fnUntraced(function* (
     readonly plugin?: Plugin.Plugin
     readonly apps?: AppCatalog.Info
     readonly unreadableEvent?: string
+    readonly hand?: boolean
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
@@ -137,6 +144,31 @@ export const make = Effect.fnUntraced(function* (
     yield* Context.get(services, ModelCatalog.Service).save(Models.catalog(access))
   })
   yield* record(Shared.access(undefined, Shared.stub().url))
+  const environment = options.hand
+    ? yield* Effect.gen(function* () {
+        const environmentId = Hand.ID.create()
+        const workspace = yield* Effect.promise(() =>
+          mkdtemp(join(tmpdir(), "ren-hand-")).then((path) => realpath(path)),
+        )
+        const served = yield* Layer.build(TestHand.layer({ environmentId, workspace }))
+        const access = yield* TestHand.access({
+          url: yield* TestHand.url.pipe(Effect.provide(served)),
+          environmentId,
+          brain: TestToken.brain,
+          directory: join(workspace, id),
+        })
+        const connections = Context.get(
+          yield* Layer.build(
+            HandConnections.layer.pipe(
+              Layer.provide(TestAccess.fixed(new Map([[id, access]]))),
+              Layer.provide(FetchHttpClient.layer),
+            ),
+          ),
+          HandConnections.Service,
+        )
+        return { connections, folder: access.directory }
+      })
+    : undefined
   const host = yield* OpenCodeServer.make(
     (replacements) =>
       createEmbeddedRoutes(
@@ -146,7 +178,7 @@ export const make = Effect.fnUntraced(function* (
           models: { fetch: false },
           fs: { filewatcher: false, fff: false },
         },
-        replacements,
+        environment ? [...replacements, ...RenWorkspaceDriver.replacements(environment.connections)] : replacements,
       ).pipe(
         Layer.provide(HttpServer.layerServices),
         Layer.tap((services) => {
@@ -156,7 +188,7 @@ export const make = Effect.fnUntraced(function* (
       ),
     [],
     Context.get(services, ModelRefresh.Service),
-    Option.none(),
+    Option.fromUndefinedOr(environment?.connections),
     { saved: Option.none(), directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps) },
   )
   const harness = yield* OpenCodeHarness.make(
@@ -263,6 +295,7 @@ export const make = Effect.fnUntraced(function* (
   return {
     id,
     directory,
+    hand: environment?.folder,
     issuer,
     configureModels: (apiKeys?: Readonly<Record<string, Models.ApiKey>>, hostToken?: string) =>
       install(Shared.access(apiKeys, Shared.stub().url), hostToken),
@@ -292,6 +325,25 @@ export const make = Effect.fnUntraced(function* (
     opencode,
     driver: OpenCodeDriver.make(opencode, directory),
     transcript: harness.transcript,
+    // oxlint-disable-next-line ren/no-comments -- An OpenCode export that Ren imported, restored as Ren's restore gives it: the rows of session.import, with no parent and no queue.
+    restoreExport: (transcript: unknown) =>
+      OpenCodeRows.fromExport(id, transcript).pipe(
+        Effect.flatMap((rows) =>
+          harness.transcript.restore({
+            chat: {
+              id,
+              harness: "opencode",
+              harnessVersion: null,
+              parentId: null,
+              revertMessageId: null,
+              session: rows.session,
+              inbox: [],
+            },
+            session: rows.session,
+            messages: rows.messages,
+          }),
+        ),
+      ),
     harness: host.fetch,
     chat,
     chatAs,
@@ -303,6 +355,7 @@ export const make = Effect.fnUntraced(function* (
           sessionId: id,
           harness: "opencode",
           interactive: true,
+          ...(environment && { directory: environment.folder }),
           ...input,
         },
       }),

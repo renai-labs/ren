@@ -33,6 +33,9 @@
       "path": "../host-api/tsconfig.src.json"
     },
     {
+      "path": "../opencode/tsconfig.src.json"
+    },
+    {
       "path": "../opencode-transcript/tsconfig.src.json"
     },
     {

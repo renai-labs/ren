@@ -1,26 +1,10 @@
 import { expect, test } from "@playwright/test"
-import { execFile, spawn } from "node:child_process"
 import { mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createInterface } from "node:readline"
-import { fileURLToPath } from "node:url"
-import { promisify } from "node:util"
 import { Schema } from "effect"
+import { Me, Stored, login, ren } from "./lib/cli.js"
 import { createUser, password, serverURL, signIn, uniqueEmail } from "./lib/servers.js"
-
-const cli = fileURLToPath(new URL("../../cli/src/index.ts", import.meta.url))
-
-const ren = (args: ReadonlyArray<string>, env: Record<string, string> = {}) =>
-  promisify(execFile)("bun", [cli, ...args], { env: { ...process.env, REN_URL: serverURL, ...env } })
-
-const Stored = Schema.fromJsonString(
-  Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number]))),
-)
-
-const Me = Schema.decodeUnknownSync(
-  Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
-)
 
 test("ren manages a space and its members by slug", async ({ request }) => {
   const email = uniqueEmail("cli-space")
@@ -77,23 +61,7 @@ test("ren signs in through the browser, refreshes its session and signs out", as
   const config = await mkdtemp(join(tmpdir(), "ren-e2e-"))
   const env = { XDG_CONFIG_HOME: config }
 
-  const login = spawn("bun", [cli, "login", "--no-browser"], {
-    env: { ...process.env, REN_URL: serverURL, ...env },
-    stdio: ["ignore", "pipe", "pipe"],
-  })
-  const exited = new Promise((resolve) => login.on("exit", resolve))
-  const stdout: Array<string> = []
-  login.stdout.on("data", (chunk: Buffer) => stdout.push(chunk.toString()))
-  const url = await new Promise<string>((resolve) =>
-    createInterface({ input: login.stderr }).on("line", (line) => {
-      if (line.startsWith("http")) resolve(line)
-    }),
-  )
-  await page.goto(url)
-  await page.getByRole("button", { name: "Allow access" }).click()
-  await expect(page.getByText("You can close this tab.")).toBeVisible()
-  expect(await exited).toBe(0)
-  expect(Me(stdout.join("")).user.email).toBe(email)
+  expect(Me(await login(page, env)).user.email).toBe(email)
   expect(Me((await ren(["whoami"], env)).stdout).user.email).toBe(email)
 
   const file = join(config, "ren", "credentials.json")

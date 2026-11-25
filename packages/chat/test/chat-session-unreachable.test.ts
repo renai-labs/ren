@@ -59,9 +59,9 @@ test("a prompt to a brain that takes no connection shows unreachable after 20 se
       expect(yield* status).toBe("unreachable")
       yield* advance(8, "5 seconds")
       const failed = yield* Fiber.join(sending)
-      expect(failed._tag).toBe("ChatSession.AccessFailed")
+      expect(failed._tag).toBe("ChatAccess.AccessFailed")
       expect(yield* status).toBe("unsent")
-      expect((yield* Fiber.join(behind))._tag).toBe("ChatSession.AccessFailed")
+      expect((yield* Fiber.join(behind))._tag).toBe("ChatAccess.AccessFailed")
       const after = yield* SubscriptionRef.get(chat.state)
       expect([...after.stalled.values()]).toEqual(["unsent", "unsent"])
     }).pipe(Effect.provide(TestClock.layer())),

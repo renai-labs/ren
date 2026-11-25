@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@renai-labs/opencode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/server.ts",
+    "./tui": "./src/tui.tsx",
+    "./rpc": "./src/rpc.ts"
+  },
+  "scripts": {
+    "build": "bun run script/build.ts",
+    "test": "bun ../../script/signoff/record.ts bun ../../script/changed.ts bun ../../script/test.ts",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
+    "typecheck": "tsrs -b",
+    "test:all": "bun ../../script/signoff/record.ts bun ../../script/test.ts"
+  },
+  "dependencies": {
+    "@ren/chat": "workspace:*",
+    "@ren/client": "workspace:*",
+    "@ren/schema": "workspace:*"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "catalog:",
+    "@opentui/core": ">=0.8.1",
+    "@opentui/solid": ">=0.8.1",
+    "effect": "catalog:",
+    "solid-js": ">=1.9.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "3.0.8",
+    "@opencode/plugin": "catalog:",
+    "@opencode/theme": "2.2.6",
+    "@opentui/core": "0.8.1",
+    "@opentui/solid": "0.8.1",
+    "@ren/cell": "workspace:*",
+    "@types/bun": "catalog:",
+    "effect": "catalog:",
+    "solid-js": "1.9.17",
+    "tsrs": "catalog:"
+  }
+}

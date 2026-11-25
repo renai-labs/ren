@@ -309,11 +309,16 @@ export const SessionList = {
     Flag.withMetavar("list"),
     Flag.withDescription("Agent slug or ID Separate values with commas."),
   ),
-  origin: Flag.Literals("origin", ["chat", "task", "schedule", "webhook", "slack", "linear", "github"]).pipe(
-    Flag.atLeast(0),
-    Flag.withMetavar("list"),
-    Flag.withDescription("Separate values with commas."),
-  ),
+  origin: Flag.Literals("origin", [
+    "chat",
+    "task",
+    "schedule",
+    "webhook",
+    "slack",
+    "linear",
+    "github",
+    "opencode",
+  ]).pipe(Flag.atLeast(0), Flag.withMetavar("list"), Flag.withDescription("Separate values with commas.")),
   status: Flag.Literals("status", ["idle", "busy"]).pipe(Flag.optional),
   search: Flag.String("search").pipe(
     Flag.optional,

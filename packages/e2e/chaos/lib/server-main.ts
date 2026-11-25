@@ -99,7 +99,9 @@ const server = HttpRouter.serve(Routes.layer).pipe(
     SlackTaskCard.layerNone,
     AccountDeletion.layer.pipe(Layer.provideMerge(Mailer.layer)),
     SignupGuard.layer,
-    TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
+    TranscriptCodec.layer({
+      opencode: { messages: OpenCodeTranscript.messages, imported: OpenCodeTranscript.imported },
+    }),
   ]),
   Layer.provideMerge(credentials),
   Layer.provideMerge(Onboarding.layer),

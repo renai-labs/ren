@@ -215,9 +215,11 @@ export const Origin = Schema.Literals([
   "schedule",
   "webhook",
   ...ChannelOrigin.Provider.literals,
+  "opencode",
 ]).annotate({
   identifier: "Session.Origin",
-  description: "What started the chat: a person in a chat, a task, a schedule, a webhook or a channel.",
+  description:
+    "What started the chat: a person in a chat, a task, a schedule, a webhook, a channel, or a person who moved it from their own OpenCode.",
 })
 export type Origin = typeof Origin.Type
 
@@ -285,6 +287,22 @@ export const CreateInput = Schema.Struct({
   }),
 }).annotate({ identifier: "Session.CreateInput" })
 
+// oxlint-disable-next-line ren/no-comments -- The body of an import: a whole transcript in one request.
+export const maxImportBytes = 32 * 1024 * 1024
+
+export interface ImportInput extends Schema.Schema.Type<typeof ImportInput> {}
+export const ImportInput = Schema.Struct({
+  spaceId: Space.ID,
+  harness: Harness,
+  model: Schema.optional(SessionModel.Ref).annotate({
+    description: "The model and variant the session goes on with, from `chat.models`.",
+  }),
+  transcript: Schema.Json.annotate({
+    description:
+      "The session as its harness exports it: for OpenCode, the answer of `GET /api/experimental/session/export`, `{ info, messages }`. Its session ID is the chat’s ID. Subagent sessions are not imported.",
+  }),
+}).annotate({ identifier: "Session.ImportInput" })
+
 export const definition = Primitive.define({
   name: "session",
   plural: "sessions",
@@ -294,4 +312,5 @@ export const definition = Primitive.define({
   get: true,
   create: { input: CreateInput, result: Info },
   archive: true,
+  actions: { import: { input: ImportInput, result: Info } },
 })

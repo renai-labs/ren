@@ -25,6 +25,7 @@ import { TranscriptCodec } from "../src/transcript-codec.js"
 import { testEffect } from "./lib/effect.js"
 import { HarnessDb } from "./lib/harness-db.js"
 import { Host } from "./lib/host.js"
+import { OpenCodeExport } from "./lib/opencode-export.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(120_000)
@@ -49,7 +50,11 @@ const it = testEffect(
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(GitHubApp.layerNone))),
     Layer.provideMerge(Billing.layerNone),
     Layer.provideMerge(BrainRegistry.layer),
-    Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
+    Layer.provideMerge(
+      TranscriptCodec.layer({
+        opencode: { messages: OpenCodeTranscript.messages, imported: OpenCodeTranscript.imported },
+      }),
+    ),
     Layer.provideMerge(Access.layer),
     Layer.provideMerge(Host.layerSynced({}, fixed)),
     Layer.provideMerge(fixed),
@@ -653,5 +658,49 @@ it.live(
           Effect.timeout("30 seconds"),
         )
       expect(yield* continued).toBe(1)
+    }),
+)
+
+it.live(
+  "an OpenCode session imported into a space: its brain restores the history at its start, and a new message goes on from it with that history in the model's context",
+  () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const brains = yield* Brains.Service
+      const owner = yield* Seed.owner()
+      const actor = { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] }
+      const exported = yield* OpenCodeExport.make("Fix the login loop", ["The loop is in auth.ts line 42."])
+      yield* sessions.import(actor, exported.id, {
+        spaceId: owner.spaceId,
+        harness: "opencode",
+        model: { providerID: "stub", id: "stub-model" },
+        transcript: exported.transcript,
+      })
+      const access = yield* Host.ready(
+        brains.access(exported.id, { userId: owner.createdBy, memberId: owner.memberId }),
+      )
+      const chat = (path: string, init: RequestInit = {}) =>
+        Effect.tryPromise(() =>
+          fetch(`${access.url}/chat/session/${exported.id}${path}`, {
+            ...init,
+            headers: { authorization: TestToken.basic(access.token), "content-type": "application/json" },
+          }).then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status))))),
+        ).pipe(Effect.retry({ schedule: Schedule.spaced("100 millis"), times: 100 }), Effect.orDie)
+      const imported = Schema.decodeUnknownSync(
+        Schema.Struct({ messages: Schema.Array(Schema.Struct({ id: Schema.String })) }),
+      )(exported.transcript).messages.map((message) => message.id)
+      const restored = Schema.decodeUnknownSync(Page)(yield* chat("/message?limit=200")).items.map((each) => each.id)
+      expect(restored.filter((id) => imported.includes(id)).toSorted()).toEqual(imported.toSorted())
+      expect(
+        Schema.decodeUnknownSync(Schema.Struct({ title: Schema.NullOr(Schema.String) }))(yield* chat("")).title,
+      ).toBe("Fix the login loop")
+      const next = stub.script({ reply: "Fixed." })
+      yield* chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: `go on ${next.marker}`, delivery: "steer" }),
+      })
+      const call = yield* Effect.promise(() => next.called())
+      expect(JSON.stringify(call.body.messages)).toContain("The loop is in auth.ts line 42.")
+      expect(call.body.model).toBe("stub-model")
     }),
 )

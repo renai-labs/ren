@@ -1,6 +1,5 @@
 export * as ChatSession from "./chat-session.js"
 
-import { ClientError, Ren } from "@ren/client/chat/effect"
 import type { FileSystem } from "@ren/schema/file-system"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
@@ -24,12 +23,11 @@ import {
   PubSub,
   Ref,
   Schedule,
-  Semaphore,
   Stream,
   Struct,
   SubscriptionRef,
 } from "effect"
-import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
+import { ChatAccess } from "./chat-access.js"
 import { ChatCache } from "./chat-cache.js"
 import { ChatState } from "./chat-state.js"
 import { Connection } from "./connection.js"
@@ -43,17 +41,14 @@ import { WebSearch } from "./websearch.js"
 export const messagePageLimit = 20
 export const olderPageLimit = 200
 export const settleMs = 150
-export const headersTimeout = "60 seconds"
 const respondedLimit = 1_000
 const autoApproveRetries = 2
-const refreshBefore = 60_000
 
-const startingPollMs = 2_000
 const unreachableAfter = "20 seconds"
 const retryCap = "30 seconds"
 const retryLimit = "2 minutes"
 
-export const sendRetry = Schedule.exponential(startingPollMs).pipe(
+export const sendRetry = Schedule.exponential(ChatAccess.startingPollMs).pipe(
   Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.fromInputUnsafe(retryCap)))),
   Schedule.upTo({ duration: retryLimit }),
 )
@@ -64,27 +59,6 @@ export const savedPageSizes = [messagePageLimit, 5, 1]
 const savedRetries = 3
 
 const prepareEveryMs = 5 * 60_000
-
-// oxlint-disable-next-line ren/no-comments -- The sandbox provider's proxy answers 502 or 504 when it cannot reach the sandbox, for example after the sandbox was killed (E123).
-const gateway = new Set([502, 504])
-
-const httpErrorOf = (error: unknown) =>
-  error instanceof ClientError && HttpClientError.isHttpClientError(error.cause)
-    ? Option.some(error.cause)
-    : Option.none()
-
-const isUnauthorized = (error: unknown) =>
-  Option.exists(httpErrorOf(error), (cause) => "response" in cause.reason && cause.reason.response.status === 401)
-
-// oxlint-disable-next-line ren/no-comments -- The brain did not answer, its sandbox is gone, or it refused a token of an old generation: the message stays pending and is sent again with the same id after new access; the brain skips an id it has (E126).
-const isUnreachable = (error: unknown) =>
-  isUnauthorized(error) ||
-  Option.exists(
-    httpErrorOf(error),
-    (cause) =>
-      cause.reason._tag === "TransportError" ||
-      ("response" in cause.reason && gateway.has(cause.reason.response.status)),
-  )
 
 // oxlint-disable-next-line ren/no-comments -- The answer to a question whose turn stopped, as a message that quotes each question (E129).
 export const quote = (form: Form.Info, answer: Form.Answer) =>
@@ -101,11 +75,9 @@ export const quote = (form: Form.Info, answer: Form.Answer) =>
     }),
   ].join("\n\n")
 
-export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{ readonly cause: unknown }> {}
-
 export interface Options {
   readonly sessionID: Session.ID
-  readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
+  readonly access: ChatAccess.Options["access"]
   // oxlint-disable-next-line ren/no-comments -- Starts the chat again after its space was shut down (Ren's `chat.retry`). A prompt to a stopped chat calls it first; reads and reconnects never do.
   readonly restart?: Effect.Effect<void, unknown>
   readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
@@ -125,12 +97,7 @@ export interface Options {
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
 
-export type Boot =
-  | { readonly _tag: "Checking" }
-  | { readonly _tag: "Ready" }
-  | { readonly _tag: "Starting"; readonly phase: string }
-  | { readonly _tag: "Failed"; readonly reason: string }
-  | { readonly _tag: "Stopped" }
+export type Boot = ChatAccess.Boot
 
 export interface Handoff {
   readonly id: SessionMessage.ID
@@ -138,7 +105,7 @@ export interface Handoff {
   readonly files?: ReadonlyArray<SessionMessage.DriveFile>
 }
 
-type Client = Effect.Success<ReturnType<typeof Ren.make>>
+type Client = ChatAccess.Client
 
 export interface Mentions {
   readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
@@ -196,7 +163,6 @@ export const enrichLeadingTurn = <E>(input: {
 
 export const make = Effect.fnUntraced(function* (options: Options) {
   const scope = yield* Effect.scope
-  const http = yield* HttpClient.HttpClient
   const root = options.sessionID
   const handoff = options.handoff
   const state = yield* SubscriptionRef.make(
@@ -215,7 +181,6 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         )
       : ChatState.empty,
   )
-  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Checking" })
   if (options.cache) {
     const cache = options.cache
     yield* cache.read.pipe(
@@ -238,23 +203,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   }
   const events = yield* PubSub.unbounded<SessionEvent.Event>()
   const reads = yield* Reads.make<unknown>()
-  const accessLock = yield* Semaphore.make(1)
   const wanted = new Map<string, Reducer.Read>()
   const settling = new Map<string, Fiber.Fiber<void>>()
   const histories = new Map<string, Deferred.Deferred<void, unknown>>()
   const sends = { tail: Deferred.makeUnsafe<void>(), stops: 0 }
   Deferred.doneUnsafe(sends.tail, Effect.void)
-  const cached: { current: Option.Option<{ readonly access: Session.ReadyAccess; readonly client: Client }> } = {
-    current: Option.none(),
-  }
-  // oxlint-disable-next-line ren/no-comments -- A request to the brain's URL that got no answer: the next access asks Ren to check the sandbox (E123).
-  const reach = { unreachable: false }
-
-  const lost = Effect.sync(() => {
-    reach.unreachable = true
-    cached.current = Option.none()
-  })
-
   const report = options.onError ?? ((error: unknown) => Effect.logWarning("A chat read failed", error))
 
   const update = (f: (current: ChatState.State) => ChatState.State) => SubscriptionRef.update(state, f)
@@ -273,7 +226,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.retry({
         while: (error) => Predicate.isTagged(error, "UnavailableError"),
         times: savedRetries,
-        schedule: Schedule.spaced(startingPollMs),
+        schedule: Schedule.spaced(ChatAccess.startingPollMs),
       }),
       Effect.catchIf(
         (error) => Predicate.isTagged(error, "TooLargeError"),
@@ -297,77 +250,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     )
   })
 
-  const client = accessLock.withPermits(1)(
-    Effect.gen(function* () {
-      const currentBoot = yield* SubscriptionRef.get(boot)
-      if (currentBoot._tag === "Failed") return yield* new AccessFailed({ cause: new Error(currentBoot.reason) })
-      if (currentBoot._tag === "Stopped")
-        return yield* new AccessFailed({ cause: new Error("The space was shut down") })
-      const now = yield* Clock.currentTimeMillis
-      if (
-        Option.isSome(cached.current) &&
-        DateTime.toEpochMillis(cached.current.value.access.expiresAt) - now > refreshBefore
-      )
-        return cached.current.value.client
-      const unreachable = reach.unreachable
-      reach.unreachable = false
-      const access = yield* options.access({ unreachable }).pipe(
-        Effect.mapError((cause) => new AccessFailed({ cause })),
-        Effect.flatMap((answer) => {
-          if (answer.status === "ready")
-            return SubscriptionRef.set(boot, { _tag: "Ready" }).pipe(Effect.as(Option.some(answer)))
-          if (answer.status === "failed")
-            return SubscriptionRef.set(boot, { _tag: "Failed", reason: answer.reason }).pipe(
-              Effect.andThen(showSaved),
-              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))),
-            )
-          if (answer.status === "stopped")
-            return SubscriptionRef.set(boot, { _tag: "Stopped" }).pipe(
-              Effect.andThen(showSaved),
-              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error("The space was shut down") }))),
-            )
-          return SubscriptionRef.set(boot, { _tag: "Starting", phase: answer.phase }).pipe(
-            Effect.andThen(showSaved),
-            Effect.andThen(Effect.sleep(startingPollMs)),
-            Effect.as(Option.none<Session.ReadyAccess>()),
-          )
-        }),
-        Effect.repeat({ until: Option.isSome }),
-        Effect.flatMap((answer) =>
-          Option.match(answer, {
-            onNone: () => Effect.fail(new AccessFailed({ cause: new Error("The brain did not start") })),
-            onSome: Effect.succeed,
-          }),
-        ),
-      )
-      const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
-        HttpClient.transform((response, request) =>
-          response.pipe(
-            Effect.tap((answer) => (gateway.has(answer.status) ? lost : Effect.void)),
-            Effect.tapError((error) => (error.reason._tag === "TransportError" ? lost : Effect.void)),
-            Effect.provideService(HttpClient.TracerPropagationEnabled, false),
-            Effect.timeoutOrElse({
-              duration: headersTimeout,
-              orElse: () =>
-                Effect.fail(
-                  new HttpClientError.HttpClientError({
-                    reason: new HttpClientError.TransportError({
-                      request,
-                      description: "Timed out waiting for the session to respond",
-                    }),
-                  }),
-                ),
-            }),
-          ),
-        ),
-      )
-      const made = yield* Ren.make({ baseUrl: access.url }).pipe(
-        Effect.provideService(HttpClient.HttpClient, authorized),
-      )
-      cached.current = Option.some({ access, client: made })
-      return made
-    }),
-  )
+  const access = yield* ChatAccess.make({ access: options.access, waiting: showSaved })
+  const client = access.client
+  const boot = access.boot
 
   const send = <A, E>(effect: Effect.Effect<A, E>) =>
     Effect.suspend(() => {
@@ -583,20 +468,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       )
     })
 
-  const connection: Connection.Connection = yield* Connection.make({
+  const connection: Connection.Connection = yield* ChatAccess.connect(access, {
     ...options.connection,
-    subscribe: Effect.map(client, (api) => api.event.subscribe()),
-    canReconnect: Effect.map(
-      SubscriptionRef.get(boot),
-      (current) => current._tag !== "Failed" && current._tag !== "Stopped",
-    ),
     onFrames,
-    onUnreachable: lost,
     onStatus: (next) =>
       Effect.sync(() => {
         if (next !== "connected") reads.invalidate()
-        // oxlint-disable-next-line ren/no-comments -- A parked brain may be asleep or gone: the next read or send asks Ren first, which wakes it (E128).
-        if (next === "reconnecting" || next === "parked") cached.current = Option.none()
       }),
   })
 
@@ -701,7 +578,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     )
     const stopped = (yield* SubscriptionRef.get(boot))._tag
     if ((stopped === "Stopped" || stopped === "Failed") && options.restart) {
-      yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+      yield* options.restart.pipe(Effect.mapError((cause) => new ChatAccess.AccessFailed({ cause })))
       yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
     }
     yield* connection.wake
@@ -710,7 +587,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     yield* send(
       Effect.gen(function* () {
         if (sends.stops !== stopsAtEnqueue)
-          return yield* new AccessFailed({ cause: new Error("An earlier send could not reach Ren") })
+          return yield* new ChatAccess.AccessFailed({ cause: new Error("An earlier send could not reach Ren") })
         const api = yield* applySelection(input.model, delivery)
         return yield* api.session.prompt({
           sessionID: root,
@@ -726,11 +603,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       }).pipe(
         Effect.tapError((error) =>
           Effect.gen(function* () {
-            if (!isUnreachable(error)) return
-            if (isUnauthorized(error)) {
-              reach.unreachable = true
-              cached.current = Option.none()
-            }
+            if (!ChatAccess.isUnreachable(error)) return
+            if (ChatAccess.isUnauthorized(error)) yield* access.lost
             if (Option.isSome(unreachableTimer.current)) return
             unreachableTimer.current = Option.some(
               yield* Effect.sleep(unreachableAfter).pipe(
@@ -740,11 +614,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             )
           }),
         ),
-        Effect.retry({ while: isUnreachable, schedule: sendRetry }),
-        Effect.catchIf(isUnreachable, (cause) =>
+        Effect.retry({ while: ChatAccess.isUnreachable, schedule: sendRetry }),
+        Effect.catchIf(ChatAccess.isUnreachable, (cause) =>
           Effect.sync(() => {
             sends.stops += 1
-          }).pipe(Effect.andThen(Effect.fail(new AccessFailed({ cause })))),
+          }).pipe(Effect.andThen(Effect.fail(new ChatAccess.AccessFailed({ cause })))),
         ),
         Effect.ensuring(
           Effect.suspend(() =>
@@ -754,7 +628,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     ).pipe(
       Effect.tapError((error) =>
-        error instanceof AccessFailed
+        error instanceof ChatAccess.AccessFailed
           ? update((current) => Outbox.stall(current, id, "unsent"))
           : unkeep(id).pipe(
               Effect.andThen(fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void),
@@ -777,7 +651,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       unsent.slice(0, unsent.findIndex((item) => item.id === id) + 1),
       (item) => update((current) => Outbox.resume(current, item.id)).pipe(Effect.andThen(prompt(item))),
       { discard: true },
-    ).pipe(Effect.catchTag("ChatSession.AccessFailed", () => Effect.void))
+    ).pipe(Effect.catchTag("ChatAccess.AccessFailed", () => Effect.void))
   })
 
   const retryUnsent = Effect.gen(function* () {
@@ -796,8 +670,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const retry = Effect.gen(function* () {
     if ((yield* SubscriptionRef.get(boot))._tag !== "Failed") return
-    if (!options.restart) return yield* new AccessFailed({ cause: new Error("This chat cannot start again") })
-    yield* options.restart.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+    if (!options.restart)
+      return yield* new ChatAccess.AccessFailed({ cause: new Error("This chat cannot start again") })
+    yield* options.restart.pipe(Effect.mapError((cause) => new ChatAccess.AccessFailed({ cause })))
     yield* SubscriptionRef.set(boot, { _tag: "Starting", phase: "starting" })
     yield* connection.wake
     yield* Effect.forEach(

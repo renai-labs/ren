@@ -481,6 +481,7 @@ const elsewhere = new Map([
   ["infra.apply", "ren infra apply"],
   ["infra.pull", "ren infra pull"],
   ["session.create", "A new session needs an ID the client makes; it comes with the chat commands."],
+  ["session.import", "The OpenCode plugin's /ren:move, which exports the local session it moves."],
   ["chat.access", "Chat commands, which stream."],
   ["chat.messages", "Chat commands, which stream."],
   ["chat.retry", "Chat commands, which stream."],

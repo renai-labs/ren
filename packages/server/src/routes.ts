@@ -318,7 +318,19 @@ export const layer = Layer.mergeAll(
       Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),
     ),
-  ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
+  ).pipe(
+    Layer.provide(
+      bodyLimit(1024 * 1024, {
+        routes: [
+          {
+            path: /^\/sessions\/[^/]+\/import$/u,
+            maxBytes: Session.maxImportBytes,
+            inFlightBytes: 2 * Session.maxImportBytes,
+          },
+        ],
+      }),
+    ),
+  ),
   WebhookRoutes.layer.pipe(Layer.provide(intake)),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),

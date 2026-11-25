@@ -123,6 +123,22 @@ const packageBoundaries: ReadonlyArray<{
       "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
   },
   {
+    files: ["packages/opencode/**"],
+    regex: "^@ren/chat/react$",
+    message: "The OpenCode plugin renders OpenCode's own session. It never uses chat's React modules.",
+  },
+  {
+    files: ["packages/opencode/{src,script}/**"],
+    group: only(["schema", "protocol", "client", "chat"]),
+    message: "The OpenCode plugin is a Ren client. It depends on schema, protocol, client and chat's Effect modules.",
+  },
+  {
+    files: ["packages/opencode/test/**"],
+    group: only(["schema", "protocol", "client", "chat", "cell/testing"]),
+    message:
+      "The OpenCode plugin's tests use what the plugin uses, and a real brain from @ren/cell/testing for end-to-end tests.",
+  },
+  {
     files: ["packages/telemetry/**"],
     regex: "^@ren/",
     message: "Telemetry knows nothing about Ren. It depends on effect and posthog-node only.",
@@ -906,6 +922,14 @@ export default defineConfig({
     {
       files: ["packages/mobile/src/app/**"],
       rules: { "import/no-default-export": "off" },
+    },
+    {
+      files: ["packages/opencode/src/{server,tui}.{ts,tsx}"],
+      rules: { "import/no-default-export": "off" },
+    },
+    {
+      files: ["packages/opencode/src/**/*.tsx"],
+      rules: { "react/only-export-components": "off", "react/no-unknown-property": "off" },
     },
     {
       files: ["packages/app/src/main.tsx"],

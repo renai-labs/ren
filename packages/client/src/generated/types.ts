@@ -147,7 +147,7 @@ export type AgentMembershipID = string
 
 export type SessionID = string
 
-export type SessionOrigin = "chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github"
+export type SessionOrigin = "chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode"
 
 export type SessionHarness = "opencode"
 
@@ -7320,7 +7320,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7336,7 +7336,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7352,7 +7352,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7368,7 +7368,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7384,7 +7384,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7400,7 +7400,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7416,7 +7416,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7432,7 +7432,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7448,7 +7448,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7464,7 +7464,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7480,7 +7480,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7496,7 +7496,7 @@ export type SessionListInput = {
     readonly createdBy?: ReadonlyArray<string> | undefined
     readonly agentId?: ReadonlyArray<string> | undefined
     readonly origin?:
-      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github">
+      | ReadonlyArray<"chat" | "task" | "schedule" | "webhook" | "slack" | "linear" | "github" | "opencode">
       | undefined
     readonly status?: ("idle" | "busy") | undefined
     readonly search?: string | undefined
@@ -7613,6 +7613,36 @@ export type SessionCreateOutput = SessionInfo
 export type SessionArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type SessionArchiveOutput = SessionInfo
+
+export type SessionImportInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly harness: "opencode"
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly transcript: JsonValue
+  }["spaceId"]
+  readonly harness: {
+    readonly spaceId: string
+    readonly harness: "opencode"
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly transcript: JsonValue
+  }["harness"]
+  readonly model?: {
+    readonly spaceId: string
+    readonly harness: "opencode"
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly transcript: JsonValue
+  }["model"]
+  readonly transcript: {
+    readonly spaceId: string
+    readonly harness: "opencode"
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+    readonly transcript: JsonValue
+  }["transcript"]
+}
+
+export type SessionImportOutput = SessionInfo
 
 export type ChatAccessInput = {
   readonly id: { readonly id: string }["id"]

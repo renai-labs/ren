@@ -43,7 +43,8 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `mobile` is the iOS and Android app (Expo). It builds on `client`, `chat`, `schema` and `util`, never on `app` or `ui`: logic both apps need moves into the package that owns it.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `telemetry` is how a process sends telemetry: OTLP export from the standard `OTEL_*` variables, and PostHog's error reporter in `posthog.ts`, the only module that knows a telemetry vendor. It imports nothing from Ren. `core`, `server`, `cell` and `executor` use it; only a process's main file provides `PostHog.layer`.
-- `client`, `chat`, `sdk`, `cli`, `app`, `mobile` and `ui` never import `core`, `db`, `server`, `host-api` or `hand-api`.
+- `opencode` is the OpenCode plugin, published as `@renai-labs/opencode`: it makes a user's own OpenCode a Ren client. It builds on `client`, `chat`, `schema` and `protocol`, and imports OpenCode only through `@opencode/plugin`.
+- `client`, `chat`, `sdk`, `cli`, `app`, `mobile`, `opencode` and `ui` never import `core`, `db`, `server`, `host-api` or `hand-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. The one exception is `repos/iron-proxy`, Ren's egress: a subtree of iron-proxy (Go) that Ren builds on and edits, and a workspace (`@ren/egress`). See `repos/iron-proxy/AGENTS.md`.
 
