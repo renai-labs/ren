@@ -52,6 +52,7 @@ import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
 import { SpaceShutdown } from "../src/space-shutdown.js"
+import { Onboarding } from "../src/onboarding.js"
 
 setDefaultTimeout(60_000)
 
@@ -294,7 +295,11 @@ describe("BrainHost pull", () => {
       expect(removed.apps?.catalog.apps).toEqual([])
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(App.layer, AppProfiles.layer, cell("http://127.0.0.1:9")).pipe(
+        Layer.mergeAll(
+          App.layer.pipe(Layer.provideMerge(Onboarding.layer)),
+          AppProfiles.layer,
+          cell("http://127.0.0.1:9"),
+        ).pipe(
           Layer.provideMerge(Credentials.layer),
           Layer.provideMerge(
             Layer.mergeAll(Access.layer, Envelope.layerLocal, OAuthFetch.layerUnchecked, EgressControl.layerNone),

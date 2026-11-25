@@ -13,6 +13,7 @@ import { AppProfilePolicy } from "./app/profile-policy.js"
 import { AppProfiles } from "./app/profiles.js"
 import { AppQueries } from "./app/queries.js"
 import { AppValidation } from "./app/validation.js"
+import { Onboarding } from "./onboarding.js"
 import { Primitive } from "./primitive.js"
 
 export interface Interface extends Primitive.Interface<typeof App.definition> {
@@ -30,6 +31,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const onboarding = yield* Onboarding.Service
     const authorize = (actor: Actor.Info, action: string, holds: AppPolicy.Holds) =>
       access.isAllowed({ actor, action, resource: AppPolicy.resource(holds) })
     return Service.of({
@@ -75,7 +77,7 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("App.create")(function* (actor, input) {
-        return yield* database.transaction((transaction) =>
+        const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
             const target = yield* AppQueries.visibleSpace(transaction, actor, input.ownerSpaceId)
@@ -128,6 +130,8 @@ export const layer = Layer.effect(
             return yield* AppQueries.info(transaction, row)
           }),
         )
+        yield* onboarding.record(actor.organizationId, Onboarding.steps.organization.customAppCreated)
+        return created
       }),
       // oxlint-disable-next-line ren/no-comments -- profiles.md §12 rule 1 (P2): an edit replaces the whole definition and raises the revision; a stale revision is refused, never merged.
       update: Effect.fn("App.update")(function* (actor, id, input) {

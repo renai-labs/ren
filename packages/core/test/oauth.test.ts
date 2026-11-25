@@ -29,13 +29,8 @@ afterAll(() => server.stop())
 const invalidated: Array<string> = []
 
 const it = testEffect(
-  Layer.mergeAll(
-    OAuth.layer.pipe(Layer.provideMerge(Onboarding.layer)),
-    CredentialRefresh.layer,
-    App.layer,
-    AppProfiles.layer,
-    OAuthApps.layer,
-  ).pipe(
+  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer, OAuthApps.layer).pipe(
+    Layer.provideMerge(Onboarding.layer),
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(ProviderConnect.layer),
     Layer.provideMerge(Credentials.layer),

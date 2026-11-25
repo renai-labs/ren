@@ -21,6 +21,7 @@ import { Envelope } from "../src/envelope.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
+import { Onboarding } from "../src/onboarding.js"
 import { testEffect } from "./lib/effect.js"
 import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
@@ -53,7 +54,7 @@ const it = testEffect(
     Space.layer.pipe(Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceProvisioning.layer,
-    App.layer,
+    App.layer.pipe(Layer.provideMerge(Onboarding.layer)),
     AppProfiles.layer,
   ).pipe(
     Layer.provideMerge(OAuth.layerRefresher),

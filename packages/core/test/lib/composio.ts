@@ -23,12 +23,8 @@ import { Seed } from "./seed.js"
 import { Onboarding } from "../../src/onboarding.js"
 
 export const layer = (server: ComposioServer.Instance, invalidated: Array<string>) =>
-  Layer.mergeAll(
-    OAuth.layer.pipe(Layer.provideMerge(Onboarding.layer)),
-    CredentialRefresh.layer,
-    App.layer,
-    AppProfiles.layer,
-  ).pipe(
+  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer).pipe(
+    Layer.provideMerge(Onboarding.layer),
     Layer.provideMerge(ProviderConnect.layerRefresher),
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(ProviderConnect.layer),
