@@ -1,8 +1,64 @@
 ---
 title: Permissions
 icon: Shield
-description: This page is not written yet.
+description: Choose what agents may do without asking, what they must ask first, and what they never do, for the organization, a space and an agent.
 summary: Choose what agents can do without asking
 ---
 
-This page is not written yet.
+Permissions decide what agents may do on their own, such as run commands, edit files or search the web. Each action is **Allow**, **Ask** or **Deny**.
+
+<Screenshot
+  shot="permissions/simple"
+  alt="Organization Permissions in Simple view: Read files, Edit files, Run commands with Asks for 1 pattern, Fetch web pages and more, each with Allow, Ask and Deny"
+  caption="Settings → Permissions, in Simple view."
+/>
+
+| Effect    | What happens                                                                                                                              |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Allow** | The agent does it.                                                                                                                        |
+| **Ask**   | The agent stops and shows a [permission card](/docs/chats/#questions-and-permission-requests). Someone in the chat approves or denies it. |
+| **Deny**  | The agent cannot do it.                                                                                                                   |
+
+## Where to set them
+
+| Level        | Where                            |
+| ------------ | -------------------------------- |
+| Organization | **Settings → Permissions**       |
+| Space        | The space's **Permissions** page |
+| Agent        | The agent's page                 |
+
+Ren checks every level, and the strictest answer wins. If the organization asks before `git push`, a space cannot allow it without asking. Set the organization's rules for what must hold everywhere, and tighten a space or an agent where its work needs it.
+
+## Allow, ask or deny one action
+
+In **Simple**, pick **Allow**, **Ask** or **Deny** next to an action. It applies to every use of that action.
+
+## Rules for one command, file or website
+
+To ask or deny only some uses, select **Add rule**:
+
+<Screenshot
+  shot="permissions/add-rule"
+  frame="detail"
+  alt="The Add rule dialog with Run commands, the command git push *, and Ask first selected"
+  caption="A rule that asks before every git push."
+/>
+
+1. Pick the action, such as **Run commands** or **Edit files**.
+2. Type the pattern. `*` matches any text: `git push *` matches every push, and `/etc/*` every file in `/etc`.
+3. Pick **Ask first** or **Never**, and select **Add rule**.
+
+**Rules** lists every rule of the level. **JSON** shows them as JSON, to copy them to another space.
+
+## Chats that nobody watches
+
+A chat from an [automation](/docs/automations/) or a [channel](/docs/channels/) has nobody to approve a card, so **Ask** works like **Deny** there. Allow what that work needs in the space or the agent it runs as.
+
+## Examples
+
+| Goal                                  | Rule                                                |
+| ------------------------------------- | --------------------------------------------------- |
+| Review every push before it leaves    | **Run commands**, `git push *`, **Ask first**       |
+| Keep agents out of production deploys | **Run commands**, `bun run deploy:prod*`, **Never** |
+| Keep secrets files untouched          | **Edit files**, `*.env`, **Never**                  |
+| A research space with no shell        | **Run commands**: **Deny** in the space             |
