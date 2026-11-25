@@ -18,6 +18,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { Models } from "../src/models.js"
 import { Host } from "./lib/host.js"
 import { ObjectStorage } from "../src/object-storage.js"
+import { Onboarding } from "../src/onboarding.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -27,6 +28,7 @@ import { ArtifactSamples } from "./lib/artifact-samples.js"
 const runtimeWith = (cellUrl: string) =>
   Artifacts.layer.pipe(
     Layer.provide([ArtifactWorkerd.layer, Access.layer]),
+    Layer.provideMerge(Onboarding.layer),
     Layer.provideMerge(
       Host.cellLayerWith(DurableRunner.layerEffect)({ CELL_URL: cellUrl }, Models.layerNone, Host.noTemplates),
     ),
@@ -65,6 +67,7 @@ const named = testEffect(
         })),
       ).pipe(Layer.provide(ArtifactWorkerd.layer)),
       Access.layer,
+      Onboarding.layer,
     ]),
     Layer.provideMerge(
       Host.cellLayerWith(DurableRunner.layerEffect)(
@@ -214,6 +217,34 @@ describe("Artifacts with durable workflows and workerd", () => {
         yield* sql`delete from cluster_messages where entity_type like 'Workflow/Artifact%' and payload::jsonb ->> 'id' = ${id}`
         const after = yield* artifacts.status(owner, id, deploymentId)
         expect([after.status, after.url]).toEqual(["ready", ready.url])
+      }),
+    120_000,
+  )
+
+  it.live(
+    "a published artifact completes the organization's artifact.created onboarding step",
+    () =>
+      Effect.gen(function* () {
+        const artifacts = yield* Artifacts.Service
+        const onboarding = yield* Onboarding.Service
+        const owner = yield* ArtifactSamples.owner()
+        const id = artifactId()
+        const deploymentId = deployment()
+        yield* Effect.addFinalizer(() => stop(artifacts, owner, id).pipe(Effect.ignore))
+        yield* ArtifactSamples.deploy(artifacts, owner, id, {
+          deploymentId,
+          title: "Report",
+          config: { entry: "index.html" },
+          files: { "index.html": text("report") },
+        })
+        expect((yield* settle(artifacts, owner, id, deploymentId)).status).toBe("ready")
+        expect(
+          (yield* onboarding.get({
+            organizationId: owner.organizationId,
+            userId: owner.createdBy,
+          })).organization.steps.find((state) => state.step === Onboarding.steps.organization.artifactCreated)
+            ?.completedAt,
+        ).not.toBeNull()
       }),
     120_000,
   )

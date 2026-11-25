@@ -41,6 +41,7 @@ import { ArtifactPolicy } from "./artifact/policy.js"
 import { Brains } from "./brains.js"
 import { DurableRunner } from "./durable-runner.js"
 import { ObjectStorage } from "./object-storage.js"
+import { Onboarding } from "./onboarding.js"
 import { Primitive } from "./primitive.js"
 
 export class Failed extends Schema.TaggedError<Failed>()("Artifacts.Failed", { message: Schema.String }) {}
@@ -274,6 +275,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const provider = yield* ArtifactProvider.Service
+    const onboarding = yield* Onboarding.Service
     const storage = yield* ObjectStorage.Service
     const signer = yield* Effect.acquireRelease(
       Effect.sync(
@@ -429,7 +431,7 @@ export const layer = Layer.effect(
               }),
             )
             const version = yield* store.version
-            yield* database.transaction((transaction) =>
+            const published = yield* database.transaction((transaction) =>
               Effect.gen(function* () {
                 const artifact = (yield* transaction
                   .select()
@@ -443,7 +445,7 @@ export const layer = Layer.effect(
                     .update(deployments)
                     .set({ status: "stopped", finished_at: sql`now()` })
                     .where(and(eq(deployments.id, payload.deploymentId), eq(deployments.status, "deploying")))
-                  return
+                  return false
                 }
                 const url = names
                   ? `${names.origin(payload.id, artifact.name)}${ArtifactProvider.entryPath(checked.config)}`
@@ -466,8 +468,11 @@ export const layer = Layer.effect(
                     updated_at: sql`now()`,
                   })
                   .where(eq(artifacts.id, payload.id))
+                return true
               }),
             )
+            if (published)
+              yield* onboarding.record(found.artifact.organization_id, Onboarding.steps.organization.artifactCreated)
             return
           }
           yield* database.db

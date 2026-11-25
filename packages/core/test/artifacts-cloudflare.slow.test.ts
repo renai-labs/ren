@@ -12,6 +12,7 @@ import { ArtifactProvider } from "../src/artifact-provider.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { ObjectStorage } from "../src/object-storage.js"
 import { Models } from "../src/models.js"
+import { Onboarding } from "../src/onboarding.js"
 import { ArtifactSamples } from "./lib/artifact-samples.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
@@ -26,7 +27,7 @@ setDefaultTimeout(600_000)
 
 const it = testEffect(
   Artifacts.layer.pipe(
-    Layer.provide([ArtifactCloudflare.layer, Access.layer]),
+    Layer.provide([ArtifactCloudflare.layer, Access.layer, Onboarding.layer]),
     Layer.provideMerge(
       Host.cellLayerWith(DurableRunner.layerEffect)(
         { CELL_URL: "http://127.0.0.1:9" },
