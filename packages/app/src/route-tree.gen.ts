@@ -21,6 +21,7 @@ import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as JoinTokenRouteImport } from "./routes/join.$token"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
+import { Route as AuthedShellOnboardingRouteImport } from "./routes/_authed/_shell/onboarding"
 import { Route as AuthedOrganizationsNewRouteImport } from "./routes/_authed/organizations/new"
 import { Route as AuthedShellAppsIndexRouteImport } from "./routes/_authed/_shell/apps/index"
 import { Route as AuthedShellAutomationsIndexRouteImport } from "./routes/_authed/_shell/automations/index"
@@ -32,6 +33,7 @@ import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
 import { Route as AuthedShellSettingsMemoryRouteImport } from "./routes/_authed/_shell/settings/memory"
+import { Route as AuthedShellSettingsOnboardingRouteImport } from "./routes/_authed/_shell/settings/onboarding"
 import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
@@ -135,6 +137,11 @@ const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   path: "/$",
   getParentRoute: () => AuthedShellRoute,
 } as any)
+const AuthedShellOnboardingRoute = AuthedShellOnboardingRouteImport.update({
+  id: "/onboarding",
+  path: "/onboarding",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
 const AuthedOrganizationsNewRoute = AuthedOrganizationsNewRouteImport.update({
   id: "/organizations/new",
   path: "/organizations/new",
@@ -196,6 +203,12 @@ const AuthedShellSettingsMemoryRoute =
   AuthedShellSettingsMemoryRouteImport.update({
     id: "/settings/memory",
     path: "/settings/memory",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsOnboardingRoute =
+  AuthedShellSettingsOnboardingRouteImport.update({
+    id: "/settings/onboarding",
+    path: "/settings/onboarding",
     getParentRoute: () => AuthedShellRoute,
   } as any)
 const AuthedShellSettingsPreferencesRoute =
@@ -482,6 +495,7 @@ export interface FileRoutesByFullPath {
   "/invites/accept": typeof InvitesAcceptRoute
   "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
+  "/onboarding": typeof AuthedShellOnboardingRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   "/automations/new": typeof AuthedShellAutomationsNewRoute
@@ -489,6 +503,7 @@ export interface FileRoutesByFullPath {
   "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps/": typeof AuthedShellAppsIndexRoute
   "/automations/": typeof AuthedShellAutomationsIndexRoute
@@ -549,12 +564,14 @@ export interface FileRoutesByTo {
   "/invites/accept": typeof InvitesAcceptRoute
   "/join/$token": typeof JoinTokenRoute
   "/$": typeof AuthedShellSplatRoute
+  "/onboarding": typeof AuthedShellOnboardingRoute
   "/organizations/new": typeof AuthedOrganizationsNewRoute
   "/automations/new": typeof AuthedShellAutomationsNewRoute
   "/drive/artifacts": typeof AuthedShellDriveArtifactsRoute
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps": typeof AuthedShellAppsIndexRoute
   "/automations": typeof AuthedShellAutomationsIndexRoute
@@ -616,6 +633,7 @@ export interface FileRoutesById {
   "/invites/accept": typeof InvitesAcceptRoute
   "/join/$token": typeof JoinTokenRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
+  "/_authed/_shell/onboarding": typeof AuthedShellOnboardingRoute
   "/_authed/organizations/new": typeof AuthedOrganizationsNewRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
   "/_authed/_shell/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
@@ -624,6 +642,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin": typeof AuthedShellSettingsAdminRouteWithChildren
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/_authed/_shell/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
   "/_authed/_shell/automations/": typeof AuthedShellAutomationsIndexRoute
@@ -686,6 +705,7 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/join/$token"
     | "/$"
+    | "/onboarding"
     | "/organizations/new"
     | "/spaces/$spaceId"
     | "/automations/new"
@@ -693,6 +713,7 @@ export interface FileRouteTypes {
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
+    | "/settings/onboarding"
     | "/settings/preferences"
     | "/apps/"
     | "/automations/"
@@ -753,12 +774,14 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/join/$token"
     | "/$"
+    | "/onboarding"
     | "/organizations/new"
     | "/automations/new"
     | "/drive/artifacts"
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
+    | "/settings/onboarding"
     | "/settings/preferences"
     | "/apps"
     | "/automations"
@@ -819,6 +842,7 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/join/$token"
     | "/_authed/_shell/$"
+    | "/_authed/_shell/onboarding"
     | "/_authed/organizations/new"
     | "/_authed/_shell/"
     | "/_authed/_shell/spaces/$spaceId"
@@ -827,6 +851,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin"
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/memory"
+    | "/_authed/_shell/settings/onboarding"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/apps/"
     | "/_authed/_shell/automations/"
@@ -975,6 +1000,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSplatRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/onboarding": {
+      id: "/_authed/_shell/onboarding"
+      path: "/onboarding"
+      fullPath: "/onboarding"
+      preLoaderRoute: typeof AuthedShellOnboardingRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/organizations/new": {
       id: "/_authed/organizations/new"
       path: "/organizations/new"
@@ -1050,6 +1082,13 @@ declare module "@tanstack/react-router" {
       path: "/settings/memory"
       fullPath: "/settings/memory"
       preLoaderRoute: typeof AuthedShellSettingsMemoryRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/settings/onboarding": {
+      id: "/_authed/_shell/settings/onboarding"
+      path: "/settings/onboarding"
+      fullPath: "/settings/onboarding"
+      preLoaderRoute: typeof AuthedShellSettingsOnboardingRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/settings/preferences": {
@@ -1471,6 +1510,7 @@ const AuthedShellSettingsAdminRouteWithChildren =
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
+  AuthedShellOnboardingRoute: typeof AuthedShellOnboardingRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
   AuthedShellAutomationsNewRoute: typeof AuthedShellAutomationsNewRoute
@@ -1478,6 +1518,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsMemoryRoute: typeof AuthedShellSettingsMemoryRoute
+  AuthedShellSettingsOnboardingRoute: typeof AuthedShellSettingsOnboardingRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
   AuthedShellAutomationsIndexRoute: typeof AuthedShellAutomationsIndexRoute
@@ -1499,6 +1540,7 @@ interface AuthedShellRouteChildren {
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
+  AuthedShellOnboardingRoute: AuthedShellOnboardingRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSpacesSpaceIdRouteRoute:
     AuthedShellSpacesSpaceIdRouteRouteWithChildren,
@@ -1507,6 +1549,7 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsMemoryRoute: AuthedShellSettingsMemoryRoute,
+  AuthedShellSettingsOnboardingRoute: AuthedShellSettingsOnboardingRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
   AuthedShellAutomationsIndexRoute: AuthedShellAutomationsIndexRoute,

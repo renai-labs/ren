@@ -25,6 +25,7 @@ import {
   IconPinnedOff,
   IconPlus,
   IconProgress,
+  IconRocket,
   IconRoute,
   IconSearch,
   IconSelector,
@@ -63,6 +64,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "./confirm-dialog.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
 import { FilterMenu, sameFilters, spaceOptions, type FilterProperty, type Filters } from "./filter-menu.js"
+import { OnboardingCard } from "./onboarding-card.js"
 import { RowMenu } from "./row-menu.js"
 import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
@@ -78,6 +80,7 @@ import { Preference } from "../lib/preference.js"
 import { Automations } from "../lib/automations.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
+import { useOnboarding } from "../lib/use-onboarding.js"
 import { useSignOut } from "../lib/use-sign-out.js"
 import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -493,6 +496,7 @@ function UserRow() {
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const onboarding = useOnboarding()
   const organizations = useQuery({ ...organizationsOptions(auth), enabled: switcherOpen })
   const listed = organizations.data ?? []
   const allOrganizations = listed.some((organization) => organization.id === me.organization.id)
@@ -546,6 +550,15 @@ function UserRow() {
             <DropdownMenuItem onClick={() => setCreating(true)}>
               <IconPlus />
               Create organization
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link to="/settings/onboarding" />}>
+              <IconRocket />
+              Onboarding
+              {onboarding && onboarding.progress.done < onboarding.progress.total ? (
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                  {onboarding.progress.done}/{onboarding.progress.total}
+                </span>
+              ) : null}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setLoggingOut(true)}>
               <IconLogout />
@@ -608,6 +621,7 @@ function HelpAndSettings() {
 export function Footer() {
   return (
     <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
+      <OnboardingCard menuClassName={sidebarMenu} rowClassName={sidebarRow} />
       <SidebarMenu className={sidebarMenu}>
         <NavRow
           to="/settings/preferences"

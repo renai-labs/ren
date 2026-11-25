@@ -132,6 +132,7 @@ import {
   WrenchScrewdriverIcon,
   XCircleIcon,
   ChatBubbleLeftRightIcon,
+  RocketLaunchIcon,
 } from "@heroicons/react/20/solid"
 
 export * from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
@@ -288,6 +289,7 @@ export const IconChartLine = wrap(PresentationChartLineIcon)
 export const IconChartPie = wrap(ChartPieIcon)
 export const IconCheck = wrap(CheckIcon)
 export const IconChecklist = wrap(ClipboardDocumentCheckIcon)
+export const IconRocket = wrap(RocketLaunchIcon)
 export const IconChevronDown = wrap(ChevronDownIcon)
 export const IconChevronLeft = wrap(ChevronLeftIcon)
 export const IconChevronRight = wrap(ChevronRightIcon)

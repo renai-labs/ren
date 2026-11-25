@@ -4,7 +4,7 @@ import { Logomark } from "../../icons/logomark.js"
 import { ModelPicker, pickModel } from "../../components/model-picker.js"
 import { WorkingIn } from "../../components/working-in.js"
 import { RepositoriesPicker } from "./repositories-picker.js"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Composer } from "@ren/chat"
 import { useMutation } from "@tanstack/react-query"
 import { getRouteApi, useNavigate, useRouter } from "@tanstack/react-router"
@@ -47,6 +47,7 @@ export function HomePage(props: {
   const [sessionId, setSessionId] = useState(() => draft.chat?.sessionId ?? Session.ID.create())
   const [sent, setSent] = useState<Composer.Draft>()
   const [picking, setPicking] = useState(false)
+  const placed = useRef(false)
   const history = Drafts.useHistory()
   const writeDraft = Drafts.useWrite()
   const models = useModels(sessionId, spaceId)
@@ -138,6 +139,11 @@ export function HomePage(props: {
       <div className="relative flex w-full max-w-3xl flex-col gap-2">
         <div className="relative flex flex-col gap-2">
           <PromptInput
+            textareaRef={(node) => {
+              if (!node || placed.current || !search.prompt) return
+              placed.current = true
+              requestAnimationFrame(() => node.setSelectionRange(node.value.length, node.value.length))
+            }}
             placement="home"
             header={
               <>

@@ -15,6 +15,7 @@ import {
   IconEdit,
   IconLock,
   IconMessage,
+  IconRocket,
   IconSettings,
 } from "@tabler/icons-react"
 import {
@@ -171,6 +172,13 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
             ) : null}
             {typed ? (
               <CommandGroup heading="Settings">
+                <CommandItem
+                  value="setting Onboarding"
+                  onSelect={() => go(() => navigate({ to: "/settings/onboarding" }))}
+                >
+                  <IconRocket />
+                  Onboarding
+                </CommandItem>
                 {settingsSections.flatMap((section) =>
                   section.items
                     .filter((item) => admin || !("admin" in item))

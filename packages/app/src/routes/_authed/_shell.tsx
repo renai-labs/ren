@@ -17,6 +17,7 @@ export const Route = createFileRoute("/_authed/_shell")({
         options.context.api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }),
       ),
       options.context.queryClient.query(canAdministerOptions(options.context.auth)),
+      options.context.queryClient.query(options.context.api.onboarding.get.queryOptions()),
     )
   },
   pendingComponent: AppBoot,
