@@ -5,22 +5,32 @@ description: See and edit the files where Ren keeps what it learns, for the orga
 summary: What agents remember across chats
 ---
 
-Memory is where Ren keeps what it learns between chats, such as facts about your customers or how your team ships. It is a set of Markdown files: one memory for the organization, and one for each [space](/docs/spaces/).
+Memory is where Ren keeps what it learns between chats, so it doesn't ask you again. Use it for facts about your customers, how your team ships, or the answer to a question Ren had to look up.
+
+```md title="memory.md of Customer Success"
+- Refunds over $500 need Priya's approval.
+- Reply in the customer's language. Sign as "The Northwind team".
+- Shipping rules are in shipping.md.
+```
+
+Memory is a set of Markdown files: one memory for the organization, and one for each [space](/docs/spaces/).
 
 <Screenshot
   shot="memory/space"
-  alt="The Memory page of the Customer Success space with memory.md marked In every chat, the customers and macros folders, and shipping.md"
+  alt="The Memory page of the Customer Success space with memory.md marked In every chat, the customers, macros and products folders, and files for escalations, refunds, returns, shipping, reply times, tone and warehouses"
   caption="The memory of the Customer Success space."
 />
 
-## How Ren uses memory
+## Reading
 
-- **memory.md**, marked **In every chat**, goes into every chat of its space, or of the organization. Ren reads its first 16,000 characters.
-- Ren reads the other files when a request needs them, and writes new facts to them as it works.
+| File                                  | When Ren reads it                                       |
+| ------------------------------------- | ------------------------------------------------------- |
+| `memory.md`, marked **In every chat** | At the start of every chat: its first 16,000 characters |
+| Every other file                      | When a request needs it                                 |
 
-Keep `memory.md` short: the rules and facts every chat needs, with links to other files for detail, such as "Shipping rules are in shipping.md."
+Keep `memory.md` short: the facts every chat needs, and where to find the rest, such as "Shipping rules are in shipping.md."
 
-## Organization and space memory
+## Scope
 
 | Memory       | Where                       | Ren reads it          | Ren writes it | You can edit it     |
 | ------------ | --------------------------- | --------------------- | ------------- | ------------------- |
