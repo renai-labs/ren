@@ -87,8 +87,8 @@ Done when:
 │              │                         │              │  push: POST /ren/pull                      │  (OpenCode)      │
 └──────────────┘                         │              │ ─────────────────────────────────────────> │                  │
                                          └──────────────┘                                            └──────────────────┘
-                                                │  model provider: gateway (§6.2), §10 routes                  │ every call
-                                                │  cards, models, card state, keys,                            │ Bearer ren:MODELS
+                                                │  RenGateway plug-in (§6.2), §10 routes                       │ every call
+                                                │  cards, models, configure, keys,                             │ Bearer ren:MODELS
                                                 │  connections, meters, brain keys                             v
                                                 v                                                     ┌──────────────────┐
                                        ┌──────────────────────────┐   brain key                       │  egress          │
@@ -191,18 +191,42 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 
 A model provider is an Effect plug-in in `core`. It is built like a machine provider (`core/src/machine-provider.ts`, `brain-provider.ts`): an `Effect` that gives a `ModelProvider.Provider`, and a registry layer that takes a list of them. The registry refuses two cards with the same id. Ren core uses only this interface:
 
-| Member        | Gives                                                                                                                 | Replaces in Ren core                                   |
-| ------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `id`          | the plug-in's id: `gateway`, `litellm`                                                                                | —                                                      |
-| `cards`       | the cards it offers (below)                                                                                           | `ProviderCard.definitions`, the `ren` constant         |
-| `models`      | a card's models for an organization: `{ revision, models: Models.Info[] }`                                            | `ModelCatalog`, the Ren list rules, the seat models    |
-| `changed`     | a `Stream` of `{ card, organizationId? }`: a card's models changed for one organization, or for all                   | the models.dev job, `POST /internal/inference/changed` |
-| `access`      | how a brain reaches the models: base URL, key, headers                                                                | `Models.Gateway`                                       |
-| `connect`     | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test | the `RenInference` key and connect routes              |
-| `disconnect`  | removes a key or a seat                                                                                               | the same                                               |
-| `connections` | a card's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                             | the same                                               |
-| `card state`  | tells the provider a card's on/off, method and model switches, for its own refusals (`model_off`)                     | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
-| `meters`      | the meters of a chat's model: credit, free cap, seat limits                                                           | the gateway calls in `limits.ts`                       |
+| Member        | Gives                                                                                                                                             | Replaces in Ren core                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `id`          | the plug-in's id: `ren-gateway`, `litellm-gateway`                                                                                                | —                                                      |
+| `baseUrl`     | where a brain calls the plug-in's models                                                                                                          | `Models.Gateway.baseUrl`                               |
+| `headers`     | headers a brain sends with each call                                                                                                              | —                                                      |
+| `cards`       | the cards it offers (below)                                                                                                                       | `ProviderCard.definitions`, the `ren` constant         |
+| `models`      | a card's models for an organization: `{ revision, models: Models.Info[] }`                                                                        | `ModelCatalog`, the Ren list rules, the seat models    |
+| `changed`     | a `Stream` of `Changed`, `{ card, organizationId? }`: a card's models changed for one organization, or for all. Named like `MachineProvider.lost` | the models.dev job, `POST /internal/inference/changed` |
+| `grant`       | a brain's key, a `Grant` (below)                                                                                                                  | `Models.Gateway.key`                                   |
+| `configure`   | tells the plug-in a card's settings: on/off, method, models switched off, for its own refusals (`model_off`)                                      | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
+| `connect`     | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test                             | the `RenInference` key and connect routes              |
+| `disconnect`  | removes a key or a seat                                                                                                                           | the same                                               |
+| `connections` | a card's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                                                         | the same                                               |
+| `meters`      | the meters of a chat's model: credit, free cap, seat limits                                                                                       | the gateway calls in `limits.ts`                       |
+
+A `Grant`:
+
+| Tag      | Fields             | Ren core caches it until                                              |
+| -------- | ------------------ | --------------------------------------------------------------------- |
+| `Minted` | `key`, `expiresAt` | `expiresAt` minus the renewal margin (`credential-source.ts:146-147`) |
+| `Fixed`  | `key`              | a call answers 401 (`forget`, `credential-source.ts:498-511`)         |
+
+Two rules for `grant`:
+
+1. It is idempotent per brain. It gives the same valid key until the key is near its expiry, also after Ren core restarts. The gateway keeps each brain's key (`Litellm.ensureBrainKey`, ren-inference `litellm/index.ts:28-53`). A LiteLLM plug-in finds its key by alias (`brain-<id>`).
+2. A minted key has an expiry. The type requires it: a `Minted` grant without `expiresAt` does not compile.
+
+Each plug-in runs the contract suite `contract(name, make)` in `core/test/lib/model-provider.ts`:
+
+| Case                                                         | Shows                                 |
+| ------------------------------------------------------------ | ------------------------------------- |
+| `grant(A)` two times                                         | the same key                          |
+| make the plug-in again over the same server, then `grant(A)` | the same key after a Ren core restart |
+| `grant(A)` and `grant(B)`                                    | two keys (`Minted` only)              |
+| a `Minted` grant                                             | `expiresAt` is in the future          |
+| `TestClock` into the renewal window, then `grant(A)`         | a new key before the old one expires  |
 
 A card:
 
@@ -220,16 +244,16 @@ The app renders a card's fields and meters as data. It knows no provider.
 The deployment chooses the plug-ins in `server/src/main.ts`:
 
 ```ts
-ModelProvider.layer([ModelProviderGateway.provider]); // hosted Ren
-ModelProvider.layer([ModelProviderLiteLLM.provider]); // self-hosted: the owner's LiteLLM
-ModelProvider.layer([]); // no models
+ModelProvider.layer([RenGateway.provider]) // hosted Ren
+ModelProvider.layer([LiteLLMGateway.provider]) // later, self-hosted: the owner's LiteLLM
+ModelProvider.layer([]) // no models
 ```
 
 With the egress, a brain has one model key (`ren:MODELS`), so a deployment that uses the egress runs one plug-in that gives a key. Several at once is part of the self-hosting work (P28).
 
-### 6.2 The gateway plug-in (hosted Ren)
+### 6.2 The `RenGateway` plug-in (hosted Ren)
 
-`core/src/model-provider/gateway.ts`. A client of the gateway's provider routes (§10). The gateway does the work:
+`core/src/model-provider/ren-gateway.ts`, namespace `RenGateway`, export `provider`. A client of the gateway's provider routes (§10). The gateway does the work:
 
 1. **models.dev.** The gateway reads `https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video` every 5 min with `If-None-Match`, keeps only its cards' providers, and keeps the last good copy. Facts on 21 Nov 2026: 327 providers, 11.8 MB. `canonical_id` links one model across providers; 9 of 18 Anthropic models had none.
 2. **Cards.** Ren, the 37 Console providers, and the subscription method on Anthropic and OpenAI. One list in the gateway holds each card's fields and how the gateway calls it.
@@ -256,16 +280,17 @@ Gateway names:
 | Own key      | `<provider>/<model>` (`openai/gpt-6.1-sol`)                |
 | Subscription | `seat/<vendor>/<model>` (`seat/anthropic/claude-opus-5-5`) |
 
-### 6.3 The LiteLLM plug-in (self-hosted Ren, later)
+### 6.3 The `LiteLLMGateway` plug-in (self-hosted Ren, later)
 
-Not built in this work. It shows that the contract fits a self-hosted Ren; build it with the self-hosting work. `core/src/model-provider/litellm.ts`. Settings: `LITELLM_URL`, `LITELLM_KEY`.
+Not built in this work. It shows that the contract fits a self-hosted Ren; build it with the self-hosting work. `core/src/model-provider/litellm-gateway.ts`, namespace `LiteLLMGateway`. Settings: `LITELLM_URL`, `LITELLM_MASTER_KEY` (stays in Ren core's environment).
 
 | Member                                 | Value                                                                                                                                                                                               |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cards`                                | one card, `litellm`, named by the setting `LITELLM_NAME` (default `LiteLLM`), auth `operator`, payer `customer`, `shared`                                                                           |
 | `models`                               | `GET <LITELLM_URL>/model/info`: each model's name, context and output limits, input types, tool calling and price, where the LiteLLM owner set them. Absent values take default limits and no price |
 | `changed`                              | the plug-in reads `/model/info` every 5 min and reports a change when the answer changes                                                                                                            |
-| `access`                               | `LITELLM_URL` and `LITELLM_KEY`                                                                                                                                                                     |
+| `baseUrl`                              | `LITELLM_URL`                                                                                                                                                                                       |
+| `grant`                                | `Minted`: a LiteLLM virtual key per brain (`POST /key/generate`, 6 h, alias `brain-<id>`, metadata: organization, brain, space), found again by alias until it nears expiry                         |
 | `connect`, `disconnect`, `connections` | none: the owner configures LiteLLM                                                                                                                                                                  |
 | `meters`                               | none                                                                                                                                                                                                |
 
@@ -279,16 +304,16 @@ On `changed` for a card and all organizations, Ren core reads the card's models 
 
 ### 7.1 What the pull carries
 
-Ren core caches two things apart. A brain's key: per workload and plug-in, until it expires or a call answers 401. The organization's list: per organization and list hash. A change in models changes lists and mints no key.
+Ren core caches two things apart. A brain's key: the plug-in's `grant`, per workload and plug-in, until it expires (`Minted`) or a call answers 401. The organization's list: per organization and list hash. A change in models changes lists and mints no key.
 
-`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per card the id, name, base URL and headers from its model provider's `access`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
+`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per card the id, name, and its model provider's `baseUrl` and `headers`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
 
 ### 7.2 HTTP runtime
 
 `cell/src/harness/opencode/model-providers.ts` keeps mapping each card to an OpenCode provider with the card id and the protocol's package. Changes:
 
 1. It does not remove `claude-agent` (`model-providers.ts:24`; tested in G4).
-2. A model carries the client settings it needs as fields, and the adapter applies them without a vendor check: `effortUpdates: false`, `compaction: "summary"`, `cost: false`. The gateway plug-in sets them on ChatGPT seat models, as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
+2. A model carries the client settings it needs as fields, and the adapter applies them without a vendor check: `effortUpdates: false`, `compaction: "summary"`, `cost: false`. The gateway sets them on ChatGPT seat models (§6.2), as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
 
 ### 7.3 Claude runtime
 
@@ -380,21 +405,21 @@ Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the 
 
 ## 10. Contract: Ren core → gateway
 
-The gateway plug-in (§6.2) and `RenInference` call the gateway with today's signed token (`core/src/ren-inference.ts`). The organization is in the token.
+The `RenGateway` plug-in (§6.2) and `RenInference` call the gateway with today's signed token (`core/src/ren-inference.ts`). The organization is in the token.
 
-| Route                                                                                | Status | Purpose                                                                                                       |
-| ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/providers`                                                                  | new    | `cards`: the gateway's cards (§6.1)                                                                           |
-| `GET /v1/providers/:card/models`                                                     | new    | `models`: `{ revision, models }`. A `shared` card answers the same for every organization                     |
-| `PUT /v1/providers/:card {enabled, method, off}`                                     | new    | card state: on/off, method, and the models switched off. A switched-off model is refused with `403 model_off` |
-| `POST /v1/providers/:card/test {fields}`                                             | new    | test a key without saving; ok or the vendor's message                                                         |
-| `PUT /v1/providers/:card/key {fields}`                                               | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them   |
-| `DELETE /v1/providers/:card/key`                                                     | new    | remove the key                                                                                                |
-| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | seats. `GET` adds each seat's card, plan and models                                                           |
-| `GET /v1/providers/:card/meters?sessionId=`                                          | new    | `meters`: credit, the free cap `{ used, limit, resetsAt }`, the seat meters                                   |
-| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | `access`: the brain key                                                                                       |
-| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | not part of the model provider                                                                                |
-| `PUT /v1/ren-models`, `GET /v1/catalog`, `GET /v1/usage/free`                        | remove | the gateway builds Ren's list; the free cap is a meter                                                        |
+| Route                                                                                | Status | Purpose                                                                                                        |
+| ------------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/providers`                                                                  | new    | `cards`: the gateway's cards (§6.1)                                                                            |
+| `GET /v1/providers/:card/models`                                                     | new    | `models`: `{ revision, models }`. A `shared` card answers the same for every organization                      |
+| `PUT /v1/providers/:card {enabled, method, off}`                                     | new    | `configure`: on/off, method, and the models switched off. A switched-off model is refused with `403 model_off` |
+| `POST /v1/providers/:card/test {fields}`                                             | new    | test a key without saving; ok or the vendor's message                                                          |
+| `PUT /v1/providers/:card/key {fields}`                                               | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them    |
+| `DELETE /v1/providers/:card/key`                                                     | new    | remove the key                                                                                                 |
+| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | seats. `GET` adds each seat's card, plan and models                                                            |
+| `GET /v1/providers/:card/meters?sessionId=`                                          | new    | `meters`: credit, the free cap `{ used, limit, resetsAt }`, the seat meters                                    |
+| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | `grant`: the brain key, `Minted`                                                                               |
+| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | not part of the model provider                                                                                 |
+| `PUT /v1/ren-models`, `GET /v1/catalog`, `GET /v1/usage/free`                        | remove | the gateway builds Ren's list; the free cap is a meter                                                         |
 
 Gateway → Ren core: `POST /internal/inference/changed {card, organizationId?}` when a card's models change: a seat (one organization) or models.dev and Ren's list (no organization). Only the usage ingest key may call it.
 
@@ -413,16 +438,16 @@ Gateway → Ren core: `POST /internal/inference/changed {card, organizationId?}`
 
 ## 12. Work in Ren, by package
 
-| Package              | Work                                                                                                                                                                                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                            |
-| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                   |
-| `core`               | `ModelProvider` (contract, registry, layer); the plug-in `model-provider/gateway.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
-| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                        |
-| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                             |
-| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                    |
-| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                          |
-| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                   |
+| Package              | Work                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                                                 |
+| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                                                                        |
+| `core`               | `ModelProvider` (contract, registry, layer); the plug-in `model-provider/ren-gateway.ts`; the contract suite `test/lib/model-provider.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
+| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                                                                             |
+| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                                                                                  |
+| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                                                                         |
+| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                                                                               |
+| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                                                                        |
 
 ## 13. Tests
 
@@ -442,11 +467,11 @@ Pending (Ren side):
 
 Only rules that the code does not show:
 
-| Package | Test                                                                                                                                                                                                                             |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`  | the registry refuses a duplicate card; an organization's list from settings and two plug-ins (a test plug-in as the second); a `changed` for all organizations notifies only those whose list changed; the default model setting |
-| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                  |
-| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                       |
+| Package | Test                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`  | the contract suite (§6.1) on `RenGateway`; a `Minted` grant is reused until its renewal time, a `Fixed` one until a 401; a `changed` event mints no key; the registry refuses a duplicate card; an organization's list from settings and two plug-ins (a test plug-in as the second); a `changed` for all organizations notifies only those whose list changed; the default model setting |
+| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                                                                                                                                                                           |
+| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                                                                                                                                                                                |
 
 ### 13.3 End-to-end (`packages/e2e/chaos`)
 
@@ -477,13 +502,13 @@ Only rules that the code does not show:
 
 ## 15. Build order (Ren side)
 
-| Step | Work                                                                                                | Done when                                                        |
-| ---- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 1    | `ModelProvider` contract and registry, the gateway plug-in, organization tables, the list job, push | a provider change reaches only affected organizations' pickers   |
-| 2    | Providers API (schema, db, core, protocol, server)                                                  | cards, keys and switches round-trip; members cannot change cards |
-| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                         | the Playwright journeys of §13.4 pass                            |
-| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress         | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
-| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases        | §13.3 passes                                                     |
+| Step | Work                                                                                                            | Done when                                                        |
+| ---- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1    | `ModelProvider` contract, registry and suite, the `RenGateway` plug-in, organization tables, the list job, push | a provider change reaches only affected organizations' pickers   |
+| 2    | Providers API (schema, db, core, protocol, server)                                                              | cards, keys and switches round-trip; members cannot change cards |
+| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                                     | the Playwright journeys of §13.4 pass                            |
+| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress                     | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
+| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases                    | §13.3 passes                                                     |
 
 ## 16. Settled details
 
@@ -497,9 +522,9 @@ Only rules that the code does not show:
 
 These items are not built in this work. The contract (§6.1) must keep room for each.
 
-| Item                             | Problem                                                                                                                                      | Planned answer                                                                                                                                                                                                                                 |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LiteLLM plug-in                  | A self-hosted Ren brings its own LiteLLM                                                                                                     | §6.3                                                                                                                                                                                                                                           |
-| Brains without the egress        | A self-hosted Ren may run brains with no egress. The brain then holds the real key                                                           | The brain gets its key from `models.refresh` (`cell/src/model-refresh.ts`, the mode without the egress). The egress becomes a deployment switch                                                                                                |
-| A brain key after its brain      | Without the egress, the key is on the machine. When Ren destroys the brain, a minted key stays valid until it expires (6 h for LiteLLM keys) | An optional contract method that revokes a brain's key. Ren core calls it when it destroys a brain. The LiteLLM plug-in deletes the key (`POST /key/delete`). The gateway does not need it: with the egress, the key never reaches the machine |
-| Several plug-ins with the egress | A brain has one model placeholder, `ren:MODELS`. Two plug-ins that each give a key need one placeholder each                                 | One egress label per plug-in that gives a key                                                                                                                                                                                                  |
+| Item                             | Problem                                                                                                                                      | Planned answer                                                                                                                                                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LiteLLM plug-in                  | A self-hosted Ren brings its own LiteLLM                                                                                                     | §6.3                                                                                                                                                                                                                                                          |
+| Brains without the egress        | A self-hosted Ren may run brains with no egress. The brain then holds the real key                                                           | The brain gets its key from `models.refresh` (`cell/src/model-refresh.ts`, the mode without the egress). The egress becomes a deployment switch                                                                                                               |
+| A brain key after its brain      | Without the egress, the key is on the machine. When Ren destroys the brain, a minted key stays valid until it expires (6 h for LiteLLM keys) | An optional contract method, `revoke(brain)`, that ends a brain's key. Ren core calls it when it destroys a brain. The LiteLLM plug-in deletes the key (`POST /key/delete`). The gateway does not need it: with the egress, the key never reaches the machine |
+| Several plug-ins with the egress | A brain has one model placeholder, `ren:MODELS`. Two plug-ins that each give a key need one placeholder each                                 | One egress label per plug-in that gives a key                                                                                                                                                                                                                 |
