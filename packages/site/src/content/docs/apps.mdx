@@ -15,6 +15,11 @@ An app gives Ren tools for a service, such as Gmail, Linear or Shopify. Connect 
 
 ## Apps and accounts
 
+| Term        | Answers                            | Example                                  |
+| ----------- | ---------------------------------- | ---------------------------------------- |
+| App         | What Ren can do in a service       | Gmail: read, send and draft email        |
+| App account | Whose access Ren uses for that app | Maya's Gmail, used in her personal space |
+
 An app holds MCP servers, skills or both:
 
 | Part       | Gives Ren                                                       |
@@ -22,13 +27,13 @@ An app holds MCP servers, skills or both:
 | MCP server | Tools, such as reading and updating Linear issues               |
 | Skill      | Instructions for a task, which Ren loads when a task needs them |
 
-An app is the same for everyone. An app account is the sign-in or key that Ren uses for it. It decides whose Gmail Ren reads, and which spaces can use it.
+An app is the same for everyone. Each app account is one sign-in or key, and you choose the spaces that use it.
 
 | Example                                   | App       | Account          | Spaces that use the account   |
 | ----------------------------------------- | --------- | ---------------- | ----------------------------- |
 | You connect your own mailbox              | Gmail     | Maya's Gmail     | Personal                      |
 | Your team shares one Linear workspace     | Linear    | Northwind Linear | Customer Success, Engineering |
-| Ren pays for the service with its credits | Firecrawl | Ren credits      | Growth                        |
+| Ren pays for the service with its credits | Firecrawl | Managed by Ren   | Growth                        |
 
 One space can use more than one account of the same app, such as two Gmail mailboxes.
 
@@ -67,9 +72,9 @@ Select an app to see example prompts, its accounts, its tools with their price, 
 1. On the app's page, select **Add to space**. When one of your spaces already uses the app, the button is **Open in chat**.
 2. Pick the space.
 3. Pick the account that the space uses, then select **Add to** and the space name:
-   - Ren credits, when the app offers them. There is nothing to connect.
+   - **Managed by Ren**, when the app offers it. There is nothing to connect.
    - An account that you already have. Everyone in the space can then use it.
-   - **Connect new**: sign in in the window that opens.
+   - **Connect a new account**: sign in in the window that opens.
 
 <Screenshot
   shot="apps/open-in-chat"
@@ -81,7 +86,7 @@ Select an app to see example prompts, its accounts, its tools with their price, 
 <Screenshot
   shot="apps/connection"
   frame="detail"
-  alt="The Add Firecrawl to Growth dialog with Works on Ren credits, Maya's Firecrawl in Personal, and Connect new"
+  alt="The Add Firecrawl to Growth dialog with three choices: Managed by Ren, Maya's Firecrawl in Personal, and Connect a new account"
   caption="Pick the account that the space uses."
 />
 
@@ -102,11 +107,11 @@ Select an app to see the accounts that this space uses. **Add account** connects
   caption="The accounts that a space uses, and the menu of each account."
 />
 
-### Ren credits
+### Managed by Ren
 
-Some apps can run on Ren's own account. The space shows **Works on Ren credits**, and each tool call uses [Ren credits](/docs/usage/). The app's page shows the price of each tool.
+Some apps can run on Ren's own account. The space shows **Connected · Managed by Ren**, and each tool call uses [Ren credits](/docs/usage/). The app's page shows the price of each tool.
 
-To use your own plan instead, select **Connect my own**. To go back to Ren credits, remove your accounts from that space.
+To use your own plan instead, pick your account for that space. Ren asks first, and names the space that stops using Ren credits. To go back, pick **Managed by Ren**. Your accounts leave that space.
 
 ### When you cannot add an account
 
@@ -133,11 +138,11 @@ When Ren needs an app that the space does not use, or an account that is not con
 
 ## Remove an app or an account
 
-| To                               | Do this                                                                           | Result                                                                                      |
-| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Stop one space using an app      | Open the space, then **Apps**. In the app's `⋯`, select **Remove from \<space\>** | The space loses the app                                                                     |
-| Stop one space using one account | In the account's `⋯`, select **Remove from \<space\>**                            | The space loses the account                                                                 |
-| Sign an account out everywhere   | In the account's `⋯`, select **Delete account**                                   | Every space that used it uses Ren credits or shows **Not connected**. You cannot undo this. |
+| To                               | Do this                                                                           | Result                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Stop one space using an app      | Open the space, then **Apps**. In the app's `⋯`, select **Remove from \<space\>** | The space loses the app                                                 |
+| Stop one space using one account | In the account's `⋯`, select **Remove from \<space\>**                            | The space loses the account                                             |
+| Sign an account out everywhere   | In the account's `⋯`, select **Delete**                                           | Every space that used it shows **Not connected**. You cannot undo this. |
 
 An account that no space uses stays in **Settings → Credentials**.
 
@@ -225,3 +230,10 @@ Changes reach each space in its next chat.
 | **Tools show after you sign in.**                               | The server lists its tools only to a signed-in account | Connect an account                                                        |
 | **Couldn't add** and a folder name                              | The skill folder breaks a rule                         | Fix each reason that Ren lists, and drop the folder again                 |
 | **Sign-in expired**                                             | The service ended the sign-in                          | Select **Reconnect**                                                      |
+
+## Apps, credentials and channels
+
+- An app is what Ren can do in a service, such as reading and sending Gmail.
+- An app account is whose access Ren uses for an app, such as Maya's Gmail.
+- [Credentials](/docs/credentials/) are your app accounts and the keys that your own scripts use, such as `STRIPE_API_KEY`.
+- A [channel](/docs/channels/) is where people ask Ren for work, such as `@Ren` in a Slack channel.
