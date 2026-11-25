@@ -68,6 +68,14 @@ const MemoryFiles = Schema.Record(Memory.SafePath, Schema.String)
   )
   .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
 
+const EnvironmentName = Primitive.Name.annotate({
+  description: "The name of an environment template that environments.yaml declares.",
+})
+
+const Environments = Schema.Record(EnvironmentName, MachineTemplate.Declaration).annotate({
+  description: "The organization’s environment templates, by name.",
+})
+
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
@@ -91,7 +99,6 @@ export const SpaceDeclaration = Schema.Struct({
   channels: Schema.Record(Primitive.Slug, Channel.Declaration).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),
-  environment: Schema.optionalKey(MachineTemplate.Declaration),
   memory: MemoryFiles,
   factory: Schema.optionalKey(
     FactoryDeclaration.check(Schema.makeFilter((factory) => FactoryCheck.issues(factory.agents, "agent"))),
@@ -103,6 +110,7 @@ export interface Spec extends Schema.Schema.Type<typeof Spec> {}
 export const Spec = Schema.Struct({
   org: OrganizationSettings.UpdateInput,
   memory: MemoryFiles,
+  environments: Environments.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   spaces: Schema.Record(Primitive.Slug, SpaceDeclaration),
 })
   .check(
@@ -259,6 +267,7 @@ export const Bindings = Schema.Struct({
 
 export const Kind = Schema.Literals([
   "organization",
+  "environment",
   "space",
   "agent",
   "membership",
@@ -296,7 +305,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
+      "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -406,6 +415,7 @@ export const Pulled = Schema.Struct({
   spec: Schema.Struct({
     org: OrganizationSettings.UpdateInput,
     memory: PulledMemory,
+    environments: Environments,
     spaces: Schema.Record(Primitive.Slug, PulledSpace),
   }),
   lock: Lock.annotate({ description: "The lock for the folder once pull writes it." }),
@@ -419,5 +429,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
 })

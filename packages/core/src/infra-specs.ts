@@ -8,13 +8,16 @@ import { Infra } from "@ren/schema/infra"
 import { Settings } from "@ren/schema/settings"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import { and, asc, eq, isNull } from "drizzle-orm"
-import { Context, Effect, Layer, Predicate, Schema, Struct } from "effect"
+import { Context, Effect, Layer, Option, Predicate, Schema, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Agent } from "./agent.js"
 import { AgentMembership } from "./agent/membership.js"
+import { BrainProvider } from "./brain-provider.js"
+import { HandProvider } from "./hand-provider.js"
 import { InfraApps } from "./infra-specs/apps.js"
 import { InfraChannels } from "./infra-specs/channels.js"
+import { InfraEnvironments } from "./infra-specs/environments.js"
 import { InfraMemory } from "./infra-specs/memory.js"
 import { InfraPlan } from "./infra-specs/plan.js"
 import { InfraPolicy } from "./infra-specs/policy.js"
@@ -51,6 +54,8 @@ interface LiveSpace {
   readonly settings: Settings.Info
   readonly factory: Factory.Info
   readonly isMember: boolean
+  readonly brain: SpaceSchema.BrainMachine
+  readonly hand: SpaceSchema.Hand
 }
 
 interface LiveAgent {
@@ -75,6 +80,7 @@ interface Live {
   readonly channels: InfraChannels.Live
   readonly profiles: InfraProfiles.Live
   readonly memory: InfraMemory.Live
+  readonly environments: InfraEnvironments.Live
 }
 
 type Step = InfraPlan.Step
@@ -195,7 +201,13 @@ export const layer = Layer.effect(
     const organizationSettings = yield* OrganizationSettings.Service
     const agents = yield* Agent.Service
     const memberships = yield* AgentMembership.Service
+    const brainProviders = yield* BrainProvider.Registry
+    const handProviders = yield* HandProvider.Registry
+    const deploymentProvider = Option.getOrNull(
+      Option.map(BrainProvider.defaultOf(brainProviders), (provider) => provider.info.id),
+    )
     const kinds = {
+      environments: yield* InfraEnvironments.make,
       apps: yield* InfraApps.make,
       schedules: yield* InfraSchedules.make,
       webhooks: yield* InfraWebhooks.make,
@@ -282,6 +294,12 @@ export const layer = Layer.effect(
             const channels = yield* InfraChannels.load(transaction, actor.organizationId)
             const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
             const memory = yield* InfraMemory.load(transaction, actor.organizationId)
+            const environments = yield* InfraEnvironments.load(
+              transaction,
+              actor.organizationId,
+              handProviders,
+              input?.spec.environments ?? {},
+            )
             return {
               organization: {
                 slug: organization.slug,
@@ -298,6 +316,7 @@ export const layer = Layer.effect(
                   settings: decoded.settings,
                   factory: row.space.factory,
                   isMember: Boolean(row.membershipId),
+                  ...SpaceQueries.machines(row.space, deploymentProvider),
                 })),
               ),
               agents: yield* Effect.forEach(
@@ -323,6 +342,7 @@ export const layer = Layer.effect(
               channels,
               profiles,
               memory,
+              environments,
             } satisfies Live
           }),
         )
@@ -367,6 +387,7 @@ export const layer = Layer.effect(
         spec: {
           org: { settings: live.organization.settings },
           memory: kinds.memory.pull(live.memory),
+          environments: kinds.environments.pull(live.environments),
           spaces: Object.fromEntries(
             inScope.shared.map((space) => [
               space.slug,
@@ -410,6 +431,7 @@ export const layer = Layer.effect(
       return InfraVersions.resources({
         org: pulled.spec.org,
         memory: pulled.spec.memory,
+        environments: pulled.spec.environments,
         spaces: pulled.spec.spaces,
         bindings: pulled.bindings.spaces,
       })
@@ -417,7 +439,13 @@ export const layer = Layer.effect(
 
     const folderResources = (spec: Infra.Spec, bindings: Infra.Bindings, live: InfraVersions.Resources) =>
       InfraVersions.resources(
-        { org: spec.org, memory: spec.memory, spaces: spec.spaces, bindings: bindings.spaces },
+        {
+          org: spec.org,
+          memory: spec.memory,
+          environments: spec.environments,
+          spaces: spec.spaces,
+          bindings: bindings.spaces,
+        },
         live,
       )
 
@@ -513,6 +541,42 @@ export const layer = Layer.effect(
               { fields: ["settings"] },
             ),
           ]
+
+      const context: InfraPlan.Context = {
+        actor,
+        spaces: spaceMatches.map((match) => ({
+          slug: match.slug,
+          declaration: match.declaration,
+          bindings: input.bindings.spaces[match.slug],
+          liveId: match.live?.id,
+        })),
+        shared: new Set(inScope.shared.map((space) => space.id)),
+        slugOf: (id) => slugOf.get(id) ?? liveById.get(id)?.slug,
+        spaceId,
+        agentId,
+        agentName: (id) => nameOf.get(id) ?? inScope.factoryNames.get(id),
+        touch: (id) => {
+          if (id) touched.push(id)
+        },
+      }
+      const environments = kinds.environments.diff(
+        context,
+        live.environments,
+        spec.environments,
+        live.spaces
+          .filter((space) => space.kind !== "shared" || slugOf.has(space.id))
+          .map((space) => ({
+            id: space.id,
+            name: space.name,
+            uses:
+              space.kind === "shared"
+                ? []
+                : [
+                    space.brain.environmentTemplateId,
+                    space.hand.placement === "remote" ? space.hand.environmentTemplateId : null,
+                  ].filter(Predicate.isNotNull),
+          })),
+      )
 
       const spaceSteps = spaceMatches.flatMap((match): Array<Step> => {
         const path = `spaces/${match.slug}`
@@ -755,24 +819,8 @@ export const layer = Layer.effect(
           return step("archive", "space", `spaces/${space.slug}`, spaces.archive(actor, space.id))
         })
 
-      const context: InfraPlan.Context = {
-        actor,
-        spaces: spaceMatches.map((match) => ({
-          slug: match.slug,
-          declaration: match.declaration,
-          bindings: input.bindings.spaces[match.slug],
-          liveId: match.live?.id,
-        })),
-        shared: new Set(inScope.shared.map((space) => space.id)),
-        slugOf: (id) => slugOf.get(id) ?? liveById.get(id)?.slug,
-        spaceId,
-        agentId,
-        agentName: (id) => nameOf.get(id) ?? inScope.factoryNames.get(id),
-        touch: (id) => {
-          if (id) touched.push(id)
-        },
-      }
       const planned = {
+        environments,
         apps: kinds.apps.diff(context, live.apps),
         schedules: kinds.schedules.diff(context, live.schedules),
         webhooks: kinds.webhooks.diff(context, live.webhooks),
@@ -781,6 +829,7 @@ export const layer = Layer.effect(
         memory: kinds.memory.diff(context, live.memory, spec.memory),
       }
       problems.push(
+        ...planned.environments.problems,
         ...planned.apps.problems,
         ...planned.schedules.problems,
         ...planned.webhooks.problems,
@@ -790,6 +839,7 @@ export const layer = Layer.effect(
 
       const steps = [
         ...organization,
+        ...planned.environments.steps,
         ...spaceSteps.toSorted(byPath),
         ...agentSteps.toSorted(byPath),
         ...membershipCreates.toSorted(byPath),
@@ -808,6 +858,7 @@ export const layer = Layer.effect(
         ...membershipArchives.toSorted(byPath),
         ...agentArchives.toSorted(byPath),
         ...spaceArchives.toSorted(byPath),
+        ...planned.environments.removals,
       ]
 
       problems.push(
@@ -842,14 +893,6 @@ export const layer = Layer.effect(
           .map(([slug]) => ({
             path: `deploy.yaml/spaces/${slug}`,
             message: `deploy.yaml binds space “${slug}”, which the spec does not declare.`,
-          })),
-      )
-      problems.push(
-        ...declared
-          .filter(([, declaration]) => declaration.environment)
-          .map(([slug]) => ({
-            path: `spaces/${slug}/environment`,
-            message: "Infra does not apply environments yet.",
           })),
       )
 

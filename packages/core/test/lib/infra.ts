@@ -1,6 +1,5 @@
 export * as InfraFixture from "./infra.js"
 
-import { BrainProviders } from "./brain-providers.js"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -12,6 +11,7 @@ import { PersistedQueue } from "effect/persistence"
 import { Access } from "../../src/access.js"
 import type { Actor } from "../../src/actor.js"
 import { Agent } from "../../src/agent.js"
+import { BrainProvider } from "../../src/brain-provider.js"
 import { AgentMembership } from "../../src/agent/membership.js"
 import { App } from "../../src/app.js"
 import { AppProfiles } from "../../src/app/profiles.js"
@@ -21,8 +21,10 @@ import { Credentials } from "../../src/credentials.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
+import { HandProvider } from "../../src/hand-provider.js"
 import { InfraSpecs } from "../../src/infra-specs.js"
 import { Intake } from "../../src/intake.js"
+import { MachineTemplates } from "../../src/machine-templates.js"
 import { Webhooks } from "../../src/webhooks.js"
 import { Memory } from "../../src/memory.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
@@ -34,6 +36,7 @@ import { SessionRunner } from "../../src/session/runner.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
 import { SpaceSettings } from "../../src/space/settings.js"
+import { TestProvider } from "./hand-provider.js"
 import { Seed } from "./seed.js"
 
 const runner = Layer.succeed(
@@ -48,6 +51,12 @@ const runner = Layer.succeed(
   }),
 )
 
+// oxlint-disable-next-line ren/no-comments -- Brains and hands of provider "test", whose templates are ready at once.
+const machines = Layer.mergeAll(
+  BrainProvider.layer([Effect.map(TestProvider.make({ canColocate: true }), (each) => each.provider)]),
+  HandProvider.layer([Effect.map(TestProvider.make(), (each) => each.provider)]),
+)
+
 export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
   InfraSpecs.layer.pipe(
     Layer.provideMerge(
@@ -60,6 +69,7 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         AppProfiles.layer,
         ChannelMappings.layer,
         Memory.layer,
+        MachineTemplates.layer,
         Schedules.layer.pipe(Layer.provide(ScheduleTrigger.layerPostgres), Layer.provide(runner)),
         Webhooks.layer.pipe(
           Layer.provide(Intake.layer),
@@ -68,9 +78,7 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         ),
       ),
     ),
-    Layer.provideMerge(
-      Layer.mergeAll(Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceMember.layer, Credentials.layer),
-    ),
+    Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, Credentials.layer)),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,
@@ -79,6 +87,7 @@ export const layer = (channels: Layer.Layer<ChannelProvider.Registry>) =>
         Envelope.layerLocal,
         OAuthFetch.layerUnchecked,
         DurableRunner.layerMemory,
+        machines,
         channels,
       ),
     ),
@@ -101,7 +110,8 @@ export const spec = (
   spaces: Record<string, unknown>,
   org: Record<string, unknown> = {},
   memory: Record<string, string> = {},
-) => Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, memory, spaces })
+  environments: Record<string, unknown> = {},
+) => Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, memory, environments, spaces })
 
 export const bindings = (organization: string, spaces: Record<string, unknown> = {}) =>
   Schema.decodeUnknownSync(Infra.Bindings)({ organization, spaces })

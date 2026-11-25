@@ -15357,7 +15357,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20251,7 +20251,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
+            "description": "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -20345,6 +20345,7 @@
         "type": "string",
         "enum": [
           "organization",
+          "environment",
           "space",
           "agent",
           "membership",
@@ -20570,6 +20571,20 @@
               "memory": {
                 "$ref": "#/components/schemas/Memory.Files"
               },
+              "environments": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "The name of an environment template that environments.yaml declares."
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+                },
+                "description": "The organization’s environment templates, by name."
+              },
               "spaces": {
                 "type": "object",
                 "propertyNames": {
@@ -20582,7 +20597,7 @@
                 }
               }
             },
-            "required": ["org", "spaces"],
+            "required": ["org", "environments", "spaces"],
             "additionalProperties": false
           },
           "lock": {
@@ -20612,7 +20627,7 @@
         },
         "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings and memory, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
+        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
       },
       "Infra.PulledApp": {
         "type": "object",
@@ -21041,9 +21056,6 @@
               "$ref": "#/components/schemas/Channel.Declaration"
             }
           },
-          "environment": {
-            "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
-          },
           "memory": {
             "type": "object",
             "propertyNames": {
@@ -21122,6 +21134,20 @@
               "type": "string"
             }
           },
+          "environments": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The name of an environment template that environments.yaml declares."
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+            },
+            "description": "The organization’s environment templates, by name."
+          },
           "spaces": {
             "type": "object",
             "propertyNames": {
@@ -21152,6 +21178,20 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "environments": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The name of an environment template that environments.yaml declares."
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EnvironmentTemplate.Declaration"
+            },
+            "description": "The organization’s environment templates, by name."
           },
           "spaces": {
             "type": "object",
