@@ -66,10 +66,11 @@ Ren runs each message as the first of these that can work in the space. It uses 
 
 The fallback user of a new link depends on where you link it:
 
-| Linked from             | Slack channel or private repository | Public repository |
-| ----------------------- | ----------------------------------- | ----------------- |
-| **Space → Channels**    | You                                 | **Nobody**        |
-| **Settings → Channels** | **Nobody**                          | **Nobody**        |
+| Linked from                                                            | Slack channel or private repository | Public repository |
+| ---------------------------------------------------------------------- | ----------------------------------- | ----------------- |
+| **Space → Channels**                                                   | You                                 | **Nobody**        |
+| **Settings → Channels**                                                | **Nobody**                          | **Nobody**        |
+| [Infrastructure as code](/docs/developers/iac/channels/#fallback-user) | The person who applies it           | **Nobody**        |
 
 A fallback user lets anyone in the place work with that person's access. Select `✎` to check it after you link.
 
