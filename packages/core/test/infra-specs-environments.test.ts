@@ -2,12 +2,14 @@ import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Infra } from "@ren/schema/infra"
 import { MachineProvider } from "@ren/schema/machine-provider"
+import type { Space as SpaceSchema } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import type { Actor } from "../src/actor.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { InfraSpecs } from "../src/infra-specs.js"
 import { MachineTemplates } from "../src/machine-templates.js"
+import { Space } from "../src/space.js"
 import { testEffect } from "./lib/effect.js"
 import { InfraFixture } from "./lib/infra.js"
 
@@ -33,19 +35,35 @@ const listed = Effect.fnUntraced(function* (actor: Actor.Info) {
   return (yield* templates.list(actor, { page: 1, pageSize: 50 })).items
 })
 
+const hand = Effect.fnUntraced(function* (actor: Actor.Info, id: SpaceSchema.ID) {
+  const spaces = yield* Space.Service
+  return (yield* spaces.get(actor, id)).hand
+})
+
 describe("InfraSpecs environments", () => {
-  it.live("pull writes the org's environment templates, and its plan is empty", () =>
+  it.live("pull writes the org's environment templates and each shared space's runtime, and its plan is empty", () =>
     Effect.gen(function* () {
       const templates = yield* MachineTemplates.Service
+      const spaces = yield* Space.Service
       const infra = yield* InfraSpecs.Service
       const o = yield* InfraFixture.org
       const provider = MachineProvider.ID.make("test")
-      yield* templates.create(o.admin, { ...python, provider, name: "Python", description: "Data work." })
+      const made = yield* templates.create(o.admin, { ...python, provider, name: "Python", description: "Data work." })
+      yield* spaces.update(o.admin, o.home.id, {
+        brainScope: "session",
+        brain: { provider, environmentTemplateId: made.id },
+        hand: { placement: "remote", environmentTemplateId: made.id },
+      })
 
       const pulled = yield* infra.pull(o.admin, {})
 
       expect(Schema.encodeSync(Infra.Pulled)(pulled).spec.environments).toEqual({
         Python: { ...python, description: "Data work." },
+      })
+      expect(pulled.spec.spaces["home"]).toMatchObject({
+        brainScope: "session",
+        brain: { environment: "Python" },
+        hand: { placement: "remote", environment: "Python" },
       })
       expect(pulled.write).toContain("environments/Python")
       expect(yield* infra.plan(o.admin, yield* InfraFixture.replan(pulled))).toMatchObject({
@@ -101,7 +119,42 @@ describe("InfraSpecs environments", () => {
       }),
   )
 
-  it.live("a plan reports a template that apply would refuse: an unknown provider or a config it refuses", () =>
+  it.live("apply creates a template before a space's hand names it, and moves the hand off before archiving it", () =>
+    Effect.gen(function* () {
+      const infra = yield* InfraSpecs.Service
+      const o = yield* InfraFixture.org
+      const remote = yield* InfraFixture.current(
+        o.admin,
+        folder(o, { home: { name: "Home", hand: { placement: "remote", environment: "Python" } } }, { Python: python }),
+      )
+
+      const planned = yield* infra.plan(o.admin, remote)
+      expect(planned.problems).toEqual([])
+      expect(InfraFixture.withoutValues(planned.changes)).toEqual([
+        change("create", "environment", "environments/Python"),
+        change("update", "space", "spaces/home", { fields: ["hand"] }),
+      ])
+      const applied = yield* infra.apply(o.admin, { ...remote, digest: planned.digest })
+      const made = (yield* listed(o.admin)).at(0)
+      expect(yield* hand(o.admin, o.home.id)).toMatchObject({
+        placement: "remote",
+        environmentTemplateId: made?.id ?? "",
+      })
+      expect(yield* infra.plan(o.admin, { ...remote, lock: applied.lock })).toMatchObject({ changes: [], problems: [] })
+
+      const back = { ...folder(o, { home: { name: "Home" } }, {}), lock: applied.lock }
+      const reverted = yield* infra.plan(o.admin, back)
+      expect(InfraFixture.withoutValues(reverted.changes)).toEqual([
+        change("update", "space", "spaces/home", { fields: ["hand"] }),
+        change("archive", "environment", "environments/Python"),
+      ])
+      yield* infra.apply(o.admin, { ...back, digest: reverted.digest })
+      expect(yield* hand(o.admin, o.home.id)).toEqual({ placement: "colocated" })
+      expect(yield* listed(o.admin)).toEqual([])
+    }),
+  )
+
+  it.live("a plan reports each part that apply would refuse: providers, configs and templates not built yet", () =>
     Effect.gen(function* () {
       const infra = yield* InfraSpecs.Service
       const o = yield* InfraFixture.org
@@ -110,8 +163,15 @@ describe("InfraSpecs environments", () => {
         o.admin,
         folder(
           o,
-          { home: { name: "Home" } },
           {
+            home: {
+              name: "Home",
+              brain: { provider: "nope" },
+              hand: { placement: "remote", environment: "Built" },
+            },
+          },
+          {
+            Built: { provider: "built", config: { label: "built" } },
             Empty: { provider: "test", config: { label: "" } },
             Ghost: { provider: "nope", config: {} },
           },
@@ -121,6 +181,12 @@ describe("InfraSpecs environments", () => {
       expect(plan.problems).toEqual([
         { path: "environments/Empty", message: expect.stringContaining("label") },
         { path: "environments/Ghost", message: "This deployment has no environment provider “nope”." },
+        { path: "spaces/home/brain", message: "This deployment has no brain provider “nope”." },
+        {
+          path: "spaces/home/hand",
+          message:
+            "Environment template “Built” has no image until its first build is ready. Apply it without this change first, then apply again when it is built.",
+        },
       ])
     }),
   )

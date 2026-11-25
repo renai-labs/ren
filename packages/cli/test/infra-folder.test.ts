@@ -23,7 +23,8 @@ describe("InfraFolder.validate", () => {
       "instructions.md": "Be brief.\n",
       "deploy.yaml": "organization: acme\n",
       "environments.yaml": "Python:\n  provider: docker\n  config:\n    image: python:3.13\n",
-      "spaces/engineering/space.yaml": "name: Engineering\nuses:\n  agents: [triage]\n",
+      "spaces/engineering/space.yaml":
+        "name: Engineering\nbrainScope: session\nhand:\n  placement: remote\n  environment: Python\nuses:\n  agents: [triage]\n",
       "spaces/engineering/instructions.md": "Ship it.\n",
       "spaces/engineering/agents/build/agent.yaml": "description: Writes the code.\n",
       "spaces/engineering/agents/build/instructions.md": "Write tests first.\n",
@@ -60,6 +61,7 @@ describe("InfraFolder.validate", () => {
       },
     })
     const engineering = result.spec.spaces["engineering"]
+    expect(engineering).toMatchObject({ brainScope: "session", hand: { placement: "remote", environment: "Python" } })
     expect(engineering?.settings.instructions).toBe("Ship it.")
     expect(engineering?.uses.agents).toEqual(["triage"])
     expect(engineering?.agents["build"]?.settings.instructions).toBe("Write tests first.")
@@ -116,7 +118,7 @@ describe("InfraFolder.validate", () => {
   test("checks the rules across spaces once each file is valid", async () => {
     const root = await folder({
       "org.yaml": "settings: {}\n",
-      "spaces/engineering/space.yaml": "name: Engineering\n",
+      "spaces/engineering/space.yaml": "name: Engineering\nbrain:\n  environment: Python\n",
       "spaces/engineering/agents/ren/agent.yaml": "{}\n",
       "spaces/engineering/schedules.yaml":
         "nightly:\n  agent: review\n  cron: '0 3 * * *'\n  timeZone: UTC\n  message: Review it.\n",
@@ -127,6 +129,7 @@ describe("InfraFolder.validate", () => {
     expect(result.problems.map(Output.formatProblem)).toEqual([
       "spaces/engineering/agents/ren/agent.yaml: The name ren is reserved.",
       'spaces/engineering/schedules.yaml: nightly.agent: Schedule "nightly" in space "engineering" runs on agent "review", which is not in the space.',
+      'spaces/engineering/space.yaml: brain.environment: The brain of space "engineering" names environment template "Python", which the spec does not declare.',
     ])
   })
 
@@ -189,6 +192,8 @@ describe("InfraFolder.write", () => {
         engineering: {
           name: "Engineering",
           description: "Builds.",
+          brainScope: "session" as const,
+          hand: { placement: "remote" as const, environment: "Python" },
           settings: {
             instructions: "  Ship it.\n\n    indented()\n\nKeep lines short.  \n",
             permissions: [{ action: "bash", resource: "*", effect: "ask" as const }],

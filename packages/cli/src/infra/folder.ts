@@ -479,9 +479,10 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
         const base =
           writes.has(folder) && space
             ? {
-                ...without(current, ["name", "description", "settings", "factory"]),
+                ...without(current, ["name", "description", "brainScope", "brain", "hand", "settings", "factory"]),
                 name: space.name,
                 ...(Predicate.isString(space.description) && { description: space.description }),
+                ...filled({ brainScope: space.brainScope, brain: space.brain, hand: space.hand }),
                 ...compact(space.settings),
                 ...(space.factory && { factory: space.factory }),
               }

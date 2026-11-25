@@ -4,7 +4,9 @@ import { Effect, Schema, Struct } from "effect"
 import { Agent } from "./agent.js"
 import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
+import { Brain } from "./brain.js"
 import { Channel } from "./channel.js"
+import { MachineProvider } from "./machine-provider.js"
 import { MachineTemplate } from "./machine-template.js"
 import { Factory } from "./factory.js"
 import { FactoryCheck } from "./factory-check.js"
@@ -72,6 +74,29 @@ const EnvironmentName = Primitive.Name.annotate({
   description: "The name of an environment template that environments.yaml declares.",
 })
 
+export interface SpaceBrain extends Schema.Schema.Type<typeof SpaceBrain> {}
+export const SpaceBrain = Schema.Struct({
+  provider: Schema.optionalKey(
+    MachineProvider.ID.annotate({ description: "Without it, the deployment’s brain provider." }),
+  ),
+  environment: Schema.optionalKey(
+    EnvironmentName.annotate({ description: "A template of the brain provider. Without it, Ren’s system image." }),
+  ),
+}).annotate({ identifier: "Infra.SpaceBrain", description: "Space.BrainMachine, with the template by name." })
+
+export const SpaceHand = Schema.Union([
+  Schema.Struct({ placement: Schema.Literal("colocated") }),
+  Schema.Struct({ placement: Schema.Literal("remote"), environment: EnvironmentName }),
+  Schema.Struct({ placement: Schema.Literal("none") }),
+]).annotate({ identifier: "Infra.SpaceHand", description: "Space.Hand, with the template by name." })
+export type SpaceHand = typeof SpaceHand.Type
+
+const Runtime = {
+  brainScope: Schema.optionalKey(Brain.Scope.annotate({ description: "Without it, space." })),
+  brain: Schema.optionalKey(SpaceBrain),
+  hand: Schema.optionalKey(SpaceHand.annotate({ description: "Without it, colocated." })),
+}
+
 const Environments = Schema.Record(EnvironmentName, MachineTemplate.Declaration).annotate({
   description: "The organization’s environment templates, by name.",
 })
@@ -79,6 +104,7 @@ const Environments = Schema.Record(EnvironmentName, MachineTemplate.Declaration)
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
+  ...Runtime,
   renamedFrom: RenamedFrom,
   description: Schema.optionalKey(Schema.String),
   settings: SpaceSettings.UpdateInput.fields.settings.pipe(
@@ -157,6 +183,21 @@ export const Spec = Schema.Struct({
               return [{ path, issue: `Space "${space}" uses agent "${name}", which no space defines.` }]
             return []
           }),
+        ),
+        ...spaces.flatMap(([space, declaration]) =>
+          [
+            ...(declaration.brain?.environment ? [{ part: "brain", name: declaration.brain.environment }] : []),
+            ...(declaration.hand?.placement === "remote" ? [{ part: "hand", name: declaration.hand.environment }] : []),
+          ].flatMap((named) =>
+            named.name in spec.environments
+              ? []
+              : [
+                  {
+                    path: ["spaces", space, named.part, "environment"],
+                    issue: `The ${named.part} of space "${space}" names environment template "${named.name}", which the spec does not declare.`,
+                  },
+                ],
+          ),
         ),
         ...[
           ...spaces.map(([space, declaration]) => ({
@@ -389,6 +430,7 @@ export const PulledSchedule = Schema.Struct({
 export interface PulledSpace extends Schema.Schema.Type<typeof PulledSpace> {}
 export const PulledSpace = Schema.Struct({
   ...Struct.omit(Space.CreateInput.fields, ["slug"]),
+  ...Runtime,
   settings: Settings.Info,
   factory: Schema.optionalKey(FactoryDeclaration),
   agents: Schema.Record(Agent.Name, Agent.Declaration),
@@ -429,5 +471,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
 })

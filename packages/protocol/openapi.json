@@ -15357,7 +15357,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17759,6 +17759,11 @@
         "type": "string",
         "enum": ["session", "space"]
       },
+      "Brain.Scope_1": {
+        "type": "string",
+        "enum": ["session", "space"],
+        "description": "Without it, space."
+      },
       "Channel.Declaration": {
         "anyOf": [
           {
@@ -19481,6 +19486,11 @@
         "type": "string",
         "minLength": 1
       },
+      "EnvironmentProvider.ID_1": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Without it, the deployment’s brain provider."
+      },
       "EnvironmentProvider.Info": {
         "type": "object",
         "properties": {
@@ -20627,7 +20637,7 @@
         },
         "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
+        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
       },
       "Infra.PulledApp": {
         "type": "object",
@@ -20782,6 +20792,15 @@
               }
             ]
           },
+          "brainScope": {
+            "$ref": "#/components/schemas/Brain.Scope_1"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Infra.SpaceBrain"
+          },
+          "hand": {
+            "$ref": "#/components/schemas/Infra.SpaceHand"
+          },
           "settings": {
             "$ref": "#/components/schemas/Settings.Info"
           },
@@ -20887,6 +20906,23 @@
         },
         "additionalProperties": false
       },
+      "Infra.SpaceBrain": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/EnvironmentProvider.ID_1"
+          },
+          "environment": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "A template of the brain provider. Without it, Ren’s system image."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Space.BrainMachine, with the template by name."
+      },
       "Infra.SpaceDeclaration": {
         "type": "object",
         "properties": {
@@ -20898,6 +20934,15 @@
           },
           "description": {
             "type": "string"
+          },
+          "brainScope": {
+            "$ref": "#/components/schemas/Brain.Scope_1"
+          },
+          "brain": {
+            "$ref": "#/components/schemas/Infra.SpaceBrain"
+          },
+          "hand": {
+            "$ref": "#/components/schemas/Infra.SpaceHand"
           },
           "renamedFrom": {
             "type": "array",
@@ -21117,6 +21162,51 @@
         },
         "required": ["name"],
         "additionalProperties": false
+      },
+      "Infra.SpaceHand": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["colocated"]
+              }
+            },
+            "required": ["placement"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["remote"]
+              },
+              "environment": {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "The name of an environment template that environments.yaml declares."
+              }
+            },
+            "required": ["placement", "environment"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "placement": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["placement"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Without it, colocated."
       },
       "Infra.Spec": {
         "type": "object",

@@ -105,6 +105,9 @@ export const make = Effect.gen(function* () {
     kept: ReadonlyArray<KeptSpace>,
   ) => {
     const byName = Map.groupBy(live.templates, (template) => template.name)
+    const ids = new Map(
+      [...byName].flatMap(([name, rows]) => rows.slice(0, 1).map((template) => [name, template.id] as const)),
+    )
     const entries = Object.entries(declared).map(([name, declaration]) => ({
       name,
       declaration,
@@ -157,13 +160,16 @@ export const make = Effect.gen(function* () {
             "create",
             "environment",
             at,
-            templates.create(context.actor, {
-              name: entry.name,
-              description: declaration.description,
-              provider: declaration.provider,
-              config: declaration.config,
-              sessionsPerEnvironment: declaration.sessionsPerEnvironment,
-              networking: declaration.networking,
+            Effect.gen(function* () {
+              const created = yield* templates.create(context.actor, {
+                name: entry.name,
+                description: declaration.description,
+                provider: declaration.provider,
+                config: declaration.config,
+                sessionsPerEnvironment: declaration.sessionsPerEnvironment,
+                networking: declaration.networking,
+              })
+              ids.set(entry.name, created.id)
             }),
           ),
         ]
@@ -222,6 +228,23 @@ export const make = Effect.gen(function* () {
       steps: writes.toSorted(InfraPlan.byPath),
       removals: archives.toSorted(InfraPlan.byPath),
       problems: [...problems, ...inUse],
+      templateId: (name: string) => {
+        const id = ids.get(name)
+        return id ? Effect.succeed(id) : Effect.die(new Error(`Environment template ${name} has no id`))
+      },
+      unready: (name: string) => {
+        const entry = entries.find((each) => each.name === name)
+        if (!entry) return
+        const current = entry.current
+        if (!current)
+          return Option.exists(entry.provider, (provider) => Option.isSome(provider.build))
+            ? `Environment template “${name}” has no image until its first build is ready. Apply it without this change first, then apply again when it is built.`
+            : undefined
+        if (current.image || current.buildStatus === "ready") return
+        return current.buildStatus === "failed"
+          ? `Environment template “${name}” has no image: its build failed. Fix the template, then apply this change when it is built.`
+          : `Environment template “${name}” has no image until its build is ready. Apply again when it is built.`
+      },
     }
   }
 

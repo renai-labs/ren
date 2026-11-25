@@ -440,6 +440,11 @@ export type ChannelTarget = { kind: "slack"; channelId: string } | { kind: "gith
 
 export type MemoryFiles = { [x: string]: string }
 
+export type InfraSpaceHand =
+  | { placement: "colocated" }
+  | { placement: "remote"; environment: string }
+  | { placement: "none" }
+
 export type AgentName = string
 
 export type InfraLock = { organization: string; resources: { [x: string]: string } }
@@ -1144,6 +1149,8 @@ export type InfraPulledBindings = {
   channels?: { [x: PrimitiveSlug]: ChannelTarget }
   profiles?: { [x: PrimitiveSlug]: Array<AppProfileSlug> }
 }
+
+export type InfraSpaceBrain = { provider?: EnvironmentProviderID; environment?: string }
 
 export type InfraFactoryEdgeDeclaration = { agent: AgentName; max?: number; else?: AgentName; start?: FactoryStartMode }
 
@@ -1879,6 +1886,9 @@ export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; t
 export type InfraPulledSpace = {
   name: string
   description?: string | null
+  brainScope?: BrainScope
+  brain?: InfraSpaceBrain
+  hand?: InfraSpaceHand
   settings: SettingsInfo
   factory?: InfraFactoryDeclaration
   agents: { [x: AgentName]: AgentDeclaration }
@@ -10008,6 +10018,12 @@ export type InfraPullInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -10408,6 +10424,12 @@ export type InfraPullInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -10808,6 +10830,12 @@ export type InfraPullInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -11213,6 +11241,12 @@ export type InfraPlanInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -11613,6 +11647,12 @@ export type InfraPlanInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -12013,6 +12053,12 @@ export type InfraPlanInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -12418,6 +12464,12 @@ export type InfraApplyInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -12820,6 +12872,12 @@ export type InfraApplyInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -13222,6 +13280,12 @@ export type InfraApplyInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -13624,6 +13688,12 @@ export type InfraApplyInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
@@ -14026,6 +14096,12 @@ export type InfraApplyInput = {
         readonly [x: string]: {
           readonly name: string
           readonly description?: string
+          readonly brainScope?: "session" | "space"
+          readonly brain?: { readonly provider?: string; readonly environment?: string }
+          readonly hand?:
+            | { readonly placement: "colocated" }
+            | { readonly placement: "remote"; readonly environment: string }
+            | { readonly placement: "none" }
           readonly renamedFrom?: ReadonlyArray<string>
           readonly settings?: {
             readonly instructions?: string
