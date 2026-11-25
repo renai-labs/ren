@@ -22992,6 +22992,10 @@
         "enum": ["key", "subscription"],
         "description": "Absent on a built-in provider."
       },
+      "Models.Modality": {
+        "type": "string",
+        "enum": ["text", "image", "pdf", "audio", "video"]
+      },
       "Models.Price": {
         "type": "object",
         "properties": {
@@ -23095,6 +23099,10 @@
         "required": ["input", "output"],
         "additionalProperties": false,
         "description": "US dollars per 1M tokens, as models.dev states them."
+      },
+      "Models.Type": {
+        "type": "string",
+        "enum": ["chat", "image", "transcription", "decision", "speech", "realtime", "video"]
       },
       "NotFoundErrorEncoded": {
         "type": "object",
@@ -23965,40 +23973,6 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The slug of an app that the space reaches."
       },
-      "Provider.Available": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "mark": {
-            "type": "string",
-            "minLength": 1
-          },
-          "modelCount": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
-          "fields": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelGateway.Field"
-            }
-          },
-          "added": {
-            "type": "boolean"
-          }
-        },
-        "required": ["id", "name", "mark", "modelCount", "fields", "added"],
-        "additionalProperties": false,
-        "description": "One provider of the Connect provider page."
-      },
       "Provider.Info": {
         "type": "object",
         "properties": {
@@ -24014,12 +23988,20 @@
             "type": "string",
             "minLength": 1
           },
+          "logo": {
+            "type": "string",
+            "description": "The address of the provider’s logo."
+          },
           "payer": {
             "$ref": "#/components/schemas/ModelGateway.Payer"
           },
           "builtIn": {
             "type": "boolean",
             "description": "The provider needs no connection: the deployment holds its credential."
+          },
+          "added": {
+            "type": "boolean",
+            "description": "The organization added or changed the provider. A built-in provider is always added."
           },
           "enabled": {
             "type": "boolean"
@@ -24056,11 +24038,14 @@
             },
             "description": "The members’ subscriptions, for a provider with the subscription method."
           },
-          "modelCount": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991,
-            "description": "The provider’s models that are on."
+          "modelTypes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "description": "How many of the provider’s models of each type are on; for a provider the organization did not add, how many it offers."
           },
           "canManage": {
             "type": "boolean",
@@ -24073,16 +24058,17 @@
           "mark",
           "payer",
           "builtIn",
+          "added",
           "enabled",
           "methods",
           "fields",
           "key",
           "seats",
-          "modelCount",
+          "modelTypes",
           "canManage"
         ],
         "additionalProperties": false,
-        "description": "One provider of the organization, as the Providers page shows it."
+        "description": "One provider of the model gateways, with the organization’s settings of it."
       },
       "Provider.Key": {
         "type": "object",
@@ -24134,6 +24120,33 @@
             "type": "string",
             "minLength": 1
           },
+          "type": {
+            "$ref": "#/components/schemas/Models.Type"
+          },
+          "input": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Models.Modality"
+            },
+            "description": "What the model reads."
+          },
+          "reasoning": {
+            "type": "boolean",
+            "description": "The model has reasoning efforts."
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The context window, in tokens."
+          },
           "price": {
             "anyOf": [
               {
@@ -24152,7 +24165,7 @@
             "type": "boolean"
           }
         },
-        "required": ["id", "name", "free", "enabled"],
+        "required": ["id", "name", "type", "input", "reasoning", "free", "enabled"],
         "additionalProperties": false
       },
       "Provider.ModelList": {
@@ -24204,16 +24217,10 @@
             "items": {
               "$ref": "#/components/schemas/Provider.Info"
             },
-            "description": "The built-in providers first, then the providers the organization added."
-          },
-          "available": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Provider.Available"
-            }
+            "description": "Every provider: the built-in ones first, then those the organization added, then the others."
           }
         },
-        "required": ["providers", "available"],
+        "required": ["providers"],
         "additionalProperties": false
       },
       "Provider.TestResult": {

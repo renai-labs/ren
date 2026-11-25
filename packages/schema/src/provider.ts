@@ -17,9 +17,13 @@ export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
   mark: Schema.NonEmptyString,
+  logo: Schema.optionalKey(Schema.String).annotate({ description: "The address of the provider’s logo." }),
   payer: ModelGateway.Payer,
   builtIn: Schema.Boolean.annotate({
     description: "The provider needs no connection: the deployment holds its credential.",
+  }),
+  added: Schema.Boolean.annotate({
+    description: "The organization added or changed the provider. A built-in provider is always added.",
   }),
   enabled: Schema.Boolean,
   method: Schema.optionalKey(Models.Method).annotate({ description: "Absent on a built-in provider." }),
@@ -29,29 +33,21 @@ export const Info = Schema.Struct({
   seats: Schema.Array(RenInference.Connection).annotate({
     description: "The members’ subscriptions, for a provider with the subscription method.",
   }),
-  modelCount: Schema.Int.annotate({ description: "The provider’s models that are on." }),
+  modelTypes: Schema.Record(Schema.String, Schema.Int).annotate({
+    description:
+      "How many of the provider’s models of each type are on; for a provider the organization did not add, how many it offers.",
+  }),
   canManage: Schema.Boolean.annotate({ description: "True for admins and owners (Providers P7)." }),
 }).annotate({
   identifier: "Provider.Info",
-  description: "One provider of the organization, as the Providers page shows it.",
+  description: "One provider of the model gateways, with the organization’s settings of it.",
 })
-
-export interface Available extends Schema.Schema.Type<typeof Available> {}
-export const Available = Schema.Struct({
-  id: Schema.NonEmptyString,
-  name: Schema.NonEmptyString,
-  mark: Schema.NonEmptyString,
-  modelCount: Schema.Int,
-  fields: Schema.Array(ModelGateway.Field),
-  added: Schema.Boolean,
-}).annotate({ identifier: "Provider.Available", description: "One provider of the Connect provider page." })
 
 export interface Page extends Schema.Schema.Type<typeof Page> {}
 export const Page = Schema.Struct({
   providers: Schema.Array(Info).annotate({
-    description: "The built-in providers first, then the providers the organization added.",
+    description: "Every provider: the built-in ones first, then those the organization added, then the others.",
   }),
-  available: Schema.Array(Available),
 }).annotate({ identifier: "Provider.Page" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
@@ -80,6 +76,10 @@ export interface Model extends Schema.Schema.Type<typeof Model> {}
 export const Model = Schema.Struct({
   id: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
+  type: Models.Type,
+  input: Schema.Array(Models.Modality).annotate({ description: "What the model reads." }),
+  reasoning: Schema.Boolean.annotate({ description: "The model has reasoning efforts." }),
+  context: Schema.optional(Schema.Int).annotate({ description: "The context window, in tokens." }),
   price: Schema.optional(Models.Price).annotate({ description: "Absent for a model the organization pays itself." }),
   free: Schema.Boolean,
   enabled: Schema.Boolean,

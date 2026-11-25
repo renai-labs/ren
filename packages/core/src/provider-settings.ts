@@ -2,6 +2,7 @@ export * as ProviderSettings from "./provider-settings.js"
 
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import type { Models } from "@ren/schema/models"
 import type { Provider } from "@ren/schema/provider"
 import { Settings } from "@ren/schema/settings"
 import { eq, inArray } from "drizzle-orm"
@@ -44,6 +45,12 @@ const forbidden = new Primitive.Forbidden({ message: "Only organization admins a
 
 const keyFields = (provider: ModelGateway.Provider) =>
   provider.auth.flatMap((auth) => (auth._tag === "key" ? auth.fields : []))
+
+const countTypes = (models: ReadonlyArray<Models.Info>) =>
+  models.reduce<Record<string, number>>(
+    (counts, model) => ({ ...counts, [model.type]: (counts[model.type] ?? 0) + 1 }),
+    {},
+  )
 
 const rejected = <A>(effect: Effect.Effect<A, ModelGateway.Unavailable | ModelGateway.Rejected>) =>
   effect.pipe(
@@ -110,51 +117,49 @@ export const layer = Layer.effect(
               .pipe(Effect.orDie)).map((row) => [row.id, row.name] as const),
       )
       const manages = canManage(actor)
-      const onPage = [
-        ...owned.filter((each) => ModelLists.builtIn(each.provider)),
-        ...owned.filter((each) => !ModelLists.builtIn(each.provider) && added(each.provider)),
-      ]
-      const shown = yield* Effect.forEach(onPage, (each) =>
-        Effect.gen(function* () {
-          const state = settings.stateOf(each.provider)
-          const key = settings.all[each.provider.id]?.key
-          const models = yield* lists.models(actor.organizationId, each)
-          return {
-            id: each.provider.id,
-            name: each.provider.name,
-            mark: each.provider.mark,
-            payer: each.provider.payer,
-            builtIn: ModelLists.builtIn(each.provider),
-            enabled: state.enabled,
-            ...(state.method && { method: state.method }),
-            methods: ModelLists.methodsOf(each.provider),
-            fields: keyFields(each.provider),
-            seats: seats.filter((seat) => seat.providerId === each.provider.id),
-            key: key
-              ? {
-                  last4: key.last4,
-                  testedAt: key.testedAt,
-                  savedBy: key.savedBy ? { memberId: key.savedBy, name: names.get(key.savedBy) ?? null } : null,
-                }
-              : null,
-            modelCount: models.filter((model) => !state.off.includes(ModelLists.switchId(model))).length,
-            canManage: manages,
-          } satisfies Provider.Info
-        }),
+      const order = (each: ModelGateway.Owned) => (ModelLists.builtIn(each.provider) ? 0 : added(each.provider) ? 1 : 2)
+      const providers = yield* Effect.forEach(
+        owned.toSorted((left, right) => order(left) - order(right)),
+        (each) =>
+          Effect.gen(function* () {
+            const state = settings.stateOf(each.provider)
+            const key = settings.all[each.provider.id]?.key
+            const shown = ModelLists.builtIn(each.provider) || added(each.provider)
+            // oxlint-disable-next-line ren/no-comments -- A provider the organization did not add shows what it offers, from the gateway's list, without asking for its models.
+            const modelTypes = shown
+              ? countTypes(
+                  (yield* lists.models(actor.organizationId, each)).filter(
+                    (model) => !state.off.includes(ModelLists.switchId(model)),
+                  ),
+                )
+              : (each.provider.modelTypes ?? { chat: each.provider.modelCount ?? 0 })
+            return {
+              id: each.provider.id,
+              name: each.provider.name,
+              mark: each.provider.mark,
+              ...(each.provider.logo && { logo: each.provider.logo }),
+              payer: each.provider.payer,
+              builtIn: ModelLists.builtIn(each.provider),
+              added: shown,
+              enabled: state.enabled,
+              ...(state.method && { method: state.method }),
+              methods: ModelLists.methodsOf(each.provider),
+              fields: keyFields(each.provider),
+              seats: seats.filter((seat) => seat.providerId === each.provider.id),
+              key: key
+                ? {
+                    last4: key.last4,
+                    testedAt: key.testedAt,
+                    savedBy: key.savedBy ? { memberId: key.savedBy, name: names.get(key.savedBy) ?? null } : null,
+                  }
+                : null,
+              modelTypes,
+              canManage: manages,
+            } satisfies Provider.Info
+          }),
+        { concurrency: 8 },
       )
-      return {
-        providers: shown,
-        available: owned
-          .filter((each) => !ModelLists.builtIn(each.provider))
-          .map((each) => ({
-            id: each.provider.id,
-            name: each.provider.name,
-            mark: each.provider.mark,
-            modelCount: each.provider.modelCount ?? 0,
-            fields: keyFields(each.provider),
-            added: added(each.provider),
-          })),
-      } satisfies Provider.Page
+      return { providers } satisfies Provider.Page
     })
 
     const models = Effect.fn("ProviderSettings.models")(function* (actor: Actor.Info, providerId: string) {
@@ -166,6 +171,10 @@ export const layer = Layer.effect(
         models: (yield* lists.models(actor.organizationId, owned)).map((model) => ({
           id: ModelLists.switchId(model),
           name: model.name ?? model.id,
+          type: model.type,
+          input: model.input ?? ["text"],
+          reasoning: (model.efforts?.length ?? 0) > 0,
+          context: model.limit?.context,
           price: model.price,
           free: model.free === true,
           enabled: !state.off.includes(ModelLists.switchId(model)),

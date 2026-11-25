@@ -395,6 +395,10 @@ export type ModelGatewayField = {
 
 export type ProviderTestResult = { ok: boolean; message?: string }
 
+export type ModelsType = "chat" | "image" | "transcription" | "decision" | "speech" | "realtime" | "video"
+
+export type ModelsModality = "text" | "image" | "pdf" | "audio" | "video"
+
 export type LimitsSeat = {
   _tag: "seat"
   key: string
@@ -1119,18 +1123,13 @@ export type RenInferenceHarnessVerificationStep =
   | { kind: "file-exists"; target: RenInferenceHarnessTarget }
   | { kind: "models-reachable" }
 
-export type ProviderAvailable = {
-  id: string
-  name: string
-  mark: string
-  modelCount: number
-  fields: Array<ModelGatewayField>
-  added: boolean
-}
-
 export type ProviderModel = {
   id: string
   name: string
+  type: ModelsType
+  input: Array<ModelsModality>
+  reasoning: boolean
+  context?: number | undefined
   price?: ModelsPrice | undefined
   free: boolean
   enabled: boolean
@@ -1721,15 +1720,17 @@ export type ProviderInfo = {
   id: string
   name: string
   mark: string
+  logo?: string
   payer: ModelGatewayPayer
   builtIn: boolean
+  added: boolean
   enabled: boolean
   method?: ModelsMethod
   methods: Array<ModelsMethod>
   fields: Array<ModelGatewayField>
   key: ProviderKey | null
   seats: Array<RenInferenceConnection>
-  modelCount: number
+  modelTypes: { [x: string]: number }
   canManage: boolean
 }
 
@@ -1862,7 +1863,7 @@ export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
 
-export type ProviderPage = { providers: Array<ProviderInfo>; available: Array<ProviderAvailable> }
+export type ProviderPage = { providers: Array<ProviderInfo> }
 
 export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
