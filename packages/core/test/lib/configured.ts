@@ -22,6 +22,7 @@ import { SpaceProvisioning } from "../../src/space/provisioning.js"
 import { TranscriptCodec } from "../../src/transcript-codec.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
+import { ModelsStub } from "./models-stub.js"
 
 export const stub = Shared.stub()
 
@@ -30,8 +31,7 @@ const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.
 // oxlint-disable-next-line ren/no-comments -- Every brain gets the stub model with the key sk-configured.
 export const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.succeed(Models.catalog(configured)),
     providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
     baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),

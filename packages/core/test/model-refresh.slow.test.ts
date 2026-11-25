@@ -9,6 +9,7 @@ import { SessionRunner } from "../src/session/runner.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 setDefaultTimeout(60_000)
 
@@ -19,8 +20,7 @@ const refreshes = Ref.makeUnsafe(0)
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-catalog") }, stub.url))),
     providers: () =>
       Effect.sync(() =>

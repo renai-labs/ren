@@ -34,13 +34,25 @@ export interface Interface {
     organizationId: Auth.OrganizationID,
     spaceId: Space.ID,
   ) => Effect.Effect<Models.Access, Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- After a call with a provider's key answers 401, the next grant asks the provider's gateway for a key again.
-  readonly forget: (
+  // oxlint-disable-next-line ren/no-comments -- Providers §2.3 of the review: the key of each gateway a brain calls, with its address. It never reads a model list, so a list that fails never takes the brain's keys with it.
+  readonly keys: (
     brainId: Brain.ID,
     organizationId: Auth.OrganizationID,
     spaceId: Space.ID,
-    provider: string,
+  ) => Effect.Effect<ReadonlyArray<Key>, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- After a call with a gateway's key answers 401, the next request asks that gateway for a key again.
+  readonly forgetKey: (
+    brainId: Brain.ID,
+    organizationId: Auth.OrganizationID,
+    spaceId: Space.ID,
+    gateway: string,
   ) => Effect.Effect<void>
+}
+
+export interface Key {
+  readonly gateway: string
+  readonly baseUrl: string
+  readonly key: Models.Endpoint["apiKey"]
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Models") {}
@@ -137,12 +149,22 @@ export const layer = Layer.effect(
         ).pipe(Effect.mapError((cause) => new Unavailable({ cause })))
         return Models.Access.make({ endpoints: granted })
       }),
-      forget: Effect.fn("Models.forget")(function* (brainId, organizationId, spaceId, provider) {
-        const entries = yield* lists.list(organizationId).pipe(Effect.orElseSucceed(() => []))
-        const entry = entries.find((each) => each.id === provider)
-        if (entry)
-          yield* Cache.invalidate(keys, encodeKeyOf({ brainId, organizationId, spaceId, gateway: entry.gateway }))
+      keys: Effect.fn("Models.keys")(function* (brainId, organizationId, spaceId) {
+        return yield* Effect.forEach(
+          registry.gateways,
+          (gateway) =>
+            Cache.get(keys, encodeKeyOf({ brainId, organizationId, spaceId, gateway: gateway.id })).pipe(
+              Effect.map((key): Key => ({
+                gateway: gateway.id,
+                baseUrl: gateway.baseUrl,
+                key: { key: key.grant.key, ...(key.grant._tag === "Minted" && { expiresAt: key.grant.expiresAt }) },
+              })),
+            ),
+          { concurrency: "unbounded" },
+        ).pipe(Effect.mapError((cause) => new Unavailable({ cause })))
       }),
+      forgetKey: (brainId, organizationId, spaceId, gateway) =>
+        Cache.invalidate(keys, encodeKeyOf({ brainId, organizationId, spaceId, gateway })),
     })
   }),
 )
@@ -155,6 +177,7 @@ export const layerNone = Layer.succeed(
     catalog: () => Effect.succeed({ endpoints: [] }),
     baseUrls: Effect.succeed([]),
     grant: () => Effect.succeed(Models.Access.make({ endpoints: [] })),
-    forget: () => Effect.void,
+    keys: () => Effect.succeed([]),
+    forgetKey: () => Effect.void,
   }),
 )

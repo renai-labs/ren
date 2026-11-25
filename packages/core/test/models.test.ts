@@ -3,7 +3,7 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
-import { Duration, Effect, Fiber, Layer, Redacted } from "effect"
+import { Duration, Effect, Exit, Fiber, Layer, Redacted } from "effect"
 import { TestClock } from "effect/testing"
 import { ModelLists } from "../src/model-lists.js"
 import { ModelGateway } from "../src/model-gateway.js"
@@ -80,9 +80,24 @@ describe("Models.layer (Providers §6.1, §7.1)", () => {
         yield* TestClock.adjust(Duration.days(30))
         yield* models.grant(...brain)
         expect((yield* test.calls).grants).toBe(1)
-        yield* models.forget(...brain, "ren")
+        yield* models.forgetKey(...brain, test.gateway.id)
         yield* models.grant(...brain)
         expect((yield* test.calls).grants).toBe(2)
+      }).pipe(Effect.provide(withGateway(test)))
+    }),
+  )
+
+  it.effect("a brain's keys do not wait for the model list: they answer while the gateway's lists fail", () =>
+    Effect.gen(function* () {
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const organizationId = yield* Seed.organization()
+      const brain = brainIn(organizationId)
+      yield* test.setListsDown(true)
+      yield* Effect.gen(function* () {
+        const models = yield* Models.Service
+        expect(Exit.isFailure(yield* Effect.exit(models.catalog(organizationId)))).toBe(true)
+        const keys = yield* models.keys(...brain)
+        expect(keys.map((key) => [key.gateway, key.baseUrl])).toEqual([[test.gateway.id, test.gateway.baseUrl]])
       }).pipe(Effect.provide(withGateway(test)))
     }),
   )

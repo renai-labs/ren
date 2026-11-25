@@ -42,6 +42,7 @@ import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 const invalidations: Array<unknown> = []
 const egress = Bun.serve({
@@ -102,11 +103,10 @@ const timed = Effect.succeed(
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
+  ModelsStub.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
     providers: () => Effect.succeed([]),
     baseUrls: Effect.succeed([]),
-    forget: () => Effect.void,
     grant: () =>
       Effect.succeed(
         Models.Access.make({

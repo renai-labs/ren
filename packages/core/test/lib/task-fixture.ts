@@ -29,6 +29,7 @@ import { TaskComment } from "../../src/task/comment.js"
 import { testEffect } from "./effect.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
+import { ModelsStub } from "./models-stub.js"
 
 export const harness = (
   cards: Layer.Layer<TaskCard.Service, never, Database.Service> = TaskCard.layerNone,
@@ -41,8 +42,7 @@ export const harness = (
   const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
   const models = Layer.succeed(
     Models.Service,
-    Models.Service.of({
-      forget: () => Effect.void,
+    ModelsStub.of({
       catalog: () => Effect.succeed(Models.catalog(configured)),
       providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
       baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),

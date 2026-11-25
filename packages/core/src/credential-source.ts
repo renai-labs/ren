@@ -244,13 +244,13 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
-    // oxlint-disable-next-line ren/no-comments -- Models keeps each brain's keys and each organization's list; asking it again is cheap.
-    const grantOf = (scope: Credentials.Scope) =>
+    // oxlint-disable-next-line ren/no-comments -- Models keeps each brain's key per gateway; asking it again is cheap, and it never reads a model list.
+    const keysOf = (scope: Credentials.Scope) =>
       scope.workload.kind === "brain" && Option.isSome(scope.spaceId)
         ? grants
-            .grant(scope.workload.id, scope.organizationId, scope.spaceId.value)
+            .keys(scope.workload.id, scope.organizationId, scope.spaceId.value)
             .pipe(Effect.retry({ schedule: Schedule.exponential(Duration.millis(500)), times: 3 }))
-        : Effect.succeed(Models.Access.make({ endpoints: [] }))
+        : Effect.succeed([])
 
     return Minted.of({
       candidates: Effect.fn("CredentialSource.minted.candidates")(function* (scope: Credentials.Scope) {
@@ -284,8 +284,8 @@ export const layerMinted = Layer.effect(
         })
         // oxlint-disable-next-line ren/no-comments -- A hand gets its space's drive, which its executor mounts, and none of the brain's own keys (REN, MODELS, INTEGRATIONS).
         if (scope.workload.kind !== "brain") return [...drive, ...gitHub]
-        const granted = yield* grantOf(scope).pipe(Effect.option)
-        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.endpoints })
+        const granted = yield* keysOf(scope).pipe(Effect.option)
+        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found })
         const modelHosts = [
           ...new Set(
             endpoints.flatMap((endpoint) =>
@@ -312,7 +312,7 @@ export const layerMinted = Layer.effect(
               if (!url) return []
               return [
                 {
-                  id: `minted:${models}:${endpoint.id}`,
+                  id: `minted:${models}:${endpoint.gateway}`,
                   source: "minted",
                   label: models,
                   owner: "workload",
@@ -462,15 +462,15 @@ export const layerMinted = Layer.effect(
             expiresAt: minted.expiresAt,
           } satisfies Sourced)
         }
-        const granted = yield* grantOf(scope).pipe(
+        const granted = yield* keysOf(scope).pipe(
           Effect.mapError(
             () => new Unavailable({ label: candidate.label, message: "Ren could not mint the model key." }),
           ),
         )
-        const endpoint = granted.endpoints.find((found) => candidate.id === `minted:${models}:${found.id}`)
+        const endpoint = granted.find((found) => candidate.id === `minted:${models}:${found.gateway}`)
         return Option.map(Option.fromNullishOr(endpoint), (found): Sourced => ({
-          value: { type: "key", value: found.apiKey.key },
-          ...(found.apiKey.expiresAt && { expiresAt: found.apiKey.expiresAt }),
+          value: { type: "key", value: found.key.key },
+          ...(found.key.expiresAt && { expiresAt: found.key.expiresAt }),
         }))
       }),
       // oxlint-disable-next-line ren/no-comments -- After an upstream 401 on REN, MODELS or INTEGRATIONS, the next request mints again (§9 rule 7).
@@ -487,7 +487,7 @@ export const layerMinted = Layer.effect(
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
         if (candidate.label === Integrations.label) return yield* Cache.invalidate(integrationTokens, keyOf(scope))
         if (scope.workload.kind === "brain" && Option.isSome(scope.spaceId))
-          yield* grants.forget(
+          yield* grants.forgetKey(
             scope.workload.id,
             scope.organizationId,
             scope.spaceId.value,

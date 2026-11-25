@@ -35,6 +35,10 @@ export const make = Effect.fnUntraced(function* (options: {
   const settings = yield* Ref.make(new Map<string, Readonly<Record<string, ModelGateway.ProviderSettings>>>())
   const keys = yield* Ref.make(new Map<string, string>())
   const limits = yield* Ref.make(new Map<string, ReadonlyArray<ModelGateway.Limit>>())
+  const listsDown = yield* Ref.make(false)
+  const unlessDown = Effect.flatMap(Ref.get(listsDown), (down) =>
+    down ? Effect.fail(new ModelGateway.Unavailable({ message: "The gateway's lists are down." })) : Effect.void,
+  )
   const keyAt = (providerId: string, organizationId: string) => `${providerId}\u0000${organizationId}`
   const change = (
     providerId: string,
@@ -58,6 +62,7 @@ export const make = Effect.fnUntraced(function* (options: {
     providers: Effect.succeed(options.providers),
     models: (providerId, organizationId) =>
       Effect.gen(function* () {
+        yield* unlessDown
         yield* Ref.update(calls, (found) => ({ ...found, models: found.models + 1 }))
         const all = yield* Ref.get(lists)
         const listed = all.get(listOf(providerId, organizationId)) ??
@@ -82,7 +87,11 @@ export const make = Effect.fnUntraced(function* (options: {
         return { _tag: "Minted" as const, key: Redacted.make(fresh.key), expiresAt: fresh.expiresAt }
       }),
     // oxlint-disable-next-line ren/no-comments -- The gateway is the only store of the settings (Providers P29).
-    settings: (organizationId) => Effect.map(Ref.get(settings), (all) => all.get(organizationId) ?? {}),
+    settings: (organizationId) =>
+      Effect.andThen(
+        unlessDown,
+        Effect.map(Ref.get(settings), (all) => all.get(organizationId) ?? {}),
+      ),
     configure: (providerId, organizationId, next) =>
       change(providerId, organizationId, (current) => ({ ...next, ...(current.key && { key: current.key }) })),
     // oxlint-disable-next-line ren/no-comments -- The vendor takes the key `good-…`; any other key gets the vendor's message.
@@ -140,6 +149,8 @@ export const make = Effect.fnUntraced(function* (options: {
       }),
     setOrganizations: (providerId: string, organizationIds: ReadonlyArray<Auth.OrganizationID>) =>
       Ref.update(enabled, (all) => new Map(all).set(providerId, organizationIds)),
+    // oxlint-disable-next-line ren/no-comments -- The gateway's settings and model lists fail, as when its service is slow or answers 5xx; keys still work.
+    setListsDown: (down: boolean) => Ref.set(listsDown, down),
     setLimits: (providerId: string, found: ReadonlyArray<ModelGateway.Limit>) =>
       Ref.update(limits, (all) => new Map(all).set(providerId, found)),
   }
