@@ -2,10 +2,11 @@ export * as InfraWebhooks from "./webhooks.js"
 
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
+import type { App } from "@ren/schema/app"
 import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Webhook } from "@ren/schema/webhook"
-import { and, asc, eq, isNull } from "drizzle-orm"
+import { and, asc, eq, isNotNull, isNull, or } from "drizzle-orm"
 import { Effect, Schema, Struct } from "effect"
 import { Primitive } from "../primitive.js"
 import { WebhookSource } from "../webhook/source.js"
@@ -22,10 +23,13 @@ export interface LiveWebhook {
   readonly slug: string
   readonly agentId: Agent.ID | null
   readonly source: Source
+  readonly mode: Webhook.Mode
+  readonly hasSigningSecret: boolean
 }
 
 export interface Live {
   readonly webhooks: ReadonlyArray<LiveWebhook>
+  readonly presets: Readonly<Record<string, App.Definition["webhooks"]>>
 }
 
 export const path = (space: string, slug: string) => `spaces/${space}/webhooks/${slug}`
@@ -44,12 +48,18 @@ const isPreset = (declaration: Webhook.Declaration): declaration is Webhook.Pres
 
 export const canonical = (slug: string, declaration: Webhook.Declaration) =>
   isPreset(declaration)
-    ? { app: declaration.app, preset: declaration.preset, ...(declaration.agent && { agent: declaration.agent }) }
+    ? {
+        app: declaration.app,
+        preset: declaration.preset,
+        ...(declaration.agent && { agent: declaration.agent }),
+        ...(declaration.mode === "live" && { mode: declaration.mode }),
+      }
     : {
         name: declaration.name ?? slug,
         ...(declaration.agent && { agent: declaration.agent }),
         message: declaration.message,
         parser: encodeParser(parserOf(declaration)),
+        ...(declaration.mode === "live" && { mode: declaration.mode }),
       }
 
 export const load = Effect.fnUntraced(function* (
@@ -76,9 +86,27 @@ export const load = Effect.fnUntraced(function* (
       slug: row.webhook.slug,
       agentId: row.agentOrganizationId ? row.webhook.agent_id : null,
       source: source._tag === "preset" ? { _tag: "preset", app: row.appSlug ?? "", preset: source.preset } : source,
+      mode: row.webhook.mode,
+      hasSigningSecret: Boolean(row.webhook.signing_secret),
     })),
   )
-  return { webhooks } satisfies Live
+  const apps = yield* transaction
+    .select({ slug: Database.Schema.app.slug, webhooks: Database.Schema.app.webhooks })
+    .from(Database.Schema.app)
+    .leftJoin(
+      Database.Schema.app_profile,
+      and(
+        eq(Database.Schema.app_profile.app_id, Database.Schema.app.id),
+        eq(Database.Schema.app_profile.organization_id, organizationId),
+      ),
+    )
+    .where(
+      and(
+        isNull(Database.Schema.app.archived_at),
+        or(eq(Database.Schema.app.organization_id, organizationId), isNotNull(Database.Schema.app_profile.id)),
+      ),
+    )
+  return { webhooks, presets: Object.fromEntries(apps.map((app) => [app.slug, app.webhooks])) } satisfies Live
 })
 
 export const make = Effect.gen(function* () {
@@ -104,7 +132,7 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const spaceId = yield* context.spaceId(space)
       const agentId = declaration.agent ? yield* context.agentId(declaration.agent) : undefined
-      yield* webhooks.create(context.actor, {
+      const webhook = yield* webhooks.create(context.actor, {
         spaceId,
         slug,
         source: isPreset(declaration)
@@ -117,6 +145,7 @@ export const make = Effect.gen(function* () {
             },
         ...(agentId && { agentId }),
       })
+      if (declaration.mode === "live") yield* webhooks.update(context.actor, webhook.id, { mode: "live" })
     })
 
   const fieldsOf = (
@@ -127,12 +156,13 @@ export const make = Effect.gen(function* () {
   ) => {
     const agent = current.agentId ? (context.agentName(current.agentId) ?? current.agentId) : undefined
     if (current.source._tag === "preset" || isPreset(declaration))
-      return InfraPlan.changed({ agent: agent !== declaration.agent })
+      return InfraPlan.changed({ agent: agent !== declaration.agent, mode: current.mode !== declaration.mode })
     return InfraPlan.changed({
       name: current.source.name !== (declaration.name ?? slug),
       agent: agent !== declaration.agent,
       message: current.source.message !== declaration.message,
       parser: !sameParser(current.source.parser, parserOf(declaration)),
+      mode: current.mode !== declaration.mode,
     })
   }
 
@@ -158,25 +188,59 @@ export const make = Effect.gen(function* () {
         current: byKey.get(key(space.liveId ?? "", slug)),
       })),
     )
-    const problems = declared.flatMap((entry) => [
-      ...(entry.webhook.agent && subagents.has(entry.webhook.agent)
-        ? [
-            {
-              path: path(entry.space, entry.slug),
-              message: `Agent “${entry.webhook.agent}” is a subagent, so it cannot run a webhook. Pick another agent.`,
-            },
-          ]
-        : []),
-      ...(entry.current && !isSameSource(entry.current, entry.webhook)
-        ? [
-            {
-              path: path(entry.space, entry.slug),
-              message:
-                "A webhook cannot change between custom and preset, or to another preset. Give the new one another slug.",
-            },
-          ]
-        : []),
-    ])
+    const declaredApps = new Map(context.spaces.flatMap((space) => Object.entries(space.declaration.apps)))
+    const goingLive = declared
+      .filter((entry) => entry.webhook.mode === "live" && entry.current?.mode !== "live")
+      .flatMap((entry) => {
+        const declaration = entry.webhook
+        const current = entry.current
+        if (current && !isSameSource(current, declaration)) return []
+        const preset = isPreset(declaration)
+          ? (declaredApps.get(declaration.app)?.webhooks ?? live.presets[declaration.app])?.[declaration.preset]
+          : undefined
+        return [
+          {
+            path: path(entry.space, entry.slug),
+            isNew: !current,
+            parser: isPreset(declaration) ? preset : parserOf(declaration),
+            hasSecret: current ? current.hasSigningSecret : preset?.secret === "ren",
+          },
+        ]
+      })
+    const problems = [
+      ...declared.flatMap((entry) => [
+        ...(entry.webhook.agent && subagents.has(entry.webhook.agent)
+          ? [
+              {
+                path: path(entry.space, entry.slug),
+                message: `Agent “${entry.webhook.agent}” is a subagent, so it cannot run a webhook. Pick another agent.`,
+              },
+            ]
+          : []),
+        ...(entry.current && !isSameSource(entry.current, entry.webhook)
+          ? [
+              {
+                path: path(entry.space, entry.slug),
+                message:
+                  "A webhook cannot change between custom and preset, or to another preset. Give the new one another slug.",
+              },
+            ]
+          : []),
+      ]),
+      ...goingLive
+        .filter((entry) => !entry.parser && !entry.isNew)
+        .map((entry) => ({
+          path: entry.path,
+          message: "The app no longer has this preset, so the webhook cannot go live. Declare it listening.",
+        })),
+      ...goingLive
+        .filter((entry) => entry.parser && Webhooks.needsSecret(entry.parser) && !entry.hasSecret)
+        .map((entry) => ({
+          path: entry.path,
+          message:
+            "Its signature needs a signing secret, which apply cannot set. Apply it as listening, set the secret in the app, then declare it live.",
+        })),
+    ]
 
     const writes = declared.flatMap((entry): Array<InfraPlan.Step> => {
       const target = path(entry.space, entry.slug)
@@ -205,6 +269,7 @@ export const make = Effect.gen(function* () {
                 ...(fields.includes("message") && { message: declaration.message }),
                 ...(fields.includes("parser") && { parser: parserOf(declaration) }),
               }),
+              ...(fields.includes("mode") && { mode: declaration.mode }),
             })
           }),
           { fields },
@@ -242,12 +307,13 @@ export const make = Effect.gen(function* () {
           return [
             webhook.slug,
             source._tag === "preset"
-              ? { app: source.app, preset: source.preset, ...(agent && { agent }) }
+              ? { app: source.app, preset: source.preset, ...(agent && { agent }), mode: webhook.mode }
               : {
                   ...(source.name !== webhook.slug && { name: source.name }),
                   ...(agent && { agent }),
                   message: source.message,
                   ...Struct.pick(source.parser, parserFields),
+                  mode: webhook.mode,
                 },
           ]
         }),

@@ -309,12 +309,17 @@ const agentField = Schema.optionalKey(
   Agent.Name.annotate({ description: "Without it, a new chat gets the space’s default settings." }),
 )
 
+const modeField = Mode.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed("listening" as const))).annotate({
+  description: "Without it, listening. `live` needs a signing secret when the signature needs one.",
+})
+
 export interface CustomDeclaration extends Schema.Schema.Type<typeof CustomDeclaration> {}
 export const CustomDeclaration = Schema.Struct({
   name: Schema.optionalKey(Primitive.Name.annotate({ description: "Without it, the slug." })),
   agent: agentField,
   message: Message,
   ...Parser.fields,
+  mode: modeField,
 }).annotate({ identifier: "Webhook.CustomDeclaration" })
 
 export interface PresetDeclaration extends Schema.Schema.Type<typeof PresetDeclaration> {}
@@ -322,12 +327,12 @@ export const PresetDeclaration = Schema.Struct({
   app: Primitive.Slug.annotate({ description: "The slug of an app that the space reaches." }),
   preset: Primitive.Slug.annotate({ description: "The key of the preset in the app’s webhooks." }),
   agent: agentField,
+  mode: modeField,
 }).annotate({ identifier: "Webhook.PresetDeclaration" })
 
 export const Declaration = Schema.Union([PresetDeclaration, CustomDeclaration]).annotate({
   identifier: "Webhook.Declaration",
-  description:
-    "A webhook in webhooks.yaml. Apply creates it listening; its mode, URL and signing secret stay live state.",
+  description: "A webhook in webhooks.yaml. Its URL and signing secret stay live state.",
 })
 export type Declaration = typeof Declaration.Type
 

@@ -30024,6 +30024,9 @@
           },
           "title": {
             "$ref": "#/components/schemas/Webhook.Expression_5"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Webhook.Mode"
           }
         },
         "required": ["message"],
@@ -30038,7 +30041,7 @@
             "$ref": "#/components/schemas/Webhook.CustomDeclaration"
           }
         ],
-        "description": "A webhook in webhooks.yaml. Apply creates it listening; its mode, URL and signing secret stay live state."
+        "description": "A webhook in webhooks.yaml. Its URL and signing secret stay live state."
       },
       "Webhook.Expression": {
         "type": "string",
@@ -30414,6 +30417,9 @@
           },
           "agent": {
             "$ref": "#/components/schemas/Agent.Name_2"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Webhook.Mode"
           }
         },
         "required": ["app", "preset"],
