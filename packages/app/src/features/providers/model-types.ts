@@ -17,7 +17,3 @@ export const total = (counts: Readonly<Record<string, number>>) =>
   Object.values(counts).reduce((sum, count) => sum + count, 0)
 
 export const countText = (count: number) => (count === 1 ? "1 model" : `${count} models`)
-
-// oxlint-disable-next-line ren/no-comments -- "Chat 287 · Image 2": the types a provider has, in page order.
-export const summary = (counts: Readonly<Record<string, number>>) =>
-  labels.flatMap((each) => ((counts[each[0]] ?? 0) > 0 ? [`${each[1]} ${counts[each[0]]}`] : [])).join(" · ")

@@ -83,18 +83,15 @@ function ProviderCard(props: { provider: ProviderInfo; onConnect: () => void }) 
           </Button>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        <span>
-          {ModelTypes.countText(count)}
-          {connected(provider) ? (
-            <>
-              {" · "}
-              <Connection provider={provider} />
-            </>
-          ) : null}
-        </span>
-        <span>{ModelTypes.summary(provider.modelTypes)}</span>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        <span className="underline decoration-dotted underline-offset-2">{ModelTypes.countText(count)}</span>
+        {connected(provider) ? (
+          <>
+            {" · "}
+            <Connection provider={provider} />
+          </>
+        ) : null}
+      </p>
     </li>
   )
 }
@@ -127,7 +124,7 @@ export function ProvidersPage() {
         </InputGroupAddon>
         <InputGroupInput
           aria-label="Search providers"
-          placeholder="Groq"
+          placeholder="Search for provider…"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
