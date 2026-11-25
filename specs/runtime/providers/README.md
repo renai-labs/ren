@@ -279,6 +279,8 @@ On `changed` for a card and all organizations, Ren core reads the card's models 
 
 ### 7.1 What the pull carries
 
+Ren core caches two things apart. A brain's key: per workload and plug-in, until it expires or a call answers 401. The organization's list: per organization and list hash. A change in models changes lists and mints no key.
+
 `RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per card the id, name, base URL and headers from its model provider's `access`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
 
 ### 7.2 HTTP runtime
@@ -286,7 +288,7 @@ On `changed` for a card and all organizations, Ren core reads the card's models 
 `cell/src/harness/opencode/model-providers.ts` keeps mapping each card to an OpenCode provider with the card id and the protocol's package. Changes:
 
 1. It does not remove `claude-agent` (`model-providers.ts:24`; tested in G4).
-2. OpenAI subscription models get the settings of OpenCode's ChatGPT plugin, which Ren does not activate: `transport: "http"`, summary compaction, `supportsEffortUpdates: false`, models with `reasoning.mode: "pro"` off, cost `[]` (`chatgpt.ts:306-339`). The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
+2. A model carries the client settings it needs as fields, and the adapter applies them without a vendor check: `effortUpdates: false`, `compaction: "summary"`, `cost: false`. The gateway plug-in sets them on ChatGPT seat models, as OpenCode's ChatGPT plugin does (`chatgpt.ts:306-339`), which Ren does not activate. Models with `reasoning.mode: "pro"` are not listed. The Ren plugin's `retry` hook stops retries on the token-sharing refusal codes (`chatgpt.ts:58-67`).
 
 ### 7.3 Claude runtime
 
