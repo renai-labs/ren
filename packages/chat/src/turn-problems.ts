@@ -1,6 +1,5 @@
 export * as TurnProblems from "./turn-problems.js"
 
-import { Models } from "@ren/schema/models"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { DateTime } from "effect"
 
@@ -56,7 +55,7 @@ const outOfCredits = (input: Context): Problem => {
   return {
     title: "You’re out of Ren credits.",
     fix: input.admin
-      ? "Add credits, or connect your own Claude or ChatGPT account in Providers. Then try again."
+      ? "Add credits, or connect a provider of your own in Providers. Then try again."
       : "Ask an admin to add credits, or pick another model.",
     actions: input.admin ? ["billing", "model", "providers"] : ["model"],
   }
@@ -115,15 +114,16 @@ const byCode: Readonly<Record<string, (input: Context) => Problem>> = {
     }
   },
   inference_unavailable: () => ({ title: "Model access is not available now.", fix: "Try again.", actions: ["try"] }),
-  ...Object.fromEntries(
-    Models.chatGptRefusals.map((code, index) => [
-      code,
-      (input: Context): Problem =>
-        index < 2
-          ? { title: "ChatGPT usage limit reached.", fix: "Pick another model to keep going.", actions: ["model"] }
-          : { title: "ChatGPT refused this request.", fix: input.text, actions: ["model"] },
-    ]),
-  ),
+  seat_unavailable: (input) => ({
+    title: `No ${input.provider} subscription can serve this now.`,
+    fix: "Try again, or pick another model.",
+    actions: ["try", "model"],
+  }),
+  subscription_request_unsupported: (input) => ({
+    title: `${input.provider} subscriptions can’t serve this request.`,
+    fix: "Pick another model to keep going.",
+    actions: ["model"],
+  }),
 }
 
 const codes = Object.keys(byCode)

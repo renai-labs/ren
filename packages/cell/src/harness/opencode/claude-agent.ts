@@ -24,15 +24,8 @@ import { Effect, Predicate, Stream } from "effect"
 // oxlint-disable-next-line ren/no-comments -- A model on the Claude runtime runs on this package. Its canonical provider keys the options the Claude Agent model reads.
 export const runtime = { package: Provider.aisdk(ClaudeProvider.PACKAGE), canonical: ClaudeProvider.ID }
 
-// oxlint-disable-next-line ren/no-comments -- The usage headers that stay the same for a chat. `ren-turn` changes each turn, and a changed connection restarts `claude`.
-const chatHeaders = [
-  Usage.headers.rootSession,
-  Usage.headers.session,
-  Usage.headers.agent,
-  Usage.headers.kind,
-  Usage.headers.variant,
-  Models.personHeader,
-]
+// oxlint-disable-next-line ren/no-comments -- The usage headers that stay the same for a chat. OpenCode restarts `claude` when its connection changes, so a header that changes within a chat stays out: `ren-turn` each turn, the request kind at a compaction, the variant at an effort change.
+const chatHeaders = [Usage.headers.rootSession, Usage.headers.session, Usage.headers.agent, Models.personHeader]
 
 // oxlint-disable-next-line ren/no-comments -- The `claude` program the SDK ships for this machine; OPENCODE_CLAUDE_PATH wins. Never a `claude` on PATH.
 const executable = () => {

@@ -45,7 +45,7 @@ describe("TurnProblems.of", () => {
     }
     expect(shown({ kind: "provider.quota", code: "insufficient_credits", admin: true })).toEqual({
       title: "You’re out of Ren credits.",
-      fix: "Add credits, or connect your own Claude or ChatGPT account in Providers. Then try again.",
+      fix: "Add credits, or connect a provider of your own in Providers. Then try again.",
       actions: ["billing", "model", "providers"],
     })
     expect(shown({ kind: "provider.quota", code: "insufficient_credits", admin: false }).actions).toEqual(["model"])
@@ -95,12 +95,14 @@ describe("TurnProblems.of", () => {
       fix: "Try again.",
       actions: ["try"],
     })
-    expect(
-      shown({ kind: "provider.chatgpt-limit", code: "subscription_sharing_usage_limit_exceeded", admin: true }),
-    ).toEqual({ title: "ChatGPT usage limit reached.", fix: "Pick another model to keep going.", actions: ["model"] })
-    expect(shown({ kind: "provider.auth", code: "subscription_sharing_invalid_user", admin: true })).toEqual({
-      title: "ChatGPT refused this request.",
-      fix: "Refused.",
+    expect(shown({ kind: "provider.rate-limit", code: "seat_unavailable", admin: true })).toEqual({
+      title: "No Anthropic subscription can serve this now.",
+      fix: "Try again, or pick another model.",
+      actions: ["try", "model"],
+    })
+    expect(shown({ kind: "provider.invalid", code: "subscription_request_unsupported", admin: true })).toEqual({
+      title: "Anthropic subscriptions can’t serve this request.",
+      fix: "Pick another model to keep going.",
       actions: ["model"],
     })
   })
@@ -108,8 +110,8 @@ describe("TurnProblems.of", () => {
   test("the next reset of a subscription limit comes from the inference service's answer", () => {
     const problem = TurnProblems.of({
       kind: "provider.rate-limit",
-      text: "Every seat is at its limit.",
-      body: JSON.stringify({ error: { code: "subscription_limit_reached", resetsAt: "2026-11-30T14:00:00.000Z" } }),
+      text: "All anthropic subscriptions of the organization are at their limit. The first is free again at 2026-11-30T14:00:00.000Z. (subscription_limit_reached)",
+      body: JSON.stringify({ error: { code: "subscription_limit_reached" } }),
       assistants: [assistant("anthropic", "claude-opus-5-5")],
       modelNames: new Map(),
       providerNames: new Map([["anthropic", "Anthropic"]]),
