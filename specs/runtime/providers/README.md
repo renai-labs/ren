@@ -1,6 +1,6 @@
-# Providers: models, own keys and subscriptions through one gateway
+# Providers: models, own keys and subscriptions from model providers
 
-Status: designed, not built. Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
+Status: designed, not built. 25 Nov 2026: model providers as plug-ins (P27, §6). Tasks: RENAI-235 (model catalog refresh), RENAI-244 (provider pattern for own keys).
 
 This file is the core of the spec. The references hold the detail:
 
@@ -10,7 +10,7 @@ This file is the core of the spec. The references hold the detail:
 | [`references/console.md`](references/console.md)   | The OpenCode Console and what Ren takes from it                             |
 | [`references/opencode.md`](references/opencode.md) | The OpenCode facts the design uses, with file and line                      |
 
-The model gateway is a separate, closed service. This spec states only what Ren needs from it (§10).
+Ren core knows no provider by name. It gets cards and models from **model providers**: Effect plug-ins that the deployment chooses (§6). Hosted Ren uses one, the model gateway: a separate, closed service. This spec states only what Ren needs from it (§10).
 
 ## 1. Goal
 
@@ -25,23 +25,25 @@ An organization uses models from three kinds of provider. Every model call goes 
 Done when:
 
 1. The Providers page works like the OpenCode Console Providers page (§5), with subscriptions as a method of the Anthropic and OpenAI cards.
-2. models.dev is the only source of models and providers. Nobody edits a model list by hand. A change reaches running brains through the push (§8).
-3. Every call goes brain → egress → gateway → vendor. The brain holds no secret, and Ren core stores no key or login.
-4. Subscriptions run on official clients only: the real `claude` program and OpenAI token sharing.
-5. A chat shows which provider runs its model, and warns at 75, 80, 85, 90, 95 and 100% of a limit.
-6. Every gate in §13.1 passes.
+2. Each model provider supplies its own cards and models. Ren core reads no model source and has no provider names in its code. The gateway's source is models.dev; nobody edits a model list by hand. A change reaches running brains through the push (§8).
+3. A self-hosted Ren plugs in its own model provider, such as its own LiteLLM, without a change to Ren core.
+4. Every call goes brain → egress → gateway → vendor. The brain holds no secret, and Ren core stores no key or login.
+5. Subscriptions run on official clients only: the real `claude` program and OpenAI token sharing.
+6. A chat shows which provider runs its model, and warns at 75, 80, 85, 90, 95 and 100% of a limit.
+7. Every gate in §13.1 passes.
 
 ## 2. Words
 
-| Word        | Meaning                                                                                                                      |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Card        | One provider on the Providers page: Ren, Anthropic, OpenAI, Google, …                                                        |
-| Method      | How a card connects: `key` or `subscription`. Only Anthropic and OpenAI have `subscription`                                  |
-| Seat        | One connected subscription account. An organization can have several per vendor                                              |
-| Gateway     | The closed model gateway service. It holds keys and logins, chooses seats, checks credit and the free cap, and calls vendors |
-| Free model  | A Ren model with price 0 on models.dev                                                                                       |
-| Free cap    | 100 free-model requests per organization per UTC day                                                                         |
-| Push / pull | Push: Ren tells a brain to pull now. Pull: the brain fetches its full state (§8)                                             |
+| Word           | Meaning                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model provider | An Effect plug-in in Ren core that supplies cards, their models, connections and meters (§6). The gateway is one; a self-hosted LiteLLM is another |
+| Card           | One provider on the Providers page: Ren, Anthropic, OpenAI, Google, …. A model provider supplies it                                                |
+| Method         | How a card connects: `key` or `subscription`. Only Anthropic and OpenAI have `subscription`                                                        |
+| Seat           | One connected subscription account. An organization can have several per vendor                                                                    |
+| Gateway        | The closed model gateway service. It holds keys and logins, reads models.dev, chooses seats, checks credit and the free cap, and calls vendors     |
+| Free model     | A Ren model with price 0 on models.dev                                                                                                             |
+| Free cap       | 100 free-model requests per organization per UTC day                                                                                               |
+| Push / pull    | Push: Ren tells a brain to pull now. Pull: the brain fetches its full state (§8)                                                                   |
 
 ## 3. Decisions
 
@@ -51,12 +53,12 @@ Done when:
 | P2  | A subscription is a method inside the Anthropic or OpenAI card. One method is active per card                                                                                                           |
 | P3  | Each card has an on/off switch, Ren included. Ren off hides Ren's models, free models included                                                                                                          |
 | P4  | No automatic fallback and no fallback switch. After an error, the person picks another model and presses Continue                                                                                       |
-| P5  | The providers for own keys are the OpenCode Console's 37 providers ([`references/console.md`](references/console.md)). One key per provider per organization                                            |
+| P5  | The gateway's providers for own keys are the OpenCode Console's 37 providers ([`references/console.md`](references/console.md)). One key per provider per organization                                  |
 | P6  | Ren's card has a models list: one on/off switch per model. A new model is always on. Not in v1: several keys per provider, "who can use this", custom providers, budgets and reservations               |
 | P7  | Admins and owners change cards, methods, keys and Ren's model switches. Any member connects their own seat. A member removes their own seats; admins remove any seat                                    |
 | P8  | Seats serve the whole organization. Several seats per vendor spread the load; a chat sticks to one seat. Keys: one per provider                                                                         |
-| P9  | models.dev is the source. Ren core is the only reader for pickers and brains. Every 5 min with an ETag; the last good copy is kept                                                                      |
-| P10 | Ren's models come automatically from Ren's upstream provider on models.dev (a deployment setting): chat models with tools, not deprecated, minus a block list                                           |
+| P9  | The gateway reads models.dev every 5 min with an ETag and keeps the last good copy. Ren core and the brain do not read it                                                                               |
+| P10 | Ren's models come automatically from Ren's upstream provider on models.dev (a gateway setting): chat models with tools, not deprecated, minus a block list                                              |
 | P11 | A Ren model id is `ren/<canonical_id>` (`ren/anthropic/claude-opus-5-5`). A model without a `canonical_id` keeps its upstream id                                                                        |
 | P12 | A seat's models come from the vendor through the gateway. Names, limits and efforts come from models.dev                                                                                                |
 | P13 | Price = the models.dev API price. Billing applies the markup and holds the credit                                                                                                                       |
@@ -72,7 +74,9 @@ Done when:
 | P23 | For a seat, the banner shows the seat that served this chat's last call                                                                                                                                 |
 | P24 | The model chip shows `<model> · <card>`, with `(subscription)` or `(key)` on Anthropic and OpenAI                                                                                                       |
 | P25 | A session stores OpenCode's provider and model ids. A method change shows a "model switched" row at the next turn                                                                                       |
-| P26 | Model list changes reach brains through the push. A models.dev change notifies only organizations whose list changed. The 30 s pull stays as the backup                                                 |
+| P26 | Model list changes reach brains through the push. A change in a provider's models notifies only organizations whose list changed. The 30 s pull stays as the backup                                     |
+| P27 | Ren core is provider-agnostic. It holds settings, builds lists, pushes and renders. Everything about a provider comes from its model provider (§6.1). The deployment chooses the model providers        |
+| P28 | A self-hosted Ren can run without the gateway and without the egress: its model provider gives the brain a real address and key. Egress on or off for self-hosting is separate work                     |
 
 ## 4. Parts and responsibilities
 
@@ -83,12 +87,13 @@ Done when:
 │              │                         │              │  push: POST /ren/pull                      │  (OpenCode)      │
 └──────────────┘                         │              │ ─────────────────────────────────────────> │                  │
                                          └──────────────┘                                            └──────────────────┘
-       models.dev ──── read every 5 min ────>   │  §10 routes (signed token)                                   │ every call
-                                                │  card state, keys, connections,                              │ Bearer ren:MODELS
-                                                │  Ren models, brain keys                                      v
+                                                │  model provider: gateway (§6.2), §10 routes                  │ every call
+                                                │  cards, models, card state, keys,                            │ Bearer ren:MODELS
+                                                │  connections, meters, brain keys                             v
                                                 v                                                     ┌──────────────────┐
                                        ┌──────────────────────────┐   brain key                       │  egress          │
                                        │  Model gateway (closed)  │ <──────────────────────────────── │  swaps ren:MODELS│
+                                       │  reads models.dev        │                                   │                  │
                                        │                          │                                   └──────────────────┘
                                        │  keys and logins         │ ──────────> Anthropic, OpenAI, Google, … (vendors)
                                        │  seat choice             │
@@ -99,15 +104,15 @@ Done when:
                                        Ren usage_event ──> billing (markup, credit)
 ```
 
-| Part     | Responsible for                                                                                                                                                                                     | Holds secrets     |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| Ren core | organization settings (cards, methods, Ren model switches, default model); reads models.dev; builds each organization's model list; push and pull; Providers page and chat UI; warnings; usage rows | no                |
-| Brain    | runs chats on OpenCode; sends every call to the gateway; runs `claude` for Claude models on the Claude Code runtime                                                                                 | no (placeholders) |
-| Egress   | swaps `ren:MODELS` for the brain's gateway key; blocks `api.anthropic.com` from the brain                                                                                                           | the brain key     |
-| Gateway  | sign-in pages for subscriptions; keys and logins; seat choice; credit check and free cap; calls vendors; usage rows                                                                                 | yes               |
-| Billing  | markup and credit                                                                                                                                                                                   | —                 |
+| Part     | Responsible for                                                                                                                                                                                                          | Holds secrets     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| Ren core | organization settings (cards, methods, model switches, default model); the registry of model providers; builds each organization's model list from them; push and pull; Providers page and chat UI; warnings; usage rows | no                |
+| Brain    | runs chats on OpenCode; sends every call to the gateway; runs `claude` for Claude models on the Claude Code runtime                                                                                                      | no (placeholders) |
+| Egress   | swaps `ren:MODELS` for the brain's gateway key; blocks `api.anthropic.com` from the brain                                                                                                                                | the brain key     |
+| Gateway  | the gateway model provider's server side: its cards and their models (models.dev, Ren's list, seats); sign-in pages; keys and logins; seat choice; credit check and free cap; calls vendors; usage rows                  | yes               |
+| Billing  | markup and credit                                                                                                                                                                                                        | —                 |
 
-For a self-hosted Ren without the gateway, `Models.layerNone` stays: no models.
+A self-hosted Ren chooses other model providers (§6.3), or none: then it has no models.
 
 ## 5. UX
 
@@ -180,42 +185,68 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 4. The default model is the deployment setting `REN_DEFAULT_MODEL` (P15).
 5. The free cap is 100 per day. Free models can also be unavailable for everyone for a while; the error says "Free models are limited and not guaranteed. Add credit or connect a provider."
 
-## 6. Models and provider lists
+## 6. Model providers and model lists
 
-### 6.1 Reading models.dev
+### 6.1 The contract
 
-1. A `ModelCatalog` service in `core` with layers `modelsDev` and `fixture`. It reads `https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video` every 5 min with `If-None-Match`. A 304 does nothing.
-2. It keeps only the providers Ren offers: the 37 Console providers, Ren's upstream, Anthropic and OpenAI. It stores the normalized result and the ETag in table `model_catalog` and keeps the last good copy. At start without a copy it uses a bundled snapshot.
-3. A change starts a job that builds each organization's list (§6.5) and notifies only organizations whose list changed (§8).
-4. The brain no longer reads models.dev (already `models: { fetch: false }`, `cell/src/harness/opencode/server.ts:85,119`) and no longer fetches `/catalog` (`cell/src/model-discovery.ts` goes).
+A model provider is an Effect plug-in in `core`. It is built like a machine provider (`core/src/machine-provider.ts`, `brain-provider.ts`): an `Effect` that gives a `ModelProvider.Provider`, and a registry layer that takes a list of them. The registry refuses two cards with the same id. Ren core uses only this interface:
 
-Facts on 21 Nov 2026: the v2 catalog had 327 providers and 11.8 MB. `canonical_id` links one model across providers; 9 of 18 Anthropic models had none.
+| Member        | Gives                                                                                                                 | Replaces in Ren core                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `id`          | the plug-in's id: `gateway`, `litellm`                                                                                | —                                                      |
+| `cards`       | the cards it offers (below)                                                                                           | `ProviderCard.definitions`, the `ren` constant         |
+| `models`      | a card's models for an organization: `{ revision, models: Models.Info[] }`                                            | `ModelCatalog`, the Ren list rules, the seat models    |
+| `changed`     | a `Stream` of `{ card, organizationId? }`: a card's models changed for one organization, or for all                   | the models.dev job, `POST /internal/inference/changed` |
+| `access`      | how a brain reaches the models: base URL, key, headers                                                                | `Models.Gateway`                                       |
+| `connect`     | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test | the `RenInference` key and connect routes              |
+| `disconnect`  | removes a key or a seat                                                                                               | the same                                               |
+| `connections` | a card's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                             | the same                                               |
+| `card state`  | tells the provider a card's on/off, method and model switches, for its own refusals (`model_off`)                     | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
+| `meters`      | the meters of a chat's model: credit, free cap, seat limits                                                           | the gateway calls in `limits.ts`                       |
 
-### 6.2 Ren's models
+A card:
 
-| Rule     | Value                                                                                                                                                                                         |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source   | Ren's upstream provider on models.dev (`REN_MODELS_UPSTREAM`)                                                                                                                                 |
-| Kept     | type chat, tool calling, not deprecated, not in the block list (`REN_MODELS_BLOCK`), not an alias (an upstream id that starts with `~`, such as OpenRouter's `~anthropic/claude-opus-latest`) |
-| Id       | `ren/<canonical_id>`; without a `canonical_id`, `ren/<upstream id>`                                                                                                                           |
-| Free     | price 0 on models.dev                                                                                                                                                                         |
-| Price    | the models.dev price; billing applies the markup                                                                                                                                              |
-| Switches | per model; a new model is on                                                                                                                                                                  |
-| Runtime  | Claude models (`ren/anthropic/…`): `claude`. Others: HTTP                                                                                                                                     |
+| Field    | Values                                                                                                                                                                                |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`     | unique over all plug-ins: `ren`, `groq`, `anthropic`, …                                                                                                                               |
+| `name`   | `Groq`                                                                                                                                                                                |
+| `mark`   | the logo id                                                                                                                                                                           |
+| `payer`  | `ren` or `customer`                                                                                                                                                                   |
+| `auth`   | one or more of: `key` with its fields (name, label, secret, multiline, placeholder); `subscription` with its sign-in label; `operator` (no form: the deployment holds the credential) |
+| `models` | `shared` (the same list for every organization) or `organization` (depends on the organization: seats)                                                                                |
 
-Ren core sends this list to the gateway (§10) before it notifies brains, so the gateway knows a model before a picker shows it.
+The app renders a card's fields and meters as data. It knows no provider.
 
-### 6.3 Own-key models
+The deployment chooses the plug-ins in `server/src/main.ts`:
 
-The provider's models on models.dev: type chat, not deprecated. No per-model switch in v1.
+```ts
+ModelProvider.layer([ModelProviderGateway.provider]); // hosted Ren
+ModelProvider.layer([ModelProviderLiteLLM.provider]); // self-hosted: the owner's LiteLLM
+ModelProvider.layer([]); // no models
+```
 
-### 6.4 Subscription models
+With the egress, a brain has one model key (`ren:MODELS`), so a deployment that uses the egress runs one plug-in that gives a key. Several at once is part of the self-hosting work (P28).
 
-The gateway reports each seat's models in `GET /v1/connections` (§10). Ren core keeps them in `organization_seat_models`. A card's list is the union over the organization's seats, joined with models.dev for names, limits and efforts. A model that models.dev does not know keeps the vendor's id and default limits.
+### 6.2 The gateway plug-in (hosted Ren)
 
-### 6.5 An organization's list
+`core/src/model-provider/gateway.ts`. A client of the gateway's provider routes (§10). The gateway does the work:
 
-For each card that is on: the card's models (§6.2–6.4) minus switched-off Ren models. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free. Ren core stores a hash per organization in `organization_model_list` and compares it to decide on a push.
+1. **models.dev.** The gateway reads `https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video` every 5 min with `If-None-Match`, keeps only its cards' providers, and keeps the last good copy. Facts on 21 Nov 2026: 327 providers, 11.8 MB. `canonical_id` links one model across providers; 9 of 18 Anthropic models had none.
+2. **Cards.** Ren, the 37 Console providers, and the subscription method on Anthropic and OpenAI. One list in the gateway holds each card's fields and how the gateway calls it.
+3. **Ren's models.** Card `ren`, `shared`:
+
+| Rule    | Value                                                                                                                                                                                         |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source  | Ren's upstream provider on models.dev (`REN_MODELS_UPSTREAM`, a gateway setting)                                                                                                              |
+| Kept    | type chat, tool calling, not deprecated, not in the block list (`REN_MODELS_BLOCK`), not an alias (an upstream id that starts with `~`, such as OpenRouter's `~anthropic/claude-opus-latest`) |
+| Id      | `ren/<canonical_id>`; without a `canonical_id`, `ren/<upstream id>`                                                                                                                           |
+| Free    | price 0 on models.dev                                                                                                                                                                         |
+| Price   | the models.dev price; billing applies the markup                                                                                                                                              |
+| Runtime | Claude models (`ren/anthropic/…`): `claude`. Others: HTTP                                                                                                                                     |
+
+4. **Own-key models.** A vendor card's models on models.dev: type chat, not deprecated. `shared`.
+5. **Subscription models.** The union of the organization's seats' models, joined with models.dev for names, limits and efforts. A model that models.dev does not know keeps the vendor's id and default limits. `organization`.
+6. **Changes.** When a card's models change, the gateway calls `POST /internal/inference/changed {card, organizationId?}` (§10). The plug-in gives it to `changed`.
 
 Gateway names:
 
@@ -225,11 +256,30 @@ Gateway names:
 | Own key      | `<provider>/<model>` (`openai/gpt-6.1-sol`)                |
 | Subscription | `seat/<vendor>/<model>` (`seat/anthropic/claude-opus-5-5`) |
 
+### 6.3 The LiteLLM plug-in (self-hosted Ren)
+
+`core/src/model-provider/litellm.ts`. Settings: `LITELLM_URL`, `LITELLM_KEY`.
+
+| Member                                 | Value                                                                                                                                                                                               |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cards`                                | one card, `litellm`, named by the setting `LITELLM_NAME` (default `LiteLLM`), auth `operator`, payer `customer`, `shared`                                                                           |
+| `models`                               | `GET <LITELLM_URL>/model/info`: each model's name, context and output limits, input types, tool calling and price, where the LiteLLM owner set them. Absent values take default limits and no price |
+| `changed`                              | the plug-in reads `/model/info` every 5 min and reports a change when the answer changes                                                                                                            |
+| `access`                               | `LITELLM_URL` and `LITELLM_KEY`                                                                                                                                                                     |
+| `connect`, `disconnect`, `connections` | none: the owner configures LiteLLM                                                                                                                                                                  |
+| `meters`                               | none                                                                                                                                                                                                |
+
+### 6.4 An organization's list
+
+Ren core builds it from the registry and the organization's settings. For each card that is on: the card's models minus the models switched off. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free. Ren core stores a hash per organization in `organization_model_list` and compares it to decide on a push.
+
+On `changed` for a card and all organizations, Ren core reads the card's models once and rebuilds the lists of the organizations that have the card on. Only organizations whose hash changed are notified (gate GR3).
+
 ## 7. The brain
 
 ### 7.1 What the pull carries
 
-`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.5): per card the id, name, gateway base URL and headers, and the models with their gateway names, runtime and metadata. The key is always the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
+`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per card the id, name, base URL and headers from its model provider's `access`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
 
 ### 7.2 HTTP runtime
 
@@ -275,14 +325,13 @@ Model lists rode only the 30 s pull until now: the brain fetched each provider's
 
 New rules (P26):
 
-| Change                                                                           | Written to                                                                  | Notify                                  |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------- |
-| Card on/off, method, key saved or removed                                        | `organization_provider`                                                     | `org:<id>`                              |
-| Ren model switch                                                                 | `organization_ren_model`                                                    | `org:<id>`                              |
-| Seat connected, removed, or its models changed (the gateway tells Ren core, §10) | `organization_seat_models`                                                  | `org:<id>`                              |
-| models.dev changed                                                               | `model_catalog`, then `organization_model_list` only where the hash changed | `org:<id>` for those organizations only |
+| Change                                                                            | Written to                                            | Notify                                  |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------- |
+| Card on/off, method, key saved or removed                                         | `organization_provider`                               | `org:<id>`                              |
+| Ren model switch                                                                  | `organization_ren_model`                              | `org:<id>`                              |
+| A provider's `changed`: one organization (a seat) or all (models.dev, Ren's list) | `organization_model_list` only where the hash changed | `org:<id>` for those organizations only |
 
-A Ren-wide `'all'` notify wakes every running brain (`specs/runtime/hot-reload/README.md` §2.5), so a models.dev change never sends `'all'`. The 30 s pull stays as the backup. The core and brain polls go.
+A Ren-wide `'all'` notify wakes every running brain (`specs/runtime/hot-reload/README.md` §2.5), so a provider change never sends `'all'`. The 30 s pull stays as the backup. The core and brain polls go.
 
 What a running chat sees:
 
@@ -313,7 +362,7 @@ Billing holds the credit and the markup. The gateway checks credit before each R
 | Ren credit   | `Billing.Summary` used ÷ granted (`schema/src/billing.ts:21-22`)    | the plan cycle         |
 | Free cap     | `GET /v1/usage/free`                                                | 00:00 UTC              |
 
-Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the chat's current model: the seat of the session's last `usage_event` with a `seat` (P23), or credit, or the free cap. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, meter and reset time.
+Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the chat's current model, from the `meters` of the card's model provider: the seat of the session's last `usage_event` with a `seat` (P23), or credit, or the free cap. The app reads it when a chat opens, after each turn and every 60 s while the chat is open. The `chat` package decides which step to show and remembers shown steps per chat, meter and reset time.
 
 ### 9.4 Errors
 
@@ -329,48 +378,49 @@ Delivery: a new endpoint `limits.get({ sessionId })` returns the meters for the 
 
 ## 10. Contract: Ren core → gateway
 
-Ren core calls the gateway with today's signed token (`core/src/ren-inference.ts`).
+The gateway plug-in (§6.2) and `RenInference` call the gateway with today's signed token (`core/src/ren-inference.ts`). The organization is in the token.
 
-| Route                                                                                | Status | Purpose                                                                                                                |
-| ------------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | `GET` adds each seat's models and plan                                                                                 |
-| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | brain key                                                                                                              |
-| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | —                                                                                                                      |
-| `PUT /v1/providers/:providerId {enabled, method}`                                    | new    | card state                                                                                                             |
-| `POST /v1/providers/:providerId/test {fields}`                                       | new    | test a key without saving; ok or the vendor's message                                                                  |
-| `PUT /v1/providers/:providerId/key {fields}`                                         | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them            |
-| `DELETE /v1/providers/:providerId/key`                                               | new    | remove the key                                                                                                         |
-| `PUT /v1/ren-models {revision, models, switches}`                                    | new    | Ren's model list (id, upstream id, prices, free) and the organizations' switches. Ren core notifies brains after a 200 |
-| `GET /v1/usage/free`                                                                 | new    | `{ used, limit, resetsAt }`                                                                                            |
-| `GET /v1/catalog`                                                                    | remove | —                                                                                                                      |
+| Route                                                                                | Status | Purpose                                                                                                       |
+| ------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/providers`                                                                  | new    | `cards`: the gateway's cards (§6.1)                                                                           |
+| `GET /v1/providers/:card/models`                                                     | new    | `models`: `{ revision, models }`. A `shared` card answers the same for every organization                     |
+| `PUT /v1/providers/:card {enabled, method, off}`                                     | new    | card state: on/off, method, and the models switched off. A switched-off model is refused with `403 model_off` |
+| `POST /v1/providers/:card/test {fields}`                                             | new    | test a key without saving; ok or the vendor's message                                                         |
+| `PUT /v1/providers/:card/key {fields}`                                               | new    | test, then store; returns `{ last4, testedAt }`. Ren core forwards the fields and never stores or logs them   |
+| `DELETE /v1/providers/:card/key`                                                     | new    | remove the key                                                                                                |
+| `POST /v1/connect`, `GET /v1/connections`, `PATCH/DELETE /v1/connections/:id`        | change | seats. `GET` adds each seat's card, plan and models                                                           |
+| `GET /v1/providers/:card/meters?sessionId=`                                          | new    | `meters`: credit, the free cap `{ used, limit, resetsAt }`, the seat meters                                   |
+| `POST /v1/keys {brainId, spaceId}`                                                   | keep   | `access`: the brain key                                                                                       |
+| inference keys, `POST /v1/harness-plans`, `DELETE /v1/members/:id`, `DELETE /v1/org` | keep   | not part of the model provider                                                                                |
+| `PUT /v1/ren-models`, `GET /v1/catalog`, `GET /v1/usage/free`                        | remove | the gateway builds Ren's list; the free cap is a meter                                                        |
 
-Gateway → Ren core: `POST /internal/inference/changed {organizationId}` when a seat or its models change, authenticated like usage ingest. Ren core reads `GET /v1/connections`, writes `organization_seat_models` and notifies.
+Gateway → Ren core: `POST /internal/inference/changed {card, organizationId?}` when a card's models change: a seat (one organization) or models.dev and Ren's list (no organization). Only the usage ingest key may call it.
 
 ## 11. Lifecycle states
 
-| State                    | What happens                                                                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Brain asleep             | Nothing. The pull at wake brings the newest list                                                                                       |
-| Brain waking             | The start pull brings the newest list. The Claude runtime starts `claude` with the new env                                             |
-| Mid-turn                 | §8 table. A seat that fills mid-turn: the gateway tries another seat                                                                   |
-| Brain down or restarting | The boot pull applies the list. No secret is lost: the brain holds none                                                                |
-| Gateway down             | Calls fail (`gateway_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error |
-| Ren core down            | Calls keep working. Settings and lists do not change until it is back                                                                  |
-| models.dev down          | The last good copy stays                                                                                                               |
-| A login's refresh fails  | The seat shows "Sign in again"                                                                                                         |
+| State                    | What happens                                                                                                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brain asleep             | Nothing. The pull at wake brings the newest list                                                                                                                                                     |
+| Brain waking             | The start pull brings the newest list. The Claude runtime starts `claude` with the new env                                                                                                           |
+| Mid-turn                 | §8 table. A seat that fills mid-turn: the gateway tries another seat                                                                                                                                 |
+| Brain down or restarting | The boot pull applies the list. No secret is lost: the brain holds none                                                                                                                              |
+| Gateway down             | Calls fail (`gateway_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error. `models` fails: Ren core keeps each organization's last list |
+| Ren core down            | Calls keep working. Settings and lists do not change until it is back                                                                                                                                |
+| models.dev down          | The gateway keeps its last good copy                                                                                                                                                                 |
+| A login's refresh fails  | The seat shows "Sign in again"                                                                                                                                                                       |
 
 ## 12. Work in Ren, by package
 
-| Package              | Work                                                                                                                                                                                                                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema`             | Provider settings shapes (card, method, key status, Ren model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                              |
-| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_seat_models`, `model_catalog`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                       |
-| `core`               | `ModelCatalog` and the list job; `Models.grant` and the pull from §6.5; `RenInference` client routes of §10; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; settings `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM`, `REN_MODELS_BLOCK` |
-| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                         |
-| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                              |
-| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                     |
-| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                           |
-| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                    |
+| Package              | Work                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                         |
+| `db`                 | Tables `organization_provider`, `organization_ren_model`, `organization_model_list`. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                                                |
+| `core`               | `ModelProvider` (contract, registry, layer); plug-ins `model-provider/gateway.ts` and `model-provider/litellm.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
+| `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                                                     |
+| `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                                                          |
+| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                                                 |
+| `chat`               | Error codes (§9.4); banner rules; card labels from data                                                                                                                                                                                                                                                                                                                       |
+| `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                                                |
 
 ## 13. Tests
 
@@ -380,34 +430,34 @@ Done ([`references/gates.md`](references/gates.md)): G1, G4, G5, G6.
 
 Pending (Ren side):
 
-| Gate | Question                                                                                                | When                    |
-| ---- | ------------------------------------------------------------------------------------------------------- | ----------------------- |
-| GR1  | The SDK's Linux `claude` binary runs in a real brain (own E2B template) and a turn reaches the gateway  | with the Claude runtime |
-| GR2  | The egress blocks `api.anthropic.com` from the brain, and a turn still works                            | with the Claude runtime |
-| GR3  | A models.dev change notifies only the organizations whose list changed, under load (many organizations) | with the list job       |
+| Gate | Question                                                                                               | When                    |
+| ---- | ------------------------------------------------------------------------------------------------------ | ----------------------- |
+| GR1  | The SDK's Linux `claude` binary runs in a real brain (own E2B template) and a turn reaches the gateway | with the Claude runtime |
+| GR2  | The egress blocks `api.anthropic.com` from the brain, and a turn still works                           | with the Claude runtime |
+| GR3  | A provider change for all organizations notifies only the organizations whose list changed, under load | with the list job       |
 
 ### 13.2 Package tests
 
 Only rules that the code does not show:
 
-| Package | Test                                                                                                                                                                    |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`  | the Ren model filter (§6.2); an organization's list from settings, seats and the catalog; only organizations whose list changed are notified; the default model setting |
-| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                         |
-| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                              |
+| Package | Test                                                                                                                                                                                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`  | the registry refuses a duplicate card; an organization's list from settings and two plug-ins; a `changed` for all organizations notifies only those whose list changed; the LiteLLM plug-in reads `/model/info` from a local LiteLLM; the default model setting |
+| `cell`  | `claude-agent` stays when Ren sends other providers; the Claude runtime env; ChatGPT refusal codes stop a retry                                                                                                                                                 |
+| `chat`  | each banner step shows once per chat, meter and reset period; each error code maps to its text and actions                                                                                                                                                      |
 
 ### 13.3 End-to-end (`packages/e2e/chaos`)
 
-| Case                          | Covers                                                                                                                                   | States                                    |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Catalog                       | a local models.dev with an ETag; a new model reaches the picker after one push; 304 changes nothing; models.dev down keeps the last copy | Ren core restart while models.dev is down |
-| Own key                       | save with a failed and a passing test; a turn; payer `customer`; key removed mid-turn → next call `provider_not_connected`               | mid-turn, asleep                          |
-| Claude seat (live test seat)  | a turn on `claude`; usage row names the seat; banner at 75%                                                                              | waking, `claude` idle 5 min               |
-| Two Claude seats              | stickiness per chat; one seat full → the next try uses the other; no error shown                                                         | mid-turn                                  |
-| ChatGPT seat (live test seat) | a turn; refusal code text                                                                                                                | mid-turn                                  |
-| Ren credit                    | cost at the models.dev price; banners; 0 credit → `insufficient_credits`                                                                 | credit runs out mid-turn                  |
-| Ren free                      | 100 requests, then `free_limit_reached`; reset at 00:00 UTC under `TestClock`                                                            | —                                         |
-| Hot reload                    | card off mid-turn; method change → switch row; Ren model switched off leaves the picker                                                  | mid-turn, asleep, restart                 |
+| Case                          | Covers                                                                                                                     | States                                     |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Catalog                       | a new model in the gateway's models.dev reaches the picker after one push; gateway down keeps the last list                | Ren core restart while the gateway is down |
+| Own key                       | save with a failed and a passing test; a turn; payer `customer`; key removed mid-turn → next call `provider_not_connected` | mid-turn, asleep                           |
+| Claude seat (live test seat)  | a turn on `claude`; usage row names the seat; banner at 75%                                                                | waking, `claude` idle 5 min                |
+| Two Claude seats              | stickiness per chat; one seat full → the next try uses the other; no error shown                                           | mid-turn                                   |
+| ChatGPT seat (live test seat) | a turn; refusal code text                                                                                                  | mid-turn                                   |
+| Ren credit                    | cost at the models.dev price; banners; 0 credit → `insufficient_credits`                                                   | credit runs out mid-turn                   |
+| Ren free                      | 100 requests, then `free_limit_reached`; reset at 00:00 UTC under `TestClock`                                              | —                                          |
+| Hot reload                    | card off mid-turn; method change → switch row; Ren model switched off leaves the picker                                    | mid-turn, asleep, restart                  |
 
 ### 13.4 App (Playwright)
 
@@ -416,21 +466,22 @@ Only rules that the code does not show:
 
 ## 14. Removed and superseded
 
-| Item                                                                                           | Fate                     |
-| ---------------------------------------------------------------------------------------------- | ------------------------ |
-| `specs/runtime/media-models.md` §8 items B0–B4 (own key through the egress)                    | replaced by this spec    |
-| `core/src/ren-inference/provider.ts` 30 s poll of `/v1/catalog`; `cell/src/model-discovery.ts` | removed                  |
-| `vendorNames`, `providerLabels`                                                                | removed; names from data |
+| Item                                                                                           | Fate                                          |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `specs/runtime/media-models.md` §8 items B0–B4 (own key through the egress)                    | replaced by this spec                         |
+| `core/src/ren-inference/provider.ts` 30 s poll of `/v1/catalog`; `cell/src/model-discovery.ts` | removed                                       |
+| `vendorNames`, `providerLabels`                                                                | removed; names from data                      |
+| `Models.layerNone`; `ProviderCard.definitions` and the `ren` card constant in Ren core         | an empty registry; cards from model providers |
 
 ## 15. Build order (Ren side)
 
-| Step | Work                                                                                         | Done when                                                        |
-| ---- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 1    | `ModelCatalog`, organization tables, the list job, push; send Ren's models to the gateway    | a models.dev change reaches only affected organizations' pickers |
-| 2    | Providers API (schema, db, core, protocol, server)                                           | cards, keys and switches round-trip; members cannot change cards |
-| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                  | the Playwright journeys of §13.4 pass                            |
-| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress  | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2          |
-| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases | §13.3 passes                                                     |
+| Step | Work                                                                                                             | Done when                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 1    | `ModelProvider` contract and registry, the gateway and LiteLLM plug-ins, organization tables, the list job, push | a provider change reaches only affected organizations' pickers; a self-hosted Ren lists its LiteLLM's models |
+| 2    | Providers API (schema, db, core, protocol, server)                                                               | cards, keys and switches round-trip; members cannot change cards                                             |
+| 3    | App: Providers page, Add provider, Ren models page, picker rows, model chip                                      | the Playwright journeys of §13.4 pass                                                                        |
+| 4    | Brain: pull shape, `model-providers.ts`, Claude runtime, ChatGPT settings, image and egress                      | a turn on a Claude seat and on a ChatGPT seat; GR1, GR2                                                      |
+| 5    | Warnings and errors: `limits.get`, usage fields, banner rules, error codes; end-to-end cases                     | §13.3 passes                                                                                                 |
 
 ## 16. Settled details
 
@@ -438,4 +489,4 @@ Only rules that the code does not show:
 | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | A "Use this model on Ren" button on errors                                                                                            | No. The error card offers "Change model" only (P4)                                                         |
 | The fields of Azure, AWS Bedrock, Google Vertex AI, Cloudflare AI Gateway, Cloudflare Workers AI and Databricks in the Connect dialog | The builder takes them from each provider's documentation and from the credential values the gateway needs |
-| The values of `REN_DEFAULT_MODEL`, `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK`                                                       | Deployment settings. The owner sets and changes them; no code change                                       |
+| The values of `REN_DEFAULT_MODEL` (Ren), `REN_MODELS_UPSTREAM` and `REN_MODELS_BLOCK` (gateway)                                       | Deployment settings. The owner sets and changes them; no code change                                       |
