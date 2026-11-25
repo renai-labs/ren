@@ -2,20 +2,22 @@
 
 A `.ren/` folder declares a whole organization. `ren infra validate`, `plan`, `apply` and `pull` are built (`packages/cli`, `core/src/infra-specs.ts`). `Infra.Spec` in `@ren/schema` (`schema/src/infra.ts`) is the one definition of the folder and is the authority for its shape.
 
-Apply works today for org settings, the organization's environment templates (`environments.yaml`, keyed by template name), shared spaces with their runtime (`brainScope`, `brain` and `hand` in `space.yaml`, naming templates by name), agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (with their `mode`; the URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
+Apply works today for org settings, the organization's environment templates (`environments.yaml`, keyed by template name), shared spaces with their runtime (`brainScope`, `brain` and `hand` in `space.yaml`, naming templates by name), agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (with their `mode`; the URL token and signing secret stay live state), GitHub and Slack channel mappings, the organization's shared app profiles (`profiles` in `deploy.yaml`), and the spaces listed on them. The rest of this file is not built.
 
 ## 1. Parts that apply refuses
 
 `plan` reports each of these as a problem, or leaves it as it is (`core/src/infra-specs.ts`, `core/src/infra-specs/environments.ts`):
 
-| Part                                                    | Today                                                                                                       |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| A brain or hand that names a template with no image yet | A problem: apply does not wait for a build. Apply again once it is built.                                   |
-| Archiving a template that a space outside the spec uses | A problem, as for any space whose brains or chats still run on it.                                          |
-| A renamed environment template                          | Archive and create: templates have no `renamedFrom`.                                                        |
-| A webhook that is declared `live` and cannot go live    | A problem: its signature needs a signing secret that it does not have, or its app no longer has the preset. |
-| One-time schedules and schedules that send to a chat    | Not managed: apply leaves them as they are.                                                                 |
-| Linear channel mappings                                 | Not managed: Ren has no Linear channel provider yet.                                                        |
+| Part                                                                | Today                                                                                                       |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| A brain or hand that names a template with no image yet             | A problem: apply does not wait for a build. Apply again once it is built.                                   |
+| Archiving a template that a space outside the spec uses             | A problem, as for any space whose brains or chats still run on it.                                          |
+| A renamed environment template                                      | Archive and create: templates have no `renamedFrom`.                                                        |
+| A webhook that is declared `live` and cannot go live                | A problem: its signature needs a signing secret that it does not have, or its app no longer has the preset. |
+| One-time schedules and schedules that send to a chat                | Not managed: apply leaves them as they are.                                                                 |
+| Linear channel mappings                                             | Not managed: Ren has no Linear channel provider yet.                                                        |
+| The link from a shared profile to a profile of an app it depends on | Not managed: apply leaves links as they are.                                                                |
+| Private app profiles, and the credentials of any profile            | Not managed: they belong to a person, and credentials are secrets.                                          |
 
 Rules that hold for these parts:
 
@@ -23,6 +25,7 @@ Rules that hold for these parts:
 2. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it. Channel mappings are the exception: a mapping has no archived state, so apply removes it the way unmapping a place in the app does, and the row is deleted.
 3. `mode` in `webhooks.yaml` is `listening` or `live`. Without it, the webhook is listening. Apply makes a webhook that is declared `live` live in the step that creates it. Apply cannot set a signing secret: apply the webhook as listening, set the secret in the app, then declare it `live`. A mode that changed in Ren since the last pull or apply, by a person or by Ren itself (for example after the parser broke), plans as changed in Ren. Apply leaves it, and `pull` writes it into the folder. A change of only the mode keeps the owner of the webhook, unless the owner left the space. A change to the message, the parser or the agent makes the person who applies it the owner.
 4. A key that the spec does not define is an error, never ignored. `validate`, `plan`, `apply` and `pull` report it at its file and field with the keys that the place allows, and `/infra/pull`, `/infra/plan` and `/infra/apply` refuse a payload that has one with a 400. The rest of a `SKILL.md` frontmatter belongs to the skill format, and an environment template's `config` belongs to its provider, so neither is checked.
+5. `profiles.<app>.<slug>` in `deploy.yaml` declares a shared profile with its `name`, and `allSpaces: true` to share it with every space. Without `allSpaces`, it reaches the spaces whose `spaces.<slug>.profiles` list it. Apply creates a declared profile without credentials, renames it, and turns `allSpaces` on or off; turning it off lists the declared spaces in the same call. Apply never deletes a profile: it leaves a live profile that `deploy.yaml` does not declare as it is, including the profiles that Ren makes for a new app and its dependencies. Turning `allSpaces` off for a profile that no space lists would delete it and its credentials, so plan reports it as a problem.
 
 ## 2. Listings and seeds
 
