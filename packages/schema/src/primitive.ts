@@ -24,7 +24,7 @@ export const Slug = Schema.String.check(
 ).annotate({ identifier: "Primitive.Slug" })
 
 export const HttpsUrl = Schema.String.check(
-  Schema.makeFilter((url) => URL.parse(url)?.protocol === "https:" || "an https URL"),
+  Schema.makeFilter((url) => URL.parse(url)?.protocol === "https:" || "Use an https URL."),
 ).annotate({ identifier: "Primitive.HttpsUrl" })
 
 export interface List {
