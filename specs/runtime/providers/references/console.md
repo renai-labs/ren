@@ -6,7 +6,7 @@ The OpenCode Console (`opencode.ai/console`) is the model for Ren's Providers an
 
 The page says "Connect providers with your own keys. OpenCode's managed models are on Models." It has an empty state, a **Connect Provider** button and a side list of popular providers (Anthropic, OpenAI, Google, Azure, AWS Bedrock, Google Vertex AI) with their model counts.
 
-**Connect Provider** opens a searchable grid. Each card shows the logo, the name, "N models" (a link to models.dev), the AI SDK package and **Connect**. **Add Custom Provider** is at the top.
+**Connect Provider** opens a searchable grid. Each tile shows the logo, the name, "N models" (a link to models.dev), the AI SDK package and **Connect**. **Add Custom Provider** is at the top.
 
 The 37 providers: Anthropic, OpenAI, Google, Azure, AWS Bedrock, Google Vertex AI, xAI, Meta, Z.AI, DeepSeek, NVIDIA, MiniMax, Moonshot AI, Alibaba, Cohere, Baseten, Cerebras, Chutes, Cloudflare AI Gateway, Cloudflare Workers AI, Databricks, DeepInfra, DigitalOcean, Fireworks AI, Groq, Together AI, Thinking Machines, Hugging Face, Mistral, Ollama Cloud, OpenRouter, Poolside, SiliconFlow, Vultr, Venice AI, Vercel AI Gateway, Xiaomi. LiteLLM and Portkey are listed as custom gateways: an address and a key, with no models.dev list.
 
