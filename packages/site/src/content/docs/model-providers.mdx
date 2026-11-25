@@ -1,8 +1,43 @@
 ---
 title: Model Providers
 icon: Server
-description: This page is not written yet.
-summary: Pick models and bring your own keys
+description: Choose the model for each chat, set the default model, run agents on your own Claude or ChatGPT subscription, and create keys to call Ren's models from other tools.
+summary: Which models run your agents, and who pays
 ---
 
-This page is not written yet.
+Ren runs your agents on models from Anthropic, OpenAI, Google and other providers. By default, model calls use Ren credits. You can also run them on your organization's own Claude or ChatGPT subscription.
+
+<Screenshot
+  shot="model-providers/providers"
+  alt="Settings Providers with the Anthropic and OpenAI tabs, Inference keys and Connect Claude"
+  caption="Settings → Providers."
+/>
+
+## Pick a model
+
+In a [chat](/docs/chats/#model), select the model name in the composer, or press `⌘` + `'`. Next to it, pick the effort for models that think longer on hard work.
+
+When nobody picks one, Ren uses the first that is set: the chat's model, the [agent's](/docs/agents/), the [space's](/docs/spaces/#settings) **Default model**, the [organization's](/docs/organization/#default-model), then Ren's own default.
+
+## Run on your own subscription
+
+If your organization already pays for Claude or ChatGPT, agents can run on that subscription instead of Ren credits.
+
+1. An admin opens **Settings → Providers** and picks **Anthropic** or **OpenAI**.
+2. Select **Connect Claude** or **Connect ChatGPT**, and sign in to the subscription in the tab that opens.
+
+The subscription shows with its usage limits and when they reset. Calls to that provider's models then use it. When the sign-in expires, it shows **Expired**: sign in again to keep using it.
+
+## Call Ren's models from other tools
+
+An inference key lets Claude Code, Codex or your own scripts call the models Ren offers, billed to your organization.
+
+1. Open **Settings → Providers → Inference keys** and select **Create inference key**.
+2. Name it, such as `Work laptop`, and pick when it expires.
+3. Copy the key and the base URL into the tool. Ren shows the key only once.
+
+Each key shows its calls, tokens and cost. **Revoke** stops it at once. For setup in each tool, see [Inference setup](/docs/developers/inference-setup/).
+
+## Pricing
+
+Model and tool prices come from your [plan](/docs/billing/). See what you spent on [Usage](/docs/usage/), and the plans on the [pricing page](/pricing/).
