@@ -19,20 +19,19 @@ A chat is a conversation with Ren in a [space](/docs/spaces/). Ren uses the inst
 
 1. Select **New Chat** in the sidebar.
 
-2. Check **Working in** above the composer. It shows the space of the chat. Select it to choose another space.
+2. Pick the space to chat in from **Working in** above the composer.
 
 3. Type your request and press Enter.
 
 </Steps>
 
-A chat can also start from a [channel](/docs/channels/), a [schedule](/docs/automations/) or a [task](/docs/tasks/). Filter all your chats by space, status, where they started or when they were updated from **Chats** in the sidebar.
+A chat can also start from a [channel](/docs/channels/), an [automation](/docs/automations/) or a [task](/docs/tasks/).
 
-## Who can see a chat
+**Chats** in the main sidebar and the [Inbox](/docs/inbox/) of a space list all your chats and that space's chats. Filter them by space, status, where they started or when they last changed.
 
-| Space of the chat  | Who can see it            |
-| ------------------ | ------------------------- |
-| A shared space     | Every member of the space |
-| Your private space | Only you                  |
+## Chat visibility
+
+Every member of a space can see its chats. Chats in your personal space are visible only to you.
 
 ## Model
 
@@ -42,7 +41,7 @@ A new model applies from your next message. If you do not pick one, Ren uses the
 
 ## Mentions
 
-Type `@` in the composer. Pick a category, then the item. The mention applies to that message only.
+Type `@` in the composer, then pick a category and an item to mention it in that message.
 
 <Screenshot
   shot="chats/mentions"
@@ -50,14 +49,14 @@ Type `@` in the composer. Pick a category, then the item. The mention applies to
   caption="Type @ to open the mention menu."
 />
 
-| Category     | What Ren gets                                                              |
-| ------------ | -------------------------------------------------------------------------- |
-| Tasks        | A link to the task.                                                        |
-| Chats        | The ID of the chat, so Ren can read it.                                    |
-| Apps         | Access to the app. If it is not connected, Ren shows a card to connect it. |
-| Agents       | The name of the agent, so you can hand work to it.                         |
-| Files        | The path of the file on the computer of the chat or in the space drive.    |
-| Repositories | The repository to work in.                                                 |
+| Category     | What Ren gets                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| Tasks        | A link to the task.                                                                               |
+| Chats        | The ID of the chat, so Ren can read it.                                                           |
+| Apps         | Ren uses that app for the request. If the space can't use it yet, Ren shows a card to connect it. |
+| Agents       | The name of the agent, so you can hand work to it.                                                |
+| Files        | The path of the file on the computer of the chat or in the space drive.                           |
+| Repositories | The repository to work in.                                                                        |
 
 ## Attach files
 
@@ -161,7 +160,7 @@ To run one command on the computer of the chat without opening a terminal, type 
   caption="Type ! to run a command."
 />
 
-Type the command and press Enter. The command and its output show as a step in the chat. Ren does not reply to it, but it reads the command and the output with your next message, so you can ask about them.
+Type the command and press Enter. It runs in the background on the computer of the chat, and its output shows in the chat when it finishes. Ren doesn't answer it, but it sees the command and its output with your next message, so you can ask about them.
 
 To go back to messages, press Esc, or press Backspace in the empty composer.
 
