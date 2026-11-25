@@ -41,12 +41,15 @@ describe("OrganizationSettings", () => {
     }),
   )
 
-  it.live("another org's settings are not found", () =>
+  it.live("the org's slug names its settings; another org's settings are not found, by ID or slug", () =>
     Effect.gen(function* () {
       const organization = yield* OrganizationSettings.Service
-      const admin = yield* Seed.actor(yield* Seed.organization(), "admin")
+      const own = yield* Seed.organization()
+      const admin = yield* Seed.actor(own, "admin")
       const other = yield* Seed.organization()
+      expect((yield* organization.get(admin, own.toLowerCase())).id).toBe(own)
       expect((yield* Effect.flip(organization.get(admin, other)))._tag).toBe("Primitive.NotFound")
+      expect((yield* Effect.flip(organization.get(admin, other.toLowerCase())))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(organization.update(admin, other, { settings })))._tag).toBe("Primitive.NotFound")
     }),
   )

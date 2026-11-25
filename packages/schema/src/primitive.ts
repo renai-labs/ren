@@ -1,6 +1,6 @@
 export * as Primitive from "./primitive.js"
 
-import { Schema } from "effect"
+import { Context, Effect, Option, Schema, SchemaAST, SchemaIssue, SchemaTransformation } from "effect"
 import { Pagination } from "./pagination.js"
 import { WriteResult } from "./write-result.js"
 
@@ -22,6 +22,50 @@ export const Slug = Schema.String.check(
     message: "Use lowercase letters and digits, joined by single dashes.",
   }),
 ).annotate({ identifier: "Primitive.Slug" })
+
+const named = [
+  "space",
+  "agent",
+  "app",
+  "app-profile",
+  "task",
+  "schedule",
+  "webhook",
+  "environment-template",
+  "organization-settings",
+] as const
+
+export type Named = (typeof named)[number]
+
+export class Resolver extends Context.Service<
+  Resolver,
+  { readonly resolve: (primitive: Named, name: string) => Effect.Effect<string, SchemaIssue.Issue> }
+>()("@ren/schema/Primitive/Resolver") {}
+
+export const reference = <ID extends Schema.Codec<string, string>>(primitive: Named, id: ID, description: string) =>
+  Schema.String.annotate({ description, reference: primitive }).pipe(
+    Schema.decodeTo(
+      id,
+      SchemaTransformation.transformEffect({
+        decode: (value: string) =>
+          Schema.is(id)(value)
+            ? Effect.succeed(value)
+            : Effect.flatMap(
+                Effect.serviceOption(Resolver),
+                Option.match({
+                  onNone: () => Effect.succeed(value),
+                  onSome: (resolver) => resolver.resolve(primitive, value),
+                }),
+              ),
+        encode: (value: string) => Effect.succeed(value),
+      }),
+    ),
+  )
+
+export const referenced = (schema: Schema.Top): Named | undefined => {
+  const value = SchemaAST.resolveAt<unknown>("reference")(SchemaAST.toEncoded(schema.ast))
+  return typeof value === "string" ? named.find((each) => each === value) : undefined
+}
 
 export const HttpsUrl = Schema.String.check(
   Schema.makeFilter((url) => URL.parse(url)?.protocol === "https:" || "Use an https URL."),

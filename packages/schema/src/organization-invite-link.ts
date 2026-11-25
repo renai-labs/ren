@@ -43,7 +43,7 @@ export const List = Schema.Struct({ items: Schema.Array(Info) }).annotate({
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceIds: Schema.Array(Space.ID).annotate({
+  spaceIds: Schema.Array(Space.Ref).annotate({
     description:
       "Shared spaces that you are in. Ren adds the organization’s first space to the link when it is not here.",
   }),

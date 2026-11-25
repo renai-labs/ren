@@ -15,6 +15,8 @@ import { TaskLink } from "./task-link.js"
 export const ID = Identifier.make("tsk", "Task.ID")
 export type ID = typeof ID.Type
 
+export const Ref = Primitive.reference("task", ID, "The task’s number, such as REN-12, or its ID.")
+
 export const Status = Schema.Literals(["backlog", "todo", "in_progress", "done", "dismissed"]).annotate({
   identifier: "Task.Status",
   description:
@@ -153,14 +155,14 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.Ref),
   status: Schema.optional(Status).annotate({ description: "Only this status. Wins over `includeDone`." }),
   includeDone: Schema.optional(Schema.Boolean).annotate({
     description:
       "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks: `backlog`, `todo` and `in_progress`.",
   }),
   priority: Schema.optional(Priority),
-  agentId: Schema.optional(Agent.ID),
+  agentId: Schema.optional(Agent.Ref),
   ownerId: Schema.optional(Auth.UserID),
   search: Search.field("the title, the description or a label, or be the task’s number (`12`, `#12` or `ENG-12`)"),
   label: Schema.optional(Label.Name).annotate({ description: "A label name, in any case." }),
@@ -169,8 +171,8 @@ export const ListInput = Schema.Struct({
     description:
       "Only tasks that link this URL. A pull request, Linear issue or Slack thread matches however its URL is written.",
   }),
-  parentId: Schema.optional(Schema.Union([ID, Schema.Literal("none")])).annotate({
-    description: "A task ID: only its subtasks, oldest first. `none`: only tasks that are not subtasks.",
+  parentId: Schema.optional(Schema.Union([Schema.Literal("none"), Ref])).annotate({
+    description: "A task: only its subtasks, oldest first. `none`: only tasks that are not subtasks.",
   }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Task.ListInput" })
@@ -179,7 +181,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Task.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
   title: Title,
   description: Schema.optional(Schema.String),
   status: Schema.optional(Status),
@@ -187,12 +189,12 @@ export const CreateInput = Schema.Struct({
   labels: Schema.optional(Labels),
   links: Schema.optional(Links),
   dueAt: Schema.optional(Schema.DateTimeUtc),
-  agentId: Schema.optional(Agent.ID).annotate({
+  agentId: Schema.optional(Agent.Ref).annotate({
     description:
       "The agent that has the task. Creating never starts it. Without it, an agent of the space’s factory that creates the task holds it.",
   }),
   ownerId: Schema.optional(Auth.UserID).annotate({ description: "The person responsible for the task." }),
-  parentId: Schema.optional(ID).annotate({ description: parentDescription }),
+  parentId: Schema.optional(Ref).annotate({ description: parentDescription }),
 }).annotate({ identifier: "Task.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
@@ -207,7 +209,7 @@ export const UpdateInput = Schema.Struct({
   removeLinks: Schema.optional(Schema.Array(Schema.Union([TaskLink.ID, TaskLink.Url]))).annotate({
     description: "Links to remove, by ID or by URL.",
   }),
-  parentId: Schema.optional(Schema.NullOr(ID)).annotate({
+  parentId: Schema.optional(Schema.NullOr(Ref)).annotate({
     description: `${parentDescription} Null makes it a task of its own. A task that has subtasks cannot become one.`,
   }),
 }).annotate({
@@ -217,12 +219,12 @@ export const UpdateInput = Schema.Struct({
 
 export interface AssignInput extends Schema.Schema.Type<typeof AssignInput> {}
 export const AssignInput = Schema.Struct({
-  agentId: Schema.optional(Schema.NullOr(Agent.ID)).annotate({
+  agentId: Schema.optional(Schema.NullOr(Agent.Ref)).annotate({
     description:
       "The new agent, or null for none. An agent whose start message lists handoff choices can hand off only to those agents.",
   }),
   ownerId: Schema.optional(Schema.NullOr(Auth.UserID)).annotate({ description: "The new owner, or null for none." }),
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description:
       "Moves the task and its subtasks to this space. An owner who is not a member of the space is cleared, and so is a subtask’s agent that the space cannot use. A subtask moves only with its parent.",
   }),
@@ -288,7 +290,7 @@ export type FinishInput = typeof FinishInput.Type
 export const definition = Primitive.define({
   name: "task",
   plural: "tasks",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

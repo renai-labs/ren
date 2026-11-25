@@ -384,7 +384,7 @@ export const Info = Schema.Struct({
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
   owner: Schema.optional(OwnerKind),
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.Ref),
   type: Schema.optional(Type),
   search: Search.field("the label or the name"),
   ...Pagination.fields(50),
@@ -449,7 +449,7 @@ export const MoveInput = Schema.Struct({ owner: LooseOwner }).annotate({ identif
 
 export interface ConnectInput extends Schema.Schema.Type<typeof ConnectInput> {}
 export const ConnectInput = Schema.Struct({
-  profileId: AppIdentity.ProfileID,
+  profileId: AppIdentity.ProfileRef,
   item: Schema.Struct({ mcp: Primitive.Slug }),
   reconnect: Schema.optional(Schema.Boolean),
   returnTo: Schema.optional(Auth.MobileReturnTo),

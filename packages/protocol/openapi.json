@@ -213,6 +213,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Return one page of the spaces that the caller can see.",
@@ -383,7 +393,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -479,7 +489,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -557,7 +567,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -645,7 +655,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -719,6 +730,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -904,7 +925,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "The space whose requests to list; its members only. Without it, the caller’s own requests."
@@ -973,6 +995,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -1342,7 +1374,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -1410,7 +1442,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -1638,6 +1670,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Make a link that brings anyone who opens it into the organization as a member, and into the chosen shared spaces. Owners and admins only. The organization’s first space is always on the link.",
@@ -1692,6 +1734,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -1913,6 +1965,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Return one page of the environment-templates that the caller can see.",
@@ -2083,7 +2145,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.IDEncoded"
             },
             "required": true
           }
@@ -2179,7 +2241,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.IDEncoded"
             },
             "required": true
           }
@@ -2257,7 +2319,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.IDEncoded"
             },
             "required": true
           }
@@ -2345,7 +2407,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.IDEncoded"
             },
             "required": true
           }
@@ -2599,7 +2661,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -2765,7 +2827,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Auth.OrganizationID"
+              "$ref": "#/components/schemas/Auth.OrganizationIDEncoded"
             },
             "required": true
           }
@@ -2863,7 +2925,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -2943,7 +3006,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3174,7 +3238,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_2"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3332,7 +3397,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_3"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3504,7 +3570,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_4"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3616,7 +3683,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_4"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3714,7 +3782,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_4"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -3813,7 +3882,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Only agents that this space owns or shares, and the global agents, which are in every space."
@@ -3883,6 +3953,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -4056,7 +4136,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Agent.ID"
+              "$ref": "#/components/schemas/Agent.IDEncoded"
             },
             "required": true
           }
@@ -4152,7 +4232,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Agent.ID"
+              "$ref": "#/components/schemas/Agent.IDEncoded"
             },
             "required": true
           }
@@ -4230,7 +4310,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Agent.ID"
+              "$ref": "#/components/schemas/Agent.IDEncoded"
             },
             "required": true
           }
@@ -4318,7 +4398,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -4390,6 +4471,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -4563,7 +4654,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/App.ID"
+              "$ref": "#/components/schemas/App.IDEncoded"
             },
             "required": true
           }
@@ -4659,7 +4750,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/App.ID"
+              "$ref": "#/components/schemas/App.IDEncoded"
             },
             "required": true
           }
@@ -4737,7 +4828,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/App.ID"
+              "$ref": "#/components/schemas/App.IDEncoded"
             },
             "required": true
           }
@@ -4893,7 +4984,8 @@
             "name": "appId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/App.ID"
+              "type": "string",
+              "description": "The app’s slug or ID."
             },
             "required": false
           },
@@ -4901,7 +4993,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID_5"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -4959,6 +5052,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -5132,7 +5235,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/AppProfile.ID"
+              "$ref": "#/components/schemas/AppProfile.IDEncoded"
             },
             "required": true
           }
@@ -5228,7 +5331,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/AppProfile.ID"
+              "$ref": "#/components/schemas/AppProfile.IDEncoded"
             },
             "required": true
           }
@@ -5296,7 +5399,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/AppProfile.ID"
+              "$ref": "#/components/schemas/AppProfile.IDEncoded"
             },
             "required": true
           }
@@ -5384,7 +5487,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/AppProfile.ID"
+              "$ref": "#/components/schemas/AppProfile.IDEncoded"
             },
             "required": true
           }
@@ -5472,7 +5575,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/AppProfile.ID"
+              "$ref": "#/components/schemas/AppProfile.IDEncoded"
             },
             "required": true
           }
@@ -5628,7 +5731,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -5850,6 +5953,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Return one page of the app-registry that the caller can see.",
@@ -6060,7 +6173,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -6068,7 +6182,8 @@
             "name": "agentId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Agent.ID"
+              "type": "string",
+              "description": "The agent’s name or ID."
             },
             "required": false
           },
@@ -6126,6 +6241,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -6313,7 +6438,8 @@
                 {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Space.ID"
+                    "type": "string",
+                    "description": "The space’s slug or ID."
                   }
                 }
               ],
@@ -6343,7 +6469,8 @@
             "schema": {
               "type": "array",
               "items": {
-                "$ref": "#/components/schemas/Agent.ID"
+                "type": "string",
+                "description": "The agent’s name or ID."
               }
             },
             "required": false
@@ -6487,6 +6614,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -7014,7 +7151,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "required": true
           }
@@ -7156,7 +7293,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -7199,7 +7337,8 @@
             "name": "agentId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Agent.ID"
+              "type": "string",
+              "description": "The agent’s name or ID."
             },
             "required": false
           },
@@ -7265,14 +7404,15 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Task.ID"
+                  "type": "string",
+                  "enum": ["none"]
                 },
                 {
                   "type": "string",
-                  "enum": ["none"]
+                  "description": "The task’s number, such as REN-12, or its ID."
                 }
               ],
-              "description": "A task ID: only its subtasks, oldest first. `none`: only tasks that are not subtasks."
+              "description": "A task: only its subtasks, oldest first. `none`: only tasks that are not subtasks."
             },
             "required": false
           },
@@ -7330,6 +7470,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -7503,7 +7653,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -7599,7 +7749,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -7677,7 +7827,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -7775,7 +7925,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -7863,7 +8013,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -7951,7 +8101,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -8312,7 +8462,7 @@
             "name": "taskId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           },
@@ -8370,6 +8520,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -8595,7 +8755,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Task.ID"
+              "$ref": "#/components/schemas/Task.IDEncoded"
             },
             "required": true
           }
@@ -8668,7 +8828,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in."
@@ -8729,6 +8890,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -9023,7 +9194,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "The views of this space’s page. Without it, the views of the organization’s page. Both start with the system views."
@@ -9084,6 +9256,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -9365,7 +9547,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Without it, the schedules of every space you are in."
@@ -9447,6 +9630,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -9620,7 +9813,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           }
@@ -9716,7 +9909,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           }
@@ -9794,7 +9987,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           }
@@ -9882,7 +10075,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           }
@@ -9970,7 +10163,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           }
@@ -10058,7 +10251,7 @@
             "name": "scheduleId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Schedule.ID"
+              "$ref": "#/components/schemas/Schedule.IDEncoded"
             },
             "required": true
           },
@@ -10127,6 +10320,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Return one page of the schedule-runs that the caller can see.",
@@ -10144,7 +10347,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Without it, the webhooks of every space you are in."
@@ -10205,6 +10409,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -10378,7 +10592,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10474,7 +10688,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10552,7 +10766,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10640,7 +10854,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10728,7 +10942,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10816,7 +11030,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10904,7 +11118,7 @@
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           }
@@ -10992,7 +11206,7 @@
             "name": "webhookId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Webhook.ID"
+              "$ref": "#/components/schemas/Webhook.IDEncoded"
             },
             "required": true
           },
@@ -11058,6 +11272,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -11166,7 +11390,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Without it, the artifacts of every space you are in."
@@ -11227,6 +11452,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -11495,7 +11730,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -11574,6 +11810,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -12421,6 +12667,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -14641,6 +14897,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Return one page of the channel-installs that the caller can see.",
@@ -14850,7 +15116,8 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "type": "string",
+              "description": "The space’s slug or ID."
             },
             "required": false
           },
@@ -14908,6 +15175,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
                 }
               }
             }
@@ -15638,7 +15915,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "type": "string",
+                  "description": "The space’s slug or ID."
                 }
               ],
               "description": "Without it, the whole organization, which only admins and owners can read."
@@ -15915,7 +16193,7 @@
         "type": "object",
         "properties": {
           "ownerSpaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "name": {
             "$ref": "#/components/schemas/Agent.Name"
@@ -15958,6 +16236,10 @@
       "Agent.ID": {
         "type": "string",
         "pattern": "^agt_"
+      },
+      "Agent.IDEncoded": {
+        "type": "string",
+        "description": "The agent’s name or ID."
       },
       "Agent.Info": {
         "type": "object",
@@ -16109,7 +16391,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           }
         },
         "required": ["spaceId"],
@@ -16181,10 +16463,10 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "agentId": {
-            "$ref": "#/components/schemas/Agent.ID"
+            "$ref": "#/components/schemas/Agent.IDEncoded"
           }
         },
         "required": ["spaceId", "agentId"],
@@ -16327,7 +16609,7 @@
             "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "ownerSpaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           }
         },
         "required": ["name", "description", "slug", "ownerSpaceId"],
@@ -16405,6 +16687,10 @@
       "App.ID": {
         "type": "string",
         "pattern": "^app_"
+      },
+      "App.IDEncoded": {
+        "type": "string",
+        "description": "The app’s slug or ID."
       },
       "App.Info": {
         "type": "object",
@@ -16589,7 +16875,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           }
         },
         "required": ["spaceId"],
@@ -16802,7 +17088,7 @@
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "$ref": "#/components/schemas/Space.IDEncoded"
                 }
               },
               {
@@ -16815,7 +17101,7 @@
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "$ref": "#/components/schemas/Space.IDEncoded"
                 }
               },
               {
@@ -16860,7 +17146,7 @@
         "type": "object",
         "properties": {
           "appId": {
-            "$ref": "#/components/schemas/App.ID"
+            "$ref": "#/components/schemas/App.IDEncoded"
           },
           "name": {
             "type": "string",
@@ -16889,7 +17175,7 @@
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/Space.ID"
+                  "$ref": "#/components/schemas/Space.IDEncoded"
                 }
               },
               {
@@ -16905,10 +17191,10 @@
                   "type": "object",
                   "properties": {
                     "appId": {
-                      "$ref": "#/components/schemas/App.ID"
+                      "$ref": "#/components/schemas/App.IDEncoded"
                     },
                     "profileId": {
-                      "$ref": "#/components/schemas/AppProfile.ID"
+                      "$ref": "#/components/schemas/AppProfile.IDEncoded"
                     }
                   },
                   "required": ["appId", "profileId"],
@@ -16927,6 +17213,10 @@
       "AppProfile.ID": {
         "type": "string",
         "pattern": "^apf_"
+      },
+      "AppProfile.IDEncoded": {
+        "type": "string",
+        "description": "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID."
       },
       "AppProfile.Info": {
         "type": "object",
@@ -17165,12 +17455,12 @@
         "type": "object",
         "properties": {
           "appId": {
-            "$ref": "#/components/schemas/App.ID"
+            "$ref": "#/components/schemas/App.IDEncoded"
           },
           "profileId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AppProfile.ID"
+                "$ref": "#/components/schemas/AppProfile.IDEncoded"
               },
               {
                 "type": "null"
@@ -17227,7 +17517,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID_6"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           }
         },
         "required": ["spaceId"],
@@ -17625,6 +17915,10 @@
       "Auth.OrganizationID": {
         "type": "string",
         "pattern": "^org_"
+      },
+      "Auth.OrganizationIDEncoded": {
+        "type": "string",
+        "description": "The organization’s slug or ID."
       },
       "Auth.SignInProvider": {
         "type": "string",
@@ -18236,7 +18530,7 @@
           "defaultSpaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -18259,12 +18553,12 @@
             "minLength": 1
           },
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -18608,7 +18902,7 @@
         "type": "object",
         "properties": {
           "profileId": {
-            "$ref": "#/components/schemas/AppProfile.ID"
+            "$ref": "#/components/schemas/AppProfile.IDEncoded"
           },
           "item": {
             "type": "object",
@@ -19612,7 +19906,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_3"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -19773,6 +20067,10 @@
       "EnvironmentTemplate.ID": {
         "type": "string",
         "pattern": "^tpl_"
+      },
+      "EnvironmentTemplate.IDEncoded": {
+        "type": "string",
+        "description": "The environment template’s name or ID."
       },
       "EnvironmentTemplate.Info": {
         "type": "object",
@@ -21859,7 +22157,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -22763,7 +23061,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_2"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -22830,7 +23128,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID_2"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -23494,7 +23792,7 @@
           "spaceIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Space.ID"
+              "$ref": "#/components/schemas/Space.IDEncoded"
             },
             "description": "Shared spaces that you are in. Ren adds the organization’s first space to the link when it is not here."
           },
@@ -24926,7 +25224,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "name": {
             "type": "string",
@@ -24965,7 +25263,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -25015,6 +25313,10 @@
       "Schedule.ID": {
         "type": "string",
         "pattern": "^sch_"
+      },
+      "Schedule.IDEncoded": {
+        "type": "string",
+        "description": "The schedule’s slug or ID."
       },
       "Schedule.Info": {
         "type": "object",
@@ -25306,7 +25608,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -25525,7 +25827,7 @@
             "$ref": "#/components/schemas/Session.ID"
           },
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "message": {
             "anyOf": [
@@ -27653,35 +27955,14 @@
         "type": "string",
         "pattern": "^spc_"
       },
+      "Space.IDEncoded": {
+        "type": "string",
+        "description": "The space’s slug or ID."
+      },
       "Space.ID_1": {
         "type": "string",
         "pattern": "^spc_",
         "description": "The first space of the link: where the person lands."
-      },
-      "Space.ID_2": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "The space whose memory to use. Omit it for the organization’s memory."
-      },
-      "Space.ID_3": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "The space whose drive to use. Omit it for the organization’s drive."
-      },
-      "Space.ID_4": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "The space whose files to use. Omit it for the organization’s."
-      },
-      "Space.ID_5": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "Only the profiles that this space reaches."
-      },
-      "Space.ID_6": {
-        "type": "string",
-        "pattern": "^spc_",
-        "description": "The one space that the shared profile lists."
       },
       "Space.Info": {
         "type": "object",
@@ -28101,7 +28382,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "note": {
             "anyOf": [
@@ -28291,7 +28572,7 @@
             "type": "object",
             "properties": {
               "spaceId": {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               "userId": {
                 "$ref": "#/components/schemas/Auth.UserID"
@@ -28304,7 +28585,7 @@
             "type": "object",
             "properties": {
               "spaceId": {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               "email": {
                 "type": "string",
@@ -28496,7 +28777,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -28524,7 +28805,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -28563,7 +28844,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "title": {
             "$ref": "#/components/schemas/Task.TitleEncoded"
@@ -28639,7 +28920,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -28661,7 +28942,7 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Task.ID"
+                "$ref": "#/components/schemas/Task.IDEncoded"
               },
               {
                 "type": "null"
@@ -28699,6 +28980,10 @@
       "Task.ID": {
         "type": "string",
         "pattern": "^tsk_"
+      },
+      "Task.IDEncoded": {
+        "type": "string",
+        "description": "The task’s number, such as REN-12, or its ID."
       },
       "Task.Info": {
         "type": "object",
@@ -29164,7 +29449,7 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Task.ID"
+                "$ref": "#/components/schemas/Task.IDEncoded"
               },
               {
                 "type": "null"
@@ -29276,7 +29561,7 @@
         "type": "object",
         "properties": {
           "taskId": {
-            "$ref": "#/components/schemas/Task.ID"
+            "$ref": "#/components/schemas/Task.IDEncoded"
           },
           "body": {
             "$ref": "#/components/schemas/TaskComment.Body"
@@ -29850,7 +30135,7 @@
           "spaceId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Space.ID"
+                "$ref": "#/components/schemas/Space.IDEncoded"
               },
               {
                 "type": "null"
@@ -30143,7 +30428,7 @@
         "type": "object",
         "properties": {
           "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "$ref": "#/components/schemas/Space.IDEncoded"
           },
           "source": {
             "$ref": "#/components/schemas/Webhook.Source"
@@ -30162,7 +30447,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"
@@ -30279,6 +30564,10 @@
       "Webhook.ID": {
         "type": "string",
         "pattern": "^whk_"
+      },
+      "Webhook.IDEncoded": {
+        "type": "string",
+        "description": "The webhook’s slug or ID."
       },
       "Webhook.Info": {
         "type": "object",
@@ -30982,7 +31271,7 @@
           "agentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Agent.ID"
+                "$ref": "#/components/schemas/Agent.IDEncoded"
               },
               {
                 "type": "null"

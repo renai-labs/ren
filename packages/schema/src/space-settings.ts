@@ -21,7 +21,7 @@ export const UpdateInput = Schema.Struct({ settings: Settings.Info }).annotate({
 export const definition = Primitive.define({
   name: "space-settings",
   plural: "space-settings",
-  id: Space.ID,
+  id: Space.Ref,
   info: Info,
   get: true,
   update: { input: UpdateInput, result: Info },

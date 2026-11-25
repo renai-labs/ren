@@ -330,16 +330,25 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      get: Effect.fn("MachineTemplates.get")(function* (actor: Actor.Info, id: string) {
-        if (!Schema.is(MachineTemplate.ID)(id) || !isAllowed(actor, actions.get)) return yield* notFound
+      get: Effect.fn("MachineTemplates.get")(function* (actor: Actor.Info, idOrName: string) {
+        if (!isAllowed(actor, actions.get)) return yield* notFound
         const rows = yield* database.db
           .select()
           .from(table)
-          .where(and(inOrganization(actor), eq(table.id, id)))
+          .where(
+            and(
+              inOrganization(actor),
+              Schema.is(MachineTemplate.ID)(idOrName) ? eq(table.id, idOrName) : eq(table.name, idOrName),
+            ),
+          )
+          .limit(2)
           .pipe(Effect.orDie)
-        const row = rows.at(0)
-        if (!row) return yield* notFound
-        return toInfo(row)
+        return toInfo(
+          yield* Primitive.single(rows, {
+            notFound,
+            ambiguous: `More than one environment template is named “${idOrName}”. Use its ID.`,
+          }),
+        )
       }),
       create: Effect.fn("MachineTemplates.create")(function* (actor: Actor.Info, input: MachineTemplate.CreateInput) {
         if (!isAllowed(actor, actions.create))

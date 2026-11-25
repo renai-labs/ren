@@ -3,7 +3,7 @@ import { Compile, EmitCli, Write } from "@ren/httpapi-codegen"
 import { ClientApi } from "@ren/protocol/client"
 import { Exposure } from "@ren/protocol/exposure"
 import { Primitive } from "@ren/protocol/primitive"
-import { Context, Effect } from "effect"
+import { Context, Effect, type Schema, SchemaAST } from "effect"
 import { fileURLToPath } from "node:url"
 
 interface Resource {
@@ -298,16 +298,6 @@ const groups: ReadonlyArray<EmitCli.Group> = [
   { path: ["billing", "invoice"], description: "Manage invoices" },
 ]
 
-const gets: Readonly<Record<string, string>> = {
-  "Space.ID": "space.get",
-  "Agent.ID": "agent.get",
-  "App.ID": "app.get",
-  "Task.ID": "task.get",
-  "Schedule.ID": "schedule.get",
-  "Webhook.ID": "webhook.get",
-  "AppProfile.ID": "app-profile.get",
-}
-
 const references: Readonly<Record<string, { readonly title: string; readonly name?: string }>> = {
   spaceId: { title: "Space" },
   ownerSpaceId: { title: "Space", name: "space" },
@@ -321,60 +311,54 @@ const references: Readonly<Record<string, { readonly title: string; readonly nam
   profileId: { title: "App profile" },
 }
 
-const resolved = (name: string, operation: string) => ({
-  names: { id: name },
-  lookups: { id: { operation, input: "idOrSlug", output: "id" } },
-  descriptions: { id: `${name.charAt(0).toUpperCase()}${name.slice(1)} slug or ID` },
-})
-
 const extra: ReadonlyArray<EmitCli.Command> = [
   {
     operation: "space.profiles",
     path: ["space", "profiles"],
     description: "List the profiles a new chat reaches",
-    ...resolved("space", "space.get"),
+    names: { id: "space" },
   },
   {
     operation: "space-invite-link.get",
     path: ["space", "invite-link", "get"],
     description: "Show a space’s invite link, and make it the first time",
-    ...resolved("space", "space.get"),
+    names: { id: "space" },
   },
   {
     operation: "space-invite-link.reset",
     path: ["space", "invite-link", "reset"],
     description: "Stop a space’s invite link and make a new one",
-    ...resolved("space", "space.get"),
+    names: { id: "space" },
   },
   {
     operation: "session.profiles",
     path: ["session", "profiles"],
     description: "List the profiles a chat reaches",
-    ...resolved("session", "session.get"),
+    names: { id: "session" },
   },
   {
     operation: "session.links",
     path: ["session", "links"],
     description: "List a chat’s tasks, pull requests, issues and threads",
-    ...resolved("session", "session.get"),
+    names: { id: "session" },
   },
   {
     operation: "session.usage",
     path: ["session", "usage"],
     description: "Show what a chat and its subagents cost",
-    ...resolved("session", "session.get"),
+    names: { id: "session" },
   },
   {
     operation: "session.pullRequests",
     path: ["session", "pull-requests"],
     description: "List a chat’s pull requests and their state",
-    ...resolved("session", "session.get"),
+    names: { id: "session" },
   },
   {
     operation: "task.pullRequests",
     path: ["task", "pull-requests"],
     description: "List a task’s pull requests and their state",
-    ...resolved("task", "task.get"),
+    names: { id: "task" },
   },
   {
     operation: "app-skills.get",
@@ -396,7 +380,7 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     operation: "app-profile.delete",
     path: ["app", "profile", "delete"],
     description: "Delete an app profile",
-    ...resolved("profile", "app-profile.get"),
+    names: { id: "profile" },
   },
   {
     operation: "schedule-run.list",
@@ -522,6 +506,28 @@ const sdk = Object.values(ClientApi.groups).filter(
   (group) => Context.getOrUndefined(group.annotations, Exposure) === "sdk",
 )
 
+const definitions = sdk.flatMap((group) => {
+  const definition = Context.getOrUndefined(group.annotations, Primitive.Annotation)
+  return definition === undefined ? [] : [definition]
+})
+
+const nameOf = (definition: { readonly id: Schema.Top }) =>
+  Primitive.referenced(definition.id) === undefined
+    ? undefined
+    : SchemaAST.resolveDescription(SchemaAST.toEncoded(definition.id.ast))
+
+const named = new Map(
+  definitions.flatMap((definition) => {
+    const identifier = SchemaAST.resolveIdentifier(SchemaAST.toType(definition.id.ast))
+    const description = nameOf(definition)
+    return identifier !== undefined &&
+      description !== undefined &&
+      Primitive.referenced(definition.id) === definition.name
+      ? [[identifier, { operation: `${definition.name}.get`, description }] as const]
+      : []
+  }),
+)
+
 const fieldsOf = (operation: string) => {
   const endpoint = contract.groups
     .flatMap((group) => group.endpoints)
@@ -533,15 +539,28 @@ const capitalized = (text: string) => `${text.at(0)?.toUpperCase() ?? ""}${text.
 
 const kebab = (name: string) => name.replaceAll(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
 
-const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; readonly self: string | undefined }) => {
+const groupOf = (resource: Resource) => {
+  const group = sdk.find((each) => each.identifier === resource.group)
+  if (group === undefined) throw new Error(`Not an SDK group: ${resource.group}`)
+  return group
+}
+
+const definitionOf = (resource: Resource) => {
+  const definition = Context.getOrUndefined(groupOf(resource).annotations, Primitive.Annotation)
+  if (definition === undefined) throw new Error(`Not a primitive: ${resource.group}`)
+  return definition
+}
+
+const namedOf = (field: { readonly identifier: string | undefined }) =>
+  field.identifier === undefined ? undefined : named.get(field.identifier)
+
+const shaped = (command: EmitCli.Command, own?: Resource) => {
   const fields = fieldsOf(command.operation)
-  const parent = own?.resource.parent
+  const parent = own?.parent
   const lookups = Object.fromEntries(
     fields.flatMap((field) => {
-      if (field.name === "id" && field.source === "params")
-        return own?.self === undefined ? [] : [[field.name, { operation: own.self, input: "idOrSlug", output: "id" }]]
-      const operation = field.identifier === undefined ? undefined : gets[field.identifier]
-      return operation === undefined ? [] : [[field.name, { operation, input: "idOrSlug", output: "id" }]]
+      const found = namedOf(field)
+      return found === undefined ? [] : [[field.name, { operation: found.operation, input: "idOrSlug", output: "id" }]]
     }),
   )
   const names = Object.fromEntries(
@@ -549,19 +568,22 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
       const reference = references[field.name]
       if (reference?.name !== undefined) return [[field.name, reference.name]]
       if (own !== undefined && field.source === "params" && (field.name === "id" || field.name === "idOrSlug"))
-        return [[field.name, own.resource.name]]
+        return [[field.name, own.name]]
       return []
     }),
   )
+  const ownName = own === undefined ? undefined : nameOf(definitionOf(own))
+  const title = capitalized(command.names?.["id"] ?? own?.name ?? "")
   const descriptions = Object.fromEntries(
     fields.flatMap((field) => {
+      const found = namedOf(field)
       const reference = references[field.name]
-      if (reference !== undefined) return [[field.name, `${reference.title} slug or ID`]]
-      if (own === undefined || field.source !== "params") return []
-      const title = capitalized(own.resource.name)
-      if (field.name === "idOrSlug") return [[field.name, `${title} slug or ID`]]
-      if (field.name === "id") return [[field.name, own.self === undefined ? `${title} ID` : `${title} slug or ID`]]
-      return []
+      if (found !== undefined && (reference !== undefined || field.source === "params"))
+        return [[field.name, found.description]]
+      if (reference !== undefined) return [[field.name, `${reference.title} ID`]]
+      if (field.source !== "params") return []
+      if (field.name === "idOrSlug") return [[field.name, ownName ?? `${title} ID`]]
+      return field.name === "id" ? [[field.name, `${title} ID`]] : []
     }),
   )
   const parentField = fields.find((field) => field.name === parent)
@@ -581,21 +603,8 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
   }
 }
 
-const groupOf = (resource: Resource) => {
-  const group = sdk.find((each) => each.identifier === resource.group)
-  if (group === undefined) throw new Error(`Not an SDK group: ${resource.group}`)
-  return group
-}
-
-const definitionOf = (resource: Resource) => {
-  const definition = Context.getOrUndefined(groupOf(resource).annotations, Primitive.Annotation)
-  if (definition === undefined) throw new Error(`Not a primitive: ${resource.group}`)
-  return definition
-}
-
-const primitive = resources.flatMap((resource) => {
-  const self = definitionOf(resource).get === true ? `${resource.group}.get` : undefined
-  return Object.keys(groupOf(resource).endpoints)
+const primitive = resources.flatMap((resource) =>
+  Object.keys(groupOf(resource).endpoints)
     .filter((operation) => !elsewhere.has(operation))
     .map((operation) => {
       const action = operation.slice(resource.group.length + 1)
@@ -608,10 +617,10 @@ const primitive = resources.flatMap((resource) => {
           description,
           ...(resource.names?.[action] === undefined ? {} : { names: resource.names[action] }),
         },
-        { resource, self },
+        resource,
       )
-    })
-})
+    }),
+)
 
 const aliased = resources.map((resource): EmitCli.Group => {
   const prefix = `${resource.path.slice(0, -1).join("-")}-`

@@ -13,6 +13,8 @@ import { WriteResult } from "./write-result.js"
 export const ID = Identifier.make("whk", "Webhook.ID")
 export type ID = typeof ID.Type
 
+export const Ref = Primitive.reference("webhook", ID, "The webhook’s slug or ID.")
+
 export const RequestID = Identifier.make("whr", "WebhookRequest.ID")
 export type RequestID = typeof RequestID.Type
 
@@ -217,7 +219,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({ description: "Without it, the webhooks of every space you are in." }),
+  spaceId: Schema.optional(Space.Ref).annotate({ description: "Without it, the webhooks of every space you are in." }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Webhook.ListInput" })
 
@@ -225,12 +227,12 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Webhook.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
   source: Source,
   slug: Schema.optional(Primitive.Slug).annotate({
     description: "Without it, Ren makes one from the name and adds -2, -3, … when it is taken.",
   }),
-  agentId: Schema.optional(Agent.ID).annotate({
+  agentId: Schema.optional(Agent.Ref).annotate({
     description: "An agent of the space. Without it, the space’s default settings.",
   }),
 }).annotate({
@@ -243,7 +245,7 @@ export const UpdateInput = Schema.Struct({
   name: Schema.optional(Primitive.Name).annotate({ description: "Not for a preset." }),
   message: Schema.optional(Message).annotate({ description: "Not for a preset." }),
   parser: Schema.optional(Parser).annotate({ description: "Not for a preset." }),
-  agentId: Schema.optional(Schema.NullOr(Agent.ID)),
+  agentId: Schema.optional(Schema.NullOr(Agent.Ref)),
   fallbackUserId: Schema.optional(Schema.NullOr(Auth.UserID)).annotate({
     description: "Only yourself, or null to remove it.",
   }),
@@ -339,7 +341,7 @@ export type Declaration = typeof Declaration.Type
 export const definition = Primitive.define({
   name: "webhook",
   plural: "webhooks",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

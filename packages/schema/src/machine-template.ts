@@ -11,6 +11,8 @@ import { Primitive } from "./primitive.js"
 export const ID = Identifier.make("tpl", "EnvironmentTemplate.ID")
 export type ID = typeof ID.Type
 
+export const Ref = Primitive.reference("environment-template", ID, "The environment template’s name or ID.")
+
 export const maximumSessionsPerEnvironment = 100
 
 const defaultSessionsPerEnvironment = 8
@@ -129,7 +131,7 @@ export const AffectedSpaces = Schema.Struct({
 export const definition = Primitive.define({
   name: "environment-template",
   plural: "environment-templates",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

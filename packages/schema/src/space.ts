@@ -15,6 +15,8 @@ import { ResourceIcon } from "./resource-icon.js"
 export const ID = Identifier.make("spc", "Space.ID")
 export type ID = typeof ID.Type
 
+export const Ref = Primitive.reference("space", ID, "The space’s slug or ID.")
+
 export const MembershipID = Identifier.make("spm", "Space.MembershipID")
 export type MembershipID = typeof MembershipID.Type
 
@@ -164,7 +166,7 @@ export const UpdateInput = Schema.Struct({
 export const definition = Primitive.define({
   name: "space",
   plural: "spaces",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

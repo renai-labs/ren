@@ -137,21 +137,24 @@ const input = {
 } satisfies MachineTemplate.CreateInput
 
 describe("MachineTemplates", () => {
-  it.live("an admin makes an org environment template; the provider checks the config and keeps its own form", () =>
-    Effect.gen(function* () {
-      const templates = yield* MachineTemplates.Service
-      const setup = yield* team()
-      const made = yield* templates.create(setup.admin, { ...input, config: { label: "python", extra: "dropped" } })
-      expect(made).toMatchObject({
-        name: "Python",
-        provider: "test",
-        config: { label: "python" },
-        sessionsPerEnvironment: 2,
-        archivedAt: null,
-      })
-      expect(yield* templates.get(setup.admin, made.id)).toEqual(made)
-      expect((yield* templates.list(setup.admin, page)).items).toEqual([made])
-    }),
+  it.live(
+    "an admin makes an org environment template; the provider checks the config and keeps its own form; its name names it",
+    () =>
+      Effect.gen(function* () {
+        const templates = yield* MachineTemplates.Service
+        const setup = yield* team()
+        const made = yield* templates.create(setup.admin, { ...input, config: { label: "python", extra: "dropped" } })
+        expect(made).toMatchObject({
+          name: "Python",
+          provider: "test",
+          config: { label: "python" },
+          sessionsPerEnvironment: 2,
+          archivedAt: null,
+        })
+        expect(yield* templates.get(setup.admin, made.id)).toEqual(made)
+        expect(yield* templates.get(setup.ada, "Python")).toEqual(made)
+        expect((yield* templates.list(setup.admin, page)).items).toEqual([made])
+      }),
   )
 
   it.live("an unknown provider or a config the provider refuses is Invalid, and names the field", () =>

@@ -224,6 +224,21 @@ it.live(
     }),
 )
 
+it.live("its slug names a profile to who can see it, as app/slug when two apps have a profile with that slug", () =>
+  Effect.gen(function* () {
+    const found = yield* org()
+    const profiles = yield* AppProfiles.Service
+    expect((yield* profiles.get(found.root, "google/acme")).id).toBe(found.acme.id)
+    expect(yield* Effect.flip(profiles.get(found.root, "acme"))).toMatchObject({
+      _tag: "Primitive.NotFound",
+      message: "More than one app has a profile “acme”. Write it as <app>/acme, or use its ID.",
+    })
+    expect((yield* profiles.get(found.ana, "ana")).userId).toBe(found.ana.userId)
+    expect((yield* Effect.flip(profiles.get(found.bob, "ana")))._tag).toBe("Primitive.NotFound")
+    expect((yield* Effect.flip(profiles.get(found.bob, "google/ana")))._tag).toBe("Primitive.NotFound")
+  }),
+)
+
 it.live("two profiles of one app that reach the same space cannot have the same name", () =>
   Effect.gen(function* () {
     const found = yield* org()

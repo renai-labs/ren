@@ -5,6 +5,7 @@ import { Exposure } from "../exposure.js"
 import { Mcp } from "../mcp.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const OrganizationInviteLinkGroup = HttpApiGroup.make("organization-invite-link")
   .add(
@@ -45,6 +46,7 @@ export const OrganizationInviteLinkGroup = HttpApiGroup.make("organization-invit
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

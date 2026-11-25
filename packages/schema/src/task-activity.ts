@@ -18,7 +18,7 @@ export type Info = typeof Info.Type
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  taskId: Task.ID,
+  taskId: Task.Ref,
   ...Pagination.fields(50),
 }).annotate({
   identifier: "TaskActivity.ListInput",

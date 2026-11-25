@@ -15,6 +15,8 @@ import { Webhook } from "./webhook.js"
 export const ID = AppIdentity.ID
 export type ID = typeof ID.Type
 
+export const Ref = AppIdentity.Ref
+
 export interface Definition extends Schema.Schema.Type<typeof Definition> {}
 export const Definition = Schema.Struct({
   requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
@@ -89,7 +91,7 @@ export const CreateInput = Schema.Struct({
   icon: Schema.optional(Primitive.HttpsUrl),
   environment: Schema.optional(Packages.Setup),
   slug: Primitive.Slug,
-  ownerSpaceId: Space.ID,
+  ownerSpaceId: Space.Ref,
 }).annotate({ identifier: "App.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
@@ -107,12 +109,12 @@ export const UpdateInput = Schema.Struct({
 
 export interface TransferOwnershipInput extends Schema.Schema.Type<typeof TransferOwnershipInput> {}
 export const TransferOwnershipInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
 }).annotate({ identifier: "App.TransferOwnershipInput" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.Ref),
   connected: Schema.optional(Schema.Boolean).annotate({
     description: "Only apps with a profile you can see, registry apps too. Without it, only the organization’s apps.",
   }),
@@ -122,7 +124,7 @@ export const ListInput = Schema.Struct({
 export const definition = Primitive.define({
   name: "app",
   plural: "apps",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Pagination.Page(Info).annotate({ identifier: "App.Page" }) },
   get: true,

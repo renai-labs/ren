@@ -43,12 +43,17 @@ export const layer = Layer.effect(
 
     return Service.of({
       get: Effect.fn("OrganizationSettings.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (
-          idOrSlug !== actor.organizationId ||
-          !access.isAllowed({ actor, action: actions.get, resource: Access.organization })
+        if (!access.isAllowed({ actor, action: actions.get, resource: Access.organization })) return yield* notFound
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const own = (yield* transaction
+              .select({ slug: Database.Schema.organization.slug })
+              .from(Database.Schema.organization)
+              .where(eq(Database.Schema.organization.id, actor.organizationId))).at(0)
+            if (idOrSlug !== actor.organizationId && idOrSlug !== own?.slug) return yield* notFound
+            return yield* read(transaction, actor)
+          }),
         )
-          return yield* notFound
-        return yield* database.transaction((transaction) => read(transaction, actor))
       }),
       update: Effect.fn("OrganizationSettings.update")(function* (
         actor: Actor.Info,

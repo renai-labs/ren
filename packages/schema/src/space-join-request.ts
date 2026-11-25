@@ -35,7 +35,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description: "The space whose requests to list; its members only. Without it, the caller’s own requests.",
   }),
   status: Schema.optional(Status),
@@ -46,7 +46,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "SpaceJoinRequest.Page
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
   note: Schema.optional(
     Schema.String.check(
       Schema.isMaxLength(maximumNoteLength, { message: `Use ${maximumNoteLength} characters or fewer.` }),

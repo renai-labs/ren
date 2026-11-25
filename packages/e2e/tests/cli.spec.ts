@@ -22,7 +22,9 @@ const Me = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ user: Schema.Struct({ email: Schema.String }) })),
 )
 
-test("ren manages a space and its members by slug", async ({ request }) => {
+test("ren manages a space, its members, settings and tasks by slug, in arguments, flags and --input", async ({
+  request,
+}) => {
   const email = uniqueEmail("cli-space")
   await createUser(request, { name: "Grace Hopper", email })
   const token = (await signIn(request, { email, password })).headers()["set-auth-token"] ?? ""
@@ -43,6 +45,26 @@ test("ren manages a space and its members by slug", async ({ request }) => {
   const input = JSON.stringify({ name: "Docs Team", description: "Draft" })
   const updated = await ren(["space", "update", "docs", "--input", input, "--description", "Writes the docs"], env)
   expect(Space(updated.stdout)).toMatchObject({ id: created.id, name: "Docs Team", description: "Writes the docs" })
+
+  const Task = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ spaceId: Schema.String })))
+  const task = await ren(
+    ["task", "create", "--input", JSON.stringify({ spaceId: "docs", title: "Write the guide" })],
+    env,
+  )
+  expect(Task(task.stdout).spaceId).toBe(created.id)
+  const Settings = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ id: Schema.String })))
+  expect(Settings((await ren(["space", "settings", "get", "docs"], env)).stdout).id).toBe(created.id)
+
+  await ren(["app", "create", "--slug", "mail", "--space", "docs", "--name", "Mail", "--description", "Mail"], env)
+  const Profile = Schema.decodeUnknownSync(
+    Schema.fromJsonString(Schema.Struct({ id: Schema.String, name: Schema.String })),
+  )
+  const profile = Profile((await ren(["app", "profile", "get", "mail/docs-team"], env)).stdout)
+  expect(Profile((await ren(["app", "profile", "update", "docs-team", "--name", "Docs mail"], env)).stdout)).toEqual({
+    id: profile.id,
+    name: "Docs mail",
+  })
+  await ren(["app", "archive", "mail"], env)
 
   const members = await ren(["space", "member", "list", "docs"], env)
   const Page = Schema.Struct({ items: Schema.Array(Schema.Unknown), total: Schema.Number })

@@ -42,7 +42,7 @@ export const TimeZone = Schema.String.check(
 
 export interface Query extends Schema.Schema.Type<typeof Query> {}
 export const Query = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description: "Without it, the whole organization, which only admins and owners can read.",
   }),
   from: Schema.DateTimeUtc,

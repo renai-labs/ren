@@ -122,6 +122,7 @@ import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
+import { Primitive } from "./primitive.js"
 import { RenMcp } from "./ren-mcp.js"
 import { SlackMcp } from "./slack-mcp.js"
 
@@ -245,7 +246,7 @@ export const layer = Layer.mergeAll(
         InsightsHandler,
         FeedbackHandler,
       ]),
-      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Compression]),
+      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer, Primitive.references, Compression]),
       Layer.provide([
         Health.layer,
         Invitation.layer,

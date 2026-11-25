@@ -896,12 +896,28 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
       }),
 
-      get: Effect.fn("AppProfiles.get")(function* (actor, id) {
+      get: Effect.fn("AppProfiles.get")(function* (actor, idOrSlug) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.get).pipe(
-              Effect.catchTag("Primitive.Forbidden", () => Effect.fail(notFound)),
+            if (Schema.is(AppProfile.ID)(idOrSlug)) {
+              const row = yield* find(transaction, actor, idOrSlug, AppProfilePolicy.actions.get).pipe(
+                Effect.catchTag("Primitive.Forbidden", () => Effect.fail(notFound)),
+              )
+              return yield* infoOf(transaction, actor, row.id)
+            }
+            const parts = idOrSlug.split("/")
+            const rows = yield* visibleRows(
+              transaction,
+              actor,
+              AppProfilePolicy.actions.get,
+              parts.length === 2
+                ? and(eq(Database.Schema.app.slug, parts.at(0) ?? ""), eq(profiles.slug, parts.at(1) ?? ""))
+                : eq(profiles.slug, idOrSlug),
             )
+            const row = yield* Primitive.single(rows, {
+              notFound,
+              ambiguous: `More than one app has a profile “${idOrSlug}”. Write it as <app>/${idOrSlug}, or use its ID.`,
+            })
             return yield* infoOf(transaction, actor, row.id)
           }),
         )

@@ -58,20 +58,24 @@ const reference = (repository: string) => ({
 const settings = { instructions: "We use Bun.", permissions: [], references: [] }
 
 describe("SpaceSettings", () => {
-  it.live("space members edit space settings; other members, admins included (AC4), get NotFound", () =>
-    Effect.gen(function* () {
-      const spaces = yield* Space.Service
-      const space = yield* SpaceSettings.Service
-      const organizationId = yield* Seed.organization()
-      const ada = yield* Seed.actor(organizationId, "member")
-      const grace = yield* Seed.actor(organizationId, "member")
-      const admin = yield* Seed.actor(organizationId, "admin")
-      const team = yield* spaces.create(ada, { name: "Team" })
-      expect((yield* space.update(ada, team.id, { settings })).settings).toEqual(settings)
-      expect((yield* Effect.flip(space.get(admin, team.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* Effect.flip(space.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* Effect.flip(space.update(grace, team.id, { settings })))._tag).toBe("Primitive.NotFound")
-    }),
+  it.live(
+    "space members edit space settings, named by the space’s ID or slug; other members, admins included (AC4), get NotFound",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const space = yield* SpaceSettings.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* Seed.actor(organizationId, "member")
+        const grace = yield* Seed.actor(organizationId, "member")
+        const admin = yield* Seed.actor(organizationId, "admin")
+        const team = yield* spaces.create(ada, { name: "Team" })
+        expect((yield* space.update(ada, team.id, { settings })).settings).toEqual(settings)
+        expect(yield* space.get(ada, team.slug)).toMatchObject({ id: team.id, settings })
+        expect((yield* Effect.flip(space.get(admin, team.id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(space.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(space.get(grace, team.slug)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(space.update(grace, team.id, { settings })))._tag).toBe("Primitive.NotFound")
+      }),
   )
 
   it.live("a space with no row reads as empty settings", () =>

@@ -56,7 +56,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description:
       "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in.",
   }),
@@ -67,7 +67,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Label.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description: "Make a space label, which only this space sees. Without it, an org label, which only admins make.",
   }),
   name: UserName,

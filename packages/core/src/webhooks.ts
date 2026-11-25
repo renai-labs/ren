@@ -565,15 +565,18 @@ export const layer = Layer.effect(
         }
       }),
       get: Effect.fn("Webhooks.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!isID(idOrSlug)) return yield* notFound
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const found = (yield* transaction
+            const rows = yield* transaction
               .select({ webhook })
               .from(webhook)
               .leftJoin(WebhookPolicy.membership, membershipOf(actor))
-              .where(and(eq(webhook.id, idOrSlug), visibleTo(actor)))).at(0)
-            if (!found) return yield* notFound
+              .where(and(isID(idOrSlug) ? eq(webhook.id, idOrSlug) : eq(webhook.slug, idOrSlug), visibleTo(actor)))
+              .limit(2)
+            const found = yield* Primitive.single(rows, {
+              notFound,
+              ambiguous: `More than one webhook has the slug “${idOrSlug}”. Use its ID.`,
+            })
             return yield* infoOf(transaction, found.webhook)
           }),
         )

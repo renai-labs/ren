@@ -233,8 +233,7 @@ export const SpaceSettingsUpdate = (input: Command.Command.Config.Infer<typeof C
       input: input["input"],
       labels: { id: "<space>" },
       lookups: {
-        id: (client, value) =>
-          client["space-settings"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
+        id: (client, value) => client["space"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
       },
     },
     (client, request) => client["space-settings"]["update"]({ ...request.params, ...request.payload }),
@@ -673,13 +672,7 @@ export const SessionGet = (input: Command.Command.Config.Infer<typeof Commands.S
 export const SessionArchive = (input: Command.Command.Config.Infer<typeof Commands.SessionArchive>) =>
   Operation.run(
     ClientApi.groups["session"].endpoints["session.archive"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<session>" },
-      lookups: {
-        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<session>" } },
     (client, request) => client["session"]["archive"]({ ...request.params }),
   )
 
@@ -1380,9 +1373,6 @@ export const ArtifactUpdate = (input: Command.Command.Config.Infer<typeof Comman
       payload: { title: input["title"], name: input["name"] },
       input: input["input"],
       labels: { id: "<artifact>", title: "--title", name: "--name" },
-      lookups: {
-        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
     },
     (client, request) => client["artifact"]["update"]({ ...request.params, ...request.payload }),
   )
@@ -1390,13 +1380,7 @@ export const ArtifactUpdate = (input: Command.Command.Config.Infer<typeof Comman
 export const ArtifactArchive = (input: Command.Command.Config.Infer<typeof Commands.ArtifactArchive>) =>
   Operation.run(
     ClientApi.groups["artifact"].endpoints["artifact.archive"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<artifact>" },
-      lookups: {
-        id: (client, value) => client["artifact"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<artifact>" } },
     (client, request) => client["artifact"]["archive"]({ ...request.params }),
   )
 
@@ -1454,10 +1438,6 @@ export const CredentialUpdate = (input: Command.Command.Config.Infer<typeof Comm
       payload: { name: input["name"], delivery: input["delivery"] },
       input: input["input"],
       labels: { id: "<credential>", name: "--name", delivery: "--delivery" },
-      lookups: {
-        id: (client, value) =>
-          client["credential"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
     },
     (client, request) => client["credential"]["update"]({ ...request.params, ...request.payload }),
   )
@@ -1465,60 +1445,28 @@ export const CredentialUpdate = (input: Command.Command.Config.Infer<typeof Comm
 export const CredentialRotate = (input: Command.Command.Config.Infer<typeof Commands.CredentialRotate>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.rotate"],
-    {
-      params: { id: input["id"] },
-      input: input["input"],
-      labels: { id: "<credential>" },
-      lookups: {
-        id: (client, value) =>
-          client["credential"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<credential>" } },
     (client, request) => client["credential"]["rotate"]({ ...request.params, ...request.payload }),
   )
 
 export const CredentialMove = (input: Command.Command.Config.Infer<typeof Commands.CredentialMove>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.move"],
-    {
-      params: { id: input["id"] },
-      input: input["input"],
-      labels: { id: "<credential>" },
-      lookups: {
-        id: (client, value) =>
-          client["credential"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<credential>" } },
     (client, request) => client["credential"]["move"]({ ...request.params, ...request.payload }),
   )
 
 export const CredentialCopy = (input: Command.Command.Config.Infer<typeof Commands.CredentialCopy>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.copy"],
-    {
-      params: { id: input["id"] },
-      input: input["input"],
-      labels: { id: "<credential>" },
-      lookups: {
-        id: (client, value) =>
-          client["credential"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<credential>" } },
     (client, request) => client["credential"]["copy"]({ ...request.params, ...request.payload }),
   )
 
 export const CredentialRemove = (input: Command.Command.Config.Infer<typeof Commands.CredentialRemove>) =>
   Operation.run(
     ClientApi.groups["credential"].endpoints["credential.remove"],
-    {
-      params: { id: input["id"] },
-      input: input["input"],
-      labels: { id: "<credential>" },
-      lookups: {
-        id: (client, value) =>
-          client["credential"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, input: input["input"], labels: { id: "<credential>" } },
     (client, request) => client["credential"]["remove"]({ ...request.params, ...request.payload }),
   )
 
@@ -1716,9 +1664,6 @@ export const OauthAppUpdate = (input: Command.Command.Config.Infer<typeof Comman
         tokenEndpointAuth: "--token-endpoint-auth",
         resource: "--resource",
       },
-      lookups: {
-        id: (client, value) => client["oauth-app"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
     },
     (client, request) => client["oauth-app"]["update"]({ ...request.params, ...request.payload }),
   )
@@ -1726,13 +1671,7 @@ export const OauthAppUpdate = (input: Command.Command.Config.Infer<typeof Comman
 export const OauthAppArchive = (input: Command.Command.Config.Infer<typeof Commands.OauthAppArchive>) =>
   Operation.run(
     ClientApi.groups["oauth-app"].endpoints["oauth-app.archive"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<app>" },
-      lookups: {
-        id: (client, value) => client["oauth-app"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<app>" } },
     (client, request) => client["oauth-app"]["archive"]({ ...request.params }),
   )
 
@@ -1875,52 +1814,28 @@ export const SpaceInviteLinkReset = (input: Command.Command.Config.Infer<typeof 
 export const SessionProfiles = (input: Command.Command.Config.Infer<typeof Commands.SessionProfiles>) =>
   Operation.run(
     ClientApi.groups["app-profile-reach"].endpoints["session.profiles"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<session>" },
-      lookups: {
-        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<session>" } },
     (client, request) => client["app-profile-reach"]["session"]["profiles"]({ ...request.params }),
   )
 
 export const SessionLinks = (input: Command.Command.Config.Infer<typeof Commands.SessionLinks>) =>
   Operation.run(
     ClientApi.groups["link"].endpoints["session.links"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<session>" },
-      lookups: {
-        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<session>" } },
     (client, request) => client["link"]["session"]["links"]({ ...request.params }),
   )
 
 export const SessionUsage = (input: Command.Command.Config.Infer<typeof Commands.SessionUsage>) =>
   Operation.run(
     ClientApi.groups["link"].endpoints["session.usage"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<session>" },
-      lookups: {
-        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<session>" } },
     (client, request) => client["link"]["session"]["usage"]({ ...request.params }),
   )
 
 export const SessionPullRequests = (input: Command.Command.Config.Infer<typeof Commands.SessionPullRequests>) =>
   Operation.run(
     ClientApi.groups["link"].endpoints["session.pullRequests"],
-    {
-      params: { id: input["id"] },
-      labels: { id: "<session>" },
-      lookups: {
-        id: (client, value) => client["session"]["get"]({ idOrSlug: value }).pipe(Effect.map((found) => found["id"])),
-      },
-    },
+    { params: { id: input["id"] }, labels: { id: "<session>" } },
     (client, request) => client["link"]["session"]["pullRequests"]({ ...request.params }),
   )
 

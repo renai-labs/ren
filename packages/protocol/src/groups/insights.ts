@@ -4,6 +4,7 @@ import { ForbiddenError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const InsightsGroup = HttpApiGroup.make("insights")
   .add(
@@ -20,6 +21,7 @@ export const InsightsGroup = HttpApiGroup.make("insights")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "internal")

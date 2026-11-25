@@ -38,7 +38,7 @@ export type Info = typeof Info.Type
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.Ref),
   userId: Schema.optional(Auth.UserID),
   status: Schema.optional(Status),
   ...Pagination.fields(50),
@@ -47,9 +47,9 @@ export const ListInput = Schema.Struct({
 const Page = Pagination.Page(Info).annotate({ identifier: "SpaceMember.Page" })
 
 export const CreateInput = Schema.Union([
-  Schema.Struct({ spaceId: Space.ID, userId: Auth.UserID }),
+  Schema.Struct({ spaceId: Space.Ref, userId: Auth.UserID }),
   Schema.Struct({
-    spaceId: Space.ID,
+    spaceId: Space.Ref,
     email: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(320)).pipe(Schema.decodeTo(Auth.Email)),
   }),
 ]).annotate({ identifier: "SpaceMember.CreateInput" })

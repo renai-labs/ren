@@ -158,29 +158,33 @@ export const run = <
     const output = yield* Output.Service
     const client = yield* connection.client
     const payloadSchema = [...endpoint.payload.values()].flatMap((payload) => payload.schemas).at(0)
-    const resolve = (values: Values | undefined, schema: Schema.Top | undefined) =>
+    const resolve = (values: Readonly<Record<string, unknown>>, schema: Schema.Top | undefined) =>
       Effect.all(
-        Record.map(values ?? {}, (value, name): Effect.Effect<Value, unknown> => {
+        Record.map(values, (value, name): Effect.Effect<unknown, unknown> => {
           const lookup = input.lookups?.[name]
-          const found = plain(value)
-          if (!lookup || Option.isNone(found)) return Effect.succeed(value)
-          const one = (item: Scalar, sample: unknown) =>
+          if (!lookup) return Effect.succeed(value)
+          const one = (item: unknown, sample: unknown) =>
             typeof item !== "string" || accepts(schema, name, sample) ? Effect.succeed(item) : lookup(client, item)
-          return typeof found.value === "object"
-            ? Effect.forEach(found.value, (item) => one(item, [item]))
-            : one(found.value, found.value)
+          return Array.isArray(value) ? Effect.forEach(value, (item) => one(item, [item])) : one(value, value)
         }),
       )
     const params = yield* decode(
       endpoint.params,
-      asStrings(yield* resolve(input.params, endpoint.params)),
+      yield* resolve(asStrings(input.params ?? {}), endpoint.params),
       input.labels,
     )
-    const query = yield* decode(endpoint.query, asStrings(yield* resolve(input.query, endpoint.query)), input.labels)
+    const query = yield* decode(
+      endpoint.query,
+      yield* resolve(asStrings(input.query ?? {}), endpoint.query),
+      input.labels,
+    )
     const payload = payloadSchema
       ? yield* decode(
           Schema.toCodecJson(payloadSchema),
-          { ...(yield* read(input.input ?? Option.none())), ...asJson(yield* resolve(input.payload, payloadSchema)) },
+          yield* resolve(
+            { ...(yield* read(input.input ?? Option.none())), ...asJson(input.payload ?? {}) },
+            payloadSchema,
+          ),
           input.labels,
         )
       : Option.none()

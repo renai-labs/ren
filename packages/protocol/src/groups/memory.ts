@@ -5,6 +5,7 @@ import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } fro
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 const scope = `Pass spaceId for a space’s memory; omit it for the organization’s memory. \`${Memory.root}\` is the root file that every chat in scope gets in its context.`
 
@@ -74,6 +75,7 @@ export const MemoryGroup = HttpApiGroup.make("memory")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

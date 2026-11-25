@@ -45,7 +45,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  scheduleId: Schedule.ID,
+  scheduleId: Schedule.Ref,
   status: Schema.optional(Status),
   ...Pagination.fields(50),
 }).annotate({

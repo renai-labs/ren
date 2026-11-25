@@ -28,15 +28,15 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
-  agentId: Schema.optional(Agent.ID),
+  spaceId: Schema.optional(Space.Ref),
+  agentId: Schema.optional(Agent.Ref),
   ...Pagination.fields(50),
 }).annotate({ identifier: "AgentMembership.ListInput" })
 
 const Page = Pagination.Page(Info).annotate({ identifier: "AgentMembership.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
-export const CreateInput = Schema.Struct({ spaceId: Space.ID, agentId: Agent.ID }).annotate({
+export const CreateInput = Schema.Struct({ spaceId: Space.Ref, agentId: Agent.Ref }).annotate({
   identifier: "AgentMembership.CreateInput",
 })
 

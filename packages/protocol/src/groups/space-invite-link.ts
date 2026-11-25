@@ -6,11 +6,12 @@ import { Exposure } from "../exposure.js"
 import { Mcp } from "../mcp.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const SpaceInviteLinkGroup = HttpApiGroup.make("space-invite-link")
   .add(
     HttpApiEndpoint.get("space-invite-link.get", "/spaces/:id/invite-link", {
-      params: { id: Space.ID },
+      params: { id: Space.Ref },
       success: SpaceInviteLink.Info,
       error: [NotFoundError, ForbiddenError],
     }).annotateMerge(
@@ -24,7 +25,7 @@ export const SpaceInviteLinkGroup = HttpApiGroup.make("space-invite-link")
   )
   .add(
     HttpApiEndpoint.post("space-invite-link.reset", "/spaces/:id/invite-link/reset", {
-      params: { id: Space.ID },
+      params: { id: Space.Ref },
       success: SpaceInviteLink.Info,
       error: [NotFoundError, ForbiddenError],
     }).annotateMerge(
@@ -35,6 +36,7 @@ export const SpaceInviteLinkGroup = HttpApiGroup.make("space-invite-link")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

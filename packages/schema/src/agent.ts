@@ -12,6 +12,8 @@ import { Space } from "./space.js"
 export const ID = AgentIdentity.ID
 export type ID = typeof ID.Type
 
+export const Ref = AgentIdentity.Ref
+
 export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
 
 export const reserved: ReadonlySet<string> = new Set(["ren", "general", "explore", "compaction", "title", "summary"])
@@ -38,7 +40,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description: "Only agents that this space owns or shares, and the global agents, which are in every space.",
   }),
   isSubagent: Schema.optional(Schema.Boolean),
@@ -49,7 +51,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Agent.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  ownerSpaceId: Space.ID,
+  ownerSpaceId: Space.Ref,
   name: Name,
   description: Schema.optional(Schema.String),
   isSubagent: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
@@ -74,14 +76,14 @@ export const UpdateInput = Schema.Struct({
 }).annotate({ identifier: "Agent.UpdateInput" })
 
 export interface TransferOwnershipInput extends Schema.Schema.Type<typeof TransferOwnershipInput> {}
-export const TransferOwnershipInput = Schema.Struct({ spaceId: Space.ID }).annotate({
+export const TransferOwnershipInput = Schema.Struct({ spaceId: Space.Ref }).annotate({
   identifier: "Agent.TransferOwnershipInput",
 })
 
 export const definition = Primitive.define({
   name: "agent",
   plural: "agents",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

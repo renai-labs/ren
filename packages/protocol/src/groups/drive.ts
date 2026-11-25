@@ -5,6 +5,7 @@ import { ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } 
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 const scope =
   "Pass spaceId for a space’s drive; omit it for the organization’s drive. Every chat in scope reads the drive’s files on its environment, read-only. files.list, files.read and files.delete list, read and delete them."
@@ -36,6 +37,7 @@ export const DriveGroup = HttpApiGroup.make("drive")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

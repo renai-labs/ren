@@ -31,15 +31,21 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const references = yield* ReferenceCheck.Service
 
-    const find = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Space.ID) {
+    const find = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, idOrSlug: string) {
       const row = (yield* transaction
-        .select({ membershipId: SpaceQueries.membership.id, settings: Database.Schema.settings })
+        .select({
+          id: Database.Schema.space.id,
+          membershipId: SpaceQueries.membership.id,
+          settings: Database.Schema.settings,
+        })
         .from(Database.Schema.space)
         .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .leftJoin(Database.Schema.settings, eq(Database.Schema.settings.owner_id, Database.Schema.space.id))
         .where(
           and(
-            eq(Database.Schema.space.id, id),
+            Schema.is(Space.ID)(idOrSlug)
+              ? eq(Database.Schema.space.id, idOrSlug)
+              : eq(Database.Schema.space.slug, idOrSlug),
             eq(Database.Schema.space.organization_id, actor.organizationId),
             isNull(Database.Schema.space.archived_at),
           ),
@@ -50,7 +56,7 @@ export const layer = Layer.effect(
       return {
         resource,
         info: {
-          id,
+          id: row.id,
           ...(yield* SettingsRows.decode(row.settings)),
           canUpdate: access.isAllowed({ actor, action: actions.update, resource }),
         } satisfies SpaceSettings.Info,
@@ -59,7 +65,6 @@ export const layer = Layer.effect(
 
     return Service.of({
       get: Effect.fn("SpaceSettings.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!Schema.is(Space.ID)(idOrSlug)) return yield* notFound
         return (yield* database.transaction((transaction) => find(transaction, actor, idOrSlug))).info
       }),
       update: Effect.fn("SpaceSettings.update")(function* (

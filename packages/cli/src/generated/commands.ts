@@ -11,7 +11,7 @@ export const SpaceList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const SpaceGet = { idOrSlug: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
+export const SpaceGet = { idOrSlug: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")) }
 
 export const SpaceCreate = {
   name: Flag.String("name").pipe(Flag.optional),
@@ -24,7 +24,7 @@ export const SpaceCreate = {
 }
 
 export const SpaceUpdate = {
-  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   icon: Flag.String("icon").pipe(
@@ -35,15 +35,15 @@ export const SpaceUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const SpaceArchive = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
+export const SpaceArchive = { id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")) }
 
 export const SpaceShutdown = {
-  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const SpaceMemberList = {
-  spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("Space slug or ID")),
+  spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("The space’s slug or ID.")),
   userId: Flag.String("user-id").pipe(Flag.optional),
   status: Flag.Literals("status", ["active", "pending"]).pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
@@ -51,7 +51,7 @@ export const SpaceMemberList = {
 }
 
 export const SpaceMemberCreate = {
-  spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  spaceId: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
   userId: Flag.String("user-id").pipe(Flag.optional),
   email: Flag.String("email").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
@@ -60,7 +60,7 @@ export const SpaceMemberCreate = {
 export const SpaceMemberArchive = { id: Argument.String("member").pipe(Argument.withDescription("Member ID")) }
 
 export const SpaceJoinRequestList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   status: Flag.Literals("status", ["pending", "approved", "declined", "cancelled"]).pipe(
     Flag.optional,
     Flag.withDescription("A pending request waits for a member of the space."),
@@ -70,7 +70,7 @@ export const SpaceJoinRequestList = {
 }
 
 export const SpaceJoinRequestCreate = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   note: Flag.String("note").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
@@ -91,15 +91,15 @@ export const SpaceJoinRequestCancel = {
 }
 
 export const AgentMembershipList = {
-  spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("Space slug or ID")),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  spaceId: Argument.String("space").pipe(Argument.optional, Argument.withDescription("The space’s slug or ID.")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const AgentMembershipCreate = {
-  spaceId: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  spaceId: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -108,34 +108,34 @@ export const AgentMembershipArchive = {
 }
 
 export const SpaceSettingsGet = {
-  idOrSlug: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  idOrSlug: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
 }
 
 export const SpaceSettingsUpdate = {
-  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const OrganizationSettingsGet = {
-  idOrSlug: Argument.String("org").pipe(Argument.withDescription("Org slug or ID")),
+  idOrSlug: Argument.String("org").pipe(Argument.withDescription("The organization’s slug or ID.")),
 }
 
 export const OrganizationSettingsUpdate = {
-  id: Argument.String("org").pipe(Argument.withDescription("Org slug or ID")),
+  id: Argument.String("org").pipe(Argument.withDescription("The organization’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AgentList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   isSubagent: Flag.Boolean("is-subagent").pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const AgentGet = { idOrSlug: Argument.String("agent").pipe(Argument.withDescription("Agent slug or ID")) }
+export const AgentGet = { idOrSlug: Argument.String("agent").pipe(Argument.withDescription("The agent’s name or ID.")) }
 
 export const AgentCreate = {
-  ownerSpaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  ownerSpaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   isSubagent: Flag.Boolean("is-subagent").pipe(Flag.optional),
@@ -143,7 +143,7 @@ export const AgentCreate = {
 }
 
 export const AgentUpdate = {
-  id: Argument.String("agent").pipe(Argument.withDescription("Agent slug or ID")),
+  id: Argument.String("agent").pipe(Argument.withDescription("The agent’s name or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   icon: Flag.String("icon").pipe(
@@ -154,16 +154,16 @@ export const AgentUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const AgentArchive = { id: Argument.String("agent").pipe(Argument.withDescription("Agent slug or ID")) }
+export const AgentArchive = { id: Argument.String("agent").pipe(Argument.withDescription("The agent’s name or ID.")) }
 
 export const AgentTransferOwnership = {
-  id: Argument.String("agent").pipe(Argument.withDescription("Agent slug or ID")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  id: Argument.String("agent").pipe(Argument.withDescription("The agent’s name or ID.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   connected: Flag.Boolean("connected").pipe(
     Flag.optional,
     Flag.withDescription("Only apps with a profile you can see, registry apps too."),
@@ -172,7 +172,7 @@ export const AppList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const AppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const AppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("The app’s slug or ID.")) }
 
 export const AppCreate = {
   name: Flag.String("name").pipe(Flag.optional),
@@ -184,12 +184,12 @@ export const AppCreate = {
     Flag.withDescription("Separate values with commas."),
   ),
   slug: Flag.String("slug").pipe(Flag.optional),
-  ownerSpaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  ownerSpaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppUpdate = {
-  id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")),
+  id: Argument.String("app").pipe(Argument.withDescription("The app’s slug or ID.")),
   dependsOn: Flag.String("depends-on").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
@@ -205,27 +205,31 @@ export const AppUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const AppArchive = { id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const AppArchive = { id: Argument.String("app").pipe(Argument.withDescription("The app’s slug or ID.")) }
 
 export const AppTransferOwnership = {
-  id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  id: Argument.String("app").pipe(Argument.withDescription("The app’s slug or ID.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppProfileList = {
-  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("App slug or ID")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("The app’s slug or ID.")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const AppProfileGet = {
-  idOrSlug: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  idOrSlug: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
 }
 
 export const AppProfileCreate = {
-  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("App slug or ID")),
+  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("The app’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   slug: Flag.String("slug").pipe(Flag.optional, Flag.withDescription("Fixed at create.")),
   kind: Flag.Literals("kind", ["shared", "private"]).pipe(
@@ -242,13 +246,21 @@ export const AppProfileCreate = {
 }
 
 export const AppProfileUpdate = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
   name: Flag.String("name").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppProfileAccess = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
   add: Flag.String("add").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
@@ -264,15 +276,28 @@ export const AppProfileAccess = {
 }
 
 export const AppProfileLink = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
-  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("App slug or ID")),
-  profileId: Flag.String("to").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
+  id: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
+  appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("The app’s slug or ID.")),
+  profileId: Flag.String("to").pipe(
+    Flag.optional,
+    Flag.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppProfilePromote = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  id: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -291,13 +316,15 @@ export const AppRegistryList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const AppRegistryGet = { idOrSlug: Argument.String("entry").pipe(Argument.withDescription("Entry slug or ID")) }
+export const AppRegistryGet = {
+  idOrSlug: Argument.String("entry").pipe(Argument.withDescription("The app’s slug or ID.")),
+}
 
 export const SessionList = {
   spaceId: Flag.String("space").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
-    Flag.withDescription("Space slug or ID Separate values with commas."),
+    Flag.withDescription("The space’s slug or ID. Separate values with commas."),
   ),
   createdBy: Flag.String("created-by").pipe(
     Flag.atLeast(0),
@@ -307,7 +334,7 @@ export const SessionList = {
   agentId: Flag.String("agent").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
-    Flag.withDescription("Agent slug or ID Separate values with commas."),
+    Flag.withDescription("The agent’s name or ID. Separate values with commas."),
   ),
   origin: Flag.Literals("origin", ["chat", "task", "schedule", "webhook", "slack", "linear", "github"]).pipe(
     Flag.atLeast(0),
@@ -330,12 +357,12 @@ export const SessionList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const SessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
-export const SessionArchive = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionArchive = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
 export const TaskList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
     Flag.optional,
     Flag.withDescription("Only this status."),
@@ -345,7 +372,7 @@ export const TaskList = {
     Flag.withDescription("Include `done` and `dismissed` tasks."),
   ),
   priority: Flag.Literals("priority", ["low", "medium", "high"]).pipe(Flag.optional),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional),
   search: Flag.String("search").pipe(
     Flag.optional,
@@ -360,10 +387,12 @@ export const TaskList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const TaskGet = { idOrSlug: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
+export const TaskGet = {
+  idOrSlug: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
+}
 
 export const TaskCreate = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
@@ -382,14 +411,17 @@ export const TaskCreate = {
     Flag.withDescription("Separate values with commas."),
   ),
   dueAt: Flag.String("due-at").pipe(Flag.optional),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional, Flag.withDescription("The person responsible for the task.")),
-  parentId: Flag.String("parent").pipe(Flag.optional, Flag.withDescription("Parent task slug or ID")),
+  parentId: Flag.String("parent").pipe(
+    Flag.optional,
+    Flag.withDescription("The task’s number, such as REN-12, or its ID."),
+  ),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const TaskUpdate = {
-  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   title: Flag.String("title").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   status: Flag.Literals("status", ["backlog", "todo", "in_progress", "done", "dismissed"]).pipe(
@@ -408,17 +440,22 @@ export const TaskUpdate = {
     Flag.withMetavar("list"),
     Flag.withDescription("Separate values with commas."),
   ),
-  parentId: Flag.String("parent").pipe(Flag.optional, Flag.withDescription("Parent task slug or ID")),
+  parentId: Flag.String("parent").pipe(
+    Flag.optional,
+    Flag.withDescription("The task’s number, such as REN-12, or its ID."),
+  ),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const TaskArchive = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
+export const TaskArchive = {
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
+}
 
 export const TaskAssign = {
-  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   ownerId: Flag.String("owner-id").pipe(Flag.optional, Flag.withDescription("The new owner, or null for none.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   note: Flag.String("note").pipe(Flag.optional, Flag.withDescription("The instruction for the receiving agent.")),
   start: Flag.Literals("start", ["new", "continue", "none"]).pipe(
     Flag.optional,
@@ -428,7 +465,7 @@ export const TaskAssign = {
 }
 
 export const TaskStart = {
-  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   mode: Flag.Literals("mode", ["new", "continue"]).pipe(
     Flag.optional,
     Flag.withDescription("`new` opens a new session for the task’s agent."),
@@ -437,7 +474,7 @@ export const TaskStart = {
 }
 
 export const TaskReview = {
-  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   reason: Flag.String("reason").pipe(
     Flag.optional,
     Flag.withDescription("Why a person must act, and what to look at."),
@@ -452,7 +489,7 @@ export const TaskReview = {
 }
 
 export const TaskFinish = {
-  id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   note: Flag.String("note").pipe(
     Flag.optional,
     Flag.withDescription("What is ready and where: the pull request, the deliverable."),
@@ -461,7 +498,7 @@ export const TaskFinish = {
 }
 
 export const TaskCommentCreate = {
-  taskId: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  taskId: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   body: Flag.String("body").pipe(Flag.optional, Flag.withDescription("Markdown.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
@@ -475,19 +512,19 @@ export const TaskCommentUpdate = {
 export const TaskCommentArchive = { id: Argument.String("comment").pipe(Argument.withDescription("Comment ID")) }
 
 export const TaskActivityList = {
-  taskId: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")),
+  taskId: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const LabelList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const LabelCreate = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   color: Flag.String("color").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
@@ -504,14 +541,14 @@ export const LabelArchive = { id: Argument.String("label").pipe(Argument.withDes
 
 export const ViewList = {
   type: Flag.Literals("type", ["task"]).pipe(Flag.optional, Flag.withDescription("Only views of this type.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const ViewCreate = {
   type: Flag.Literals("type", ["task"]).pipe(Flag.optional, Flag.withDescription("What the view lists.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   shared: Flag.Boolean("shared").pipe(
     Flag.optional,
@@ -530,7 +567,7 @@ export const ViewUpdate = {
 export const ViewArchive = { id: Argument.String("view").pipe(Argument.withDescription("View ID")) }
 
 export const ScheduleList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   status: Flag.Literals("status", ["active", "paused", "ended"]).pipe(Flag.optional),
   search: Flag.String("search").pipe(
     Flag.optional,
@@ -541,69 +578,73 @@ export const ScheduleList = {
 }
 
 export const ScheduleGet = {
-  idOrSlug: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  idOrSlug: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
 }
 
 export const ScheduleCreate = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   slug: Flag.String("slug").pipe(
     Flag.optional,
     Flag.withDescription("Without it, Ren makes one from the name and adds -2, -3, … when it is taken."),
   ),
   message: Flag.String("message").pipe(Flag.optional),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const ScheduleUpdate = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   message: Flag.String("message").pipe(Flag.optional),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const ScheduleArchive = { id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")) }
+export const ScheduleArchive = {
+  id: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
+}
 
 export const SchedulePause = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const ScheduleResume = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const ScheduleRun = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const WebhookGet = { idOrSlug: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+export const WebhookGet = {
+  idOrSlug: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
+}
 
 export const WebhookCreate = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   slug: Flag.String("slug").pipe(
     Flag.optional,
     Flag.withDescription("Without it, Ren makes one from the name and adds -2, -3, … when it is taken."),
   ),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookUpdate = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
   message: Flag.String("message").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   fallbackUserId: Flag.String("fallback-user-id").pipe(
     Flag.optional,
     Flag.withDescription("Only yourself, or null to remove it."),
@@ -617,26 +658,28 @@ export const WebhookUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const WebhookArchive = { id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+export const WebhookArchive = {
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
+}
 
 export const WebhookRotateUrl = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookSetSigningSecret = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   secret: Flag.String("secret").pipe(Flag.optional, Flag.withDescription("The secret that the provider gave.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookRevealSigningSecret = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookTest = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   requestIds: Flag.String("request-ids").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
@@ -646,12 +689,12 @@ export const WebhookTest = {
 }
 
 export const WebhookReplay = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("The webhook’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookRequestList = {
-  webhookId: Flag.String("webhook").pipe(Flag.withDescription("Webhook slug or ID")),
+  webhookId: Flag.String("webhook").pipe(Flag.withDescription("The webhook’s slug or ID.")),
   outcome: Flag.Literals("outcome", [
     "queued",
     "started",
@@ -674,27 +717,25 @@ export const WebhookRequestGet = {
 }
 
 export const ArtifactList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const ArtifactGet = {
-  idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
-}
+export const ArtifactGet = { idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")) }
 
 export const ArtifactUpdate = {
-  id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
+  id: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")),
   title: Flag.String("title").pipe(Flag.optional, Flag.withDescription("The new title.")),
   name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("The new name.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")) }
+export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")) }
 
 export const CredentialList = {
   owner: Flag.Literals("owner", ["org", "space", "person", "profile"]).pipe(Flag.optional),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   type: Flag.Literals("type", ["key", "basic", "oauth", "fields", "route", "client_credentials"]).pipe(Flag.optional),
   search: Flag.String("search").pipe(
     Flag.optional,
@@ -704,9 +745,7 @@ export const CredentialList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const CredentialGet = {
-  idOrSlug: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
-}
+export const CredentialGet = { idOrSlug: Argument.String("credential").pipe(Argument.withDescription("Credential ID")) }
 
 export const CredentialCreate = {
   label: Flag.String("label").pipe(Flag.optional),
@@ -719,7 +758,7 @@ export const CredentialCreate = {
 }
 
 export const CredentialUpdate = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   name: Flag.String("name").pipe(Flag.optional),
   delivery: Flag.Literals("delivery", ["egress", "delivered"]).pipe(
     Flag.optional,
@@ -729,22 +768,22 @@ export const CredentialUpdate = {
 }
 
 export const CredentialRotate = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialMove = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialCopy = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialRemove = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -754,7 +793,7 @@ export const EnvironmentTemplateList = {
 }
 
 export const EnvironmentTemplateGet = {
-  idOrSlug: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  idOrSlug: Argument.String("template").pipe(Argument.withDescription("The environment template’s name or ID.")),
 }
 
 export const EnvironmentTemplateCreate = {
@@ -766,7 +805,7 @@ export const EnvironmentTemplateCreate = {
 }
 
 export const EnvironmentTemplateUpdate = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("The environment template’s name or ID.")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   sessionsPerEnvironment: Flag.Finite("sessions-per-environment").pipe(Flag.optional),
@@ -774,16 +813,16 @@ export const EnvironmentTemplateUpdate = {
 }
 
 export const EnvironmentTemplateArchive = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("The environment template’s name or ID.")),
 }
 
 export const EnvironmentTemplateRetryBuild = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("The environment template’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const EnvironmentTemplateAffectedSpaces = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("The environment template’s name or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -792,7 +831,7 @@ export const OauthAppList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const OauthAppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const OauthAppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App ID")) }
 
 export const OauthAppCreate = {
   name: Flag.String("name").pipe(Flag.optional),
@@ -817,7 +856,7 @@ export const OauthAppCreate = {
 }
 
 export const OauthAppUpdate = {
-  id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")),
+  id: Argument.String("app").pipe(Argument.withDescription("App ID")),
   name: Flag.String("name").pipe(Flag.optional),
   clientId: Flag.String("client-id").pipe(Flag.optional),
   clientSecret: Flag.String("client-secret").pipe(Flag.optional),
@@ -839,11 +878,9 @@ export const OauthAppUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const OauthAppArchive = { id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const OauthAppArchive = { id: Argument.String("app").pipe(Argument.withDescription("App ID")) }
 
-export const OauthSessionGet = {
-  idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
-}
+export const OauthSessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
 export const ChannelInstallList = {
   page: Flag.Finite("page").pipe(Flag.optional),
@@ -852,7 +889,7 @@ export const ChannelInstallList = {
 
 export const ChannelInstallUpdate = {
   id: Argument.String("install").pipe(Argument.withDescription("Install ID")),
-  defaultSpaceId: Flag.String("default-space").pipe(Flag.optional, Flag.withDescription("Default space slug or ID")),
+  defaultSpaceId: Flag.String("default-space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -863,7 +900,7 @@ export const ChannelInstallRemove = {
 
 export const ChannelMappingList = {
   installId: Flag.String("install-id").pipe(Flag.optional),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
@@ -871,8 +908,8 @@ export const ChannelMappingList = {
 export const ChannelMappingCreate = {
   installId: Flag.String("install-id").pipe(Flag.optional),
   place: Flag.String("place").pipe(Flag.optional),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
-  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
+  agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("The agent’s name or ID.")),
   fallback: Flag.Boolean("fallback").pipe(
     Flag.optional,
     Flag.withDescription("On by default, and off by default for a public GitHub repository."),
@@ -886,23 +923,27 @@ export const ChannelMappingRemove = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const SpaceProfiles = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
+export const SpaceProfiles = { id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")) }
 
-export const SpaceInviteLinkGet = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
-
-export const SpaceInviteLinkReset = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
-
-export const SessionProfiles = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
-
-export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
-
-export const SessionUsage = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
-
-export const SessionPullRequests = {
-  id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
+export const SpaceInviteLinkGet = {
+  id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
 }
 
-export const TaskPullRequests = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
+export const SpaceInviteLinkReset = {
+  id: Argument.String("space").pipe(Argument.withDescription("The space’s slug or ID.")),
+}
+
+export const SessionProfiles = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
+
+export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
+
+export const SessionUsage = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
+
+export const SessionPullRequests = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
+
+export const TaskPullRequests = {
+  id: Argument.String("task").pipe(Argument.withDescription("The task’s number, such as REN-12, or its ID.")),
+}
 
 export const AppSkillsGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
 
@@ -910,17 +951,23 @@ export const AppToolsGet = {
   idOrSlug: Argument.String("app").pipe(Argument.withDescription("Registry app slug or ID")),
 }
 
-export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")) }
+export const AppProfileDelete = {
+  id: Argument.String("profile").pipe(
+    Argument.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
+}
 
 export const ScheduleRunList = {
-  scheduleId: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  scheduleId: Argument.String("schedule").pipe(Argument.withDescription("The schedule’s slug or ID.")),
   status: Flag.Literals("status", ["pending", "started", "skipped", "failed"]).pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
 export const MemoryList = {
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   prefix: Flag.String("prefix").pipe(
     Flag.optional,
     Flag.withDescription("Only the files whose path starts with it, such as `people/`."),
@@ -931,14 +978,14 @@ export const MemoryRead = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file path relative to the memory root, such as `memory.md` or `people/ana.md`."),
   ),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
 }
 
 export const MemoryWrite = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file path relative to the memory root, such as `memory.md` or `people/ana.md`."),
   ),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   content: Flag.String("content").pipe(Flag.optional, Flag.withDescription("The whole new content of the file.")),
   mode: Flag.Literals("mode", ["create", "replace"]).pipe(
     Flag.optional,
@@ -951,7 +998,7 @@ export const MemoryEdit = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file path relative to the memory root, such as `memory.md` or `people/ana.md`."),
   ),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   oldString: Flag.String("old-string").pipe(Flag.optional, Flag.withDescription("The exact text to replace.")),
   newString: Flag.String("new-string").pipe(Flag.optional),
   replaceAll: Flag.Boolean("replace-all").pipe(Flag.optional, Flag.withDescription("Replace every occurrence.")),
@@ -962,14 +1009,14 @@ export const MemoryDelete = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file path relative to the memory root, such as `memory.md` or `people/ana.md`."),
   ),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
 }
 
 export const DriveDownload = {
   path: Argument.String("path").pipe(
     Argument.withDescription("A file’s path inside its drive, such as `reports/q3.pdf`."),
   ),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   disposition: Flag.Literals("disposition", ["attachment", "inline"]).pipe(
     Flag.optional,
     Flag.withDescription("Defaults to `attachment`."),
@@ -978,7 +1025,7 @@ export const DriveDownload = {
 
 export const FilesList = {
   source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
   folder: Flag.String("folder").pipe(Flag.optional, Flag.withDescription("The folder to list, such as `reports/`.")),
   cursor: Flag.String("cursor").pipe(
     Flag.optional,
@@ -991,7 +1038,7 @@ export const FilesRead = {
     Argument.withDescription("A file’s path inside its source, such as `reports/q3.pdf`."),
   ),
   source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
 }
 
 export const FilesDelete = {
@@ -999,11 +1046,16 @@ export const FilesDelete = {
     Argument.withDescription("A file’s path inside its source, such as `reports/q3.pdf`."),
   ),
   source: Flag.Literals("source", ["drive", "memory"]).pipe(Flag.withDescription("`drive`: the files of a drive.")),
-  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
+  spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("The space’s slug or ID.")),
 }
 
 export const CredentialConnect = {
-  profileId: Flag.String("profile").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
+  profileId: Flag.String("profile").pipe(
+    Flag.optional,
+    Flag.withDescription(
+      "The profile’s slug, written <app>/<slug> when two apps have a profile with that slug, or its ID.",
+    ),
+  ),
   reconnect: Flag.Boolean("reconnect").pipe(Flag.optional),
   returnTo: Flag.String("return-to").pipe(
     Flag.optional,

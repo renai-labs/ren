@@ -29,7 +29,7 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "TaskComment.Info" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
-export const CreateInput = Schema.Struct({ taskId: Task.ID, body: Body }).annotate({
+export const CreateInput = Schema.Struct({ taskId: Task.Ref, body: Body }).annotate({
   identifier: "TaskComment.CreateInput",
 })
 

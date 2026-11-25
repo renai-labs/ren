@@ -632,14 +632,17 @@ export const layer = Layer.effect(
     return Service.of({
       list,
       get: Effect.fn("Schedules.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!isID(idOrSlug)) return yield* notFound
-        const found = (yield* database.db
+        const rows = yield* database.db
           .select({ schedule })
           .from(schedule)
           .leftJoin(SchedulePolicy.membership, membershipOf(actor))
-          .where(and(eq(schedule.id, idOrSlug), visibleTo(actor)))
-          .pipe(Effect.orDie)).at(0)
-        if (!found) return yield* notFound
+          .where(and(isID(idOrSlug) ? eq(schedule.id, idOrSlug) : eq(schedule.slug, idOrSlug), visibleTo(actor)))
+          .limit(2)
+          .pipe(Effect.orDie)
+        const found = yield* Primitive.single(rows, {
+          notFound,
+          ambiguous: `More than one schedule has the slug “${idOrSlug}”. Use its ID.`,
+        })
         return yield* infoOf(database.db, found.schedule).pipe(Effect.orDie)
       }),
       create: Effect.fn("Schedules.create")(function* (actor: Actor.Info, input: Schedule.CreateInput) {

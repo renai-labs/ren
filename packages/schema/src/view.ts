@@ -90,7 +90,7 @@ export const system: Readonly<Record<Type, ReadonlyArray<Pick<Info, "id" | "name
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
   type: Schema.optional(Type).annotate({ description: "Only views of this type. Without it, views of every type." }),
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description:
       "The views of this space’s page. Without it, the views of the organization’s page. Both start with the system views.",
   }),
@@ -102,7 +102,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "View.Page" })
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   type: Type,
-  spaceId: Schema.optional(Space.ID).annotate({
+  spaceId: Schema.optional(Space.Ref).annotate({
     description: "Show the view on this space’s page. Without it, on the organization’s page.",
   }),
   name: Name,

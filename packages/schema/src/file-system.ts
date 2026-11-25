@@ -55,7 +55,7 @@ export type Source = typeof Source.Type
 const scope = {
   source: Source,
   spaceId: Schema.optional(
-    Space.ID.annotate({ description: "The space whose files to use. Omit it for the organization’s." }),
+    Space.Ref.annotate({ description: "The space whose files to use. Omit it for the organization’s." }),
   ),
 }
 

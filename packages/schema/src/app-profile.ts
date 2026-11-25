@@ -11,6 +11,8 @@ import { Space } from "./space.js"
 export const ID = AppIdentity.ProfileID
 export type ID = typeof ID.Type
 
+export const Ref = AppIdentity.ProfileRef
+
 export const maximumSlugLength = 32
 
 export const Slug = Primitive.Slug.check(
@@ -116,20 +118,20 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  appId: Schema.optional(AppIdentity.ID),
-  spaceId: Schema.optional(Space.ID.annotate({ description: "Only the profiles that this space reaches." })),
+  appId: Schema.optional(AppIdentity.Ref),
+  spaceId: Schema.optional(Space.Ref.annotate({ description: "Only the profiles that this space reaches." })),
   ...Pagination.fields(50),
 }).annotate({ identifier: "AppProfile.ListInput" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  appId: AppIdentity.ID,
+  appId: AppIdentity.Ref,
   name: Primitive.Name,
   slug: Slug,
   kind: Kind,
   allSpaces: Schema.optional(Schema.Boolean),
-  spaceIds: Schema.optional(Schema.Array(Space.ID)),
-  links: Schema.optional(Schema.Array(Schema.Struct({ appId: AppIdentity.ID, profileId: ID }))),
+  spaceIds: Schema.optional(Schema.Array(Space.Ref)),
+  links: Schema.optional(Schema.Array(Schema.Struct({ appId: AppIdentity.Ref, profileId: Ref }))),
 }).annotate({ identifier: "AppProfile.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
@@ -139,19 +141,19 @@ export const UpdateInput = Schema.Struct({ name: Schema.optional(Primitive.Name)
 
 export interface AccessInput extends Schema.Schema.Type<typeof AccessInput> {}
 export const AccessInput = Schema.Struct({
-  add: Schema.optional(Schema.Array(Space.ID)),
-  remove: Schema.optional(Schema.Array(Space.ID)),
+  add: Schema.optional(Schema.Array(Space.Ref)),
+  remove: Schema.optional(Schema.Array(Space.Ref)),
   allSpaces: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "AppProfile.AccessInput" })
 
 export interface LinkInput extends Schema.Schema.Type<typeof LinkInput> {}
-export const LinkInput = Schema.Struct({ appId: AppIdentity.ID, profileId: Schema.NullOr(ID) }).annotate({
+export const LinkInput = Schema.Struct({ appId: AppIdentity.Ref, profileId: Schema.NullOr(Ref) }).annotate({
   identifier: "AppProfile.LinkInput",
 })
 
 export interface PromoteInput extends Schema.Schema.Type<typeof PromoteInput> {}
 export const PromoteInput = Schema.Struct({
-  spaceId: Space.ID.annotate({ description: "The one space that the shared profile lists." }),
+  spaceId: Space.Ref.annotate({ description: "The one space that the shared profile lists." }),
 }).annotate({ identifier: "AppProfile.PromoteInput" })
 
 export interface Reach extends Schema.Schema.Type<typeof Reach> {}
@@ -173,7 +175,7 @@ export const Connect = Schema.Struct({
 export const definition = Primitive.define({
   name: "app-profile",
   plural: "app-profiles",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Pagination.Page(Info).annotate({ identifier: "AppProfile.Page" }) },
   get: true,

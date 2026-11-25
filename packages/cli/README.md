@@ -98,7 +98,7 @@ The npm package is private: the CLI ships only through the installer. ren-v1's `
 - `src/services/output.ts` owns the output format, results encoded with their schema, diagnostics, `Output.Failure` and terminal confirmation.
 - `src/infra/folder.ts` maps local files to and from the shared Infra schema.
 - `src/generated/` holds the generated resource commands. Never edit it.
-- `src/operation.ts` runs a generated command: it resolves slugs to IDs, decodes flags and `--input` with the endpoint's own schemas, calls the SDK and renders the result.
+- `src/operation.ts` runs a generated command: it resolves names to IDs in arguments, flags and `--input`, decodes flags and `--input` with the endpoint's own schemas, calls the SDK and renders the result.
 
 ## Resource commands
 
@@ -114,6 +114,6 @@ ren task comment add <task> --body "On it"
 ren schedule run nightly
 ```
 
-A slug works wherever an ID does. Plural nouns are accepted (`ren spaces list`). Nested fields come through `--input` (JSON, `@file` or `@-`), and flags override it.
+Where a resource has a human name, the name works wherever its ID does, in arguments, flags and `--input`: a space’s, app’s, schedule’s or webhook’s slug, an agent’s or environment template’s name, a task’s number such as `REN-12`, and the organization’s slug. Each argument’s help says which. Plural nouns are accepted (`ren spaces list`). Nested fields come through `--input` (JSON, `@file` or `@-`), and flags override it.
 
 The names come from the table in `script/generate.ts`. After a change to `@ren/protocol` or the table, run `bun run generate` from the repo root. Generation fails while an SDK operation is neither in the table nor listed with the command that covers it, so a new endpoint is never silently missing.

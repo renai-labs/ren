@@ -9,6 +9,10 @@ import type { Actor } from "./actor.js"
 
 export const action = Primitive.action
 
+export const Resolver = Primitive.Resolver
+
+export type Named = Primitive.Named
+
 export const maximumNameLength = Primitive.maximumNameLength
 
 export class NotFound extends Schema.TaggedError<NotFound>()("Primitive.NotFound", { message: Schema.String }) {}
@@ -33,6 +37,15 @@ export const slugFor = (
     )
   if (taken.has(input.slug)) return Effect.fail(new Conflict({ message: `The slug “${input.slug}” is already taken.` }))
   return Effect.succeed(input.slug)
+}
+
+export const single = <Row>(
+  rows: ReadonlyArray<Row>,
+  options: { readonly notFound: NotFound; readonly ambiguous: string },
+) => {
+  const row = rows.at(0)
+  if (rows.length > 1) return Effect.fail(new NotFound({ message: options.ambiguous }))
+  return row ? Effect.succeed(row) : Effect.fail(options.notFound)
 }
 
 export const uniqueConflict =

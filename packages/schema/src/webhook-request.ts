@@ -42,7 +42,7 @@ export const Detail = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  webhookId: Webhook.ID,
+  webhookId: Webhook.Ref,
   outcome: Schema.optional(Outcome),
   ...Pagination.fields(20),
 }).annotate({

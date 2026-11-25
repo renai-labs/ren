@@ -140,7 +140,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({ description: "Without it, the artifacts of every space you are in." }),
+  spaceId: Schema.optional(Space.Ref).annotate({ description: "Without it, the artifacts of every space you are in." }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Artifact.ListInput" })
 

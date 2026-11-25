@@ -8,10 +8,13 @@ import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } fro
 import { Exposure } from "./exposure.js"
 import { ActiveOrganization } from "./middleware/active-organization.js"
 import { Authentication } from "./middleware/authentication.js"
+import { References } from "./middleware/references.js"
 
 export class Annotation extends Context.Service<Annotation, Primitive.Definition>()(
   "@ren/protocol/Primitive/Annotation",
 ) {}
+
+export const referenced = Primitive.referenced
 
 interface Named<Name extends string, Plural extends string> {
   readonly name: Name
@@ -166,6 +169,7 @@ export const group = <
 ) =>
   HttpApiGroup.make(definition.name)
     .add(...endpoints)
+    .middleware(References)
     .middleware(ActiveOrganization)
     .middleware(Authentication)
     .annotate(Annotation, definition)

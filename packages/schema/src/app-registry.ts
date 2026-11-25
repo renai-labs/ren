@@ -87,7 +87,7 @@ export const ListInput = Schema.Struct({
 export const definition = Primitive.define({
   name: "app-registry",
   plural: "app-registry",
-  id: App.ID,
+  id: App.Ref,
   info: Info,
   list: { input: ListInput, page: Pagination.Page(Info).annotate({ identifier: "AppRegistry.Page" }) },
   get: true,

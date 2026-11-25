@@ -13,6 +13,8 @@ import { Space } from "./space.js"
 export const ID = Identifier.make("sch", "Schedule.ID")
 export type ID = typeof ID.Type
 
+export const Ref = Primitive.reference("schedule", ID, "The schedule’s slug or ID.")
+
 export const RunID = Identifier.make("srn", "ScheduleRun.ID")
 export type RunID = typeof RunID.Type
 
@@ -145,7 +147,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID).annotate({ description: "Without it, the schedules of every space you are in." }),
+  spaceId: Schema.optional(Space.Ref).annotate({ description: "Without it, the schedules of every space you are in." }),
   status: Schema.optional(Status),
   search: Search.field("the name or the message"),
   ...Pagination.fields(50),
@@ -155,7 +157,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Schedule.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
   name: Primitive.Name,
   slug: Schema.optional(Primitive.Slug).annotate({
     description: "Without it, Ren makes one from the name and adds -2, -3, … when it is taken.",
@@ -163,7 +165,7 @@ export const CreateInput = Schema.Struct({
   message: Message,
   when: WhenInput,
   target: Schema.optional(TargetInput).annotate({ description: "Without it, `new-chat`." }),
-  agentId: Schema.optional(Agent.ID).annotate({
+  agentId: Schema.optional(Agent.Ref).annotate({
     description: "An agent of the space for a new chat. Without it, the space’s default settings.",
   }),
 }).annotate({ identifier: "Schedule.CreateInput" })
@@ -174,7 +176,7 @@ export const UpdateInput = Schema.Struct({
   message: Schema.optional(Message),
   when: Schema.optional(WhenInput),
   target: Schema.optional(TargetInput),
-  agentId: Schema.optional(Schema.NullOr(Agent.ID)),
+  agentId: Schema.optional(Schema.NullOr(Agent.Ref)),
 }).annotate({
   identifier: "Schedule.UpdateInput",
   description: "A change to the message, the agent, the target or the time makes you its owner.",
@@ -196,7 +198,7 @@ export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
 export const definition = Primitive.define({
   name: "schedule",
   plural: "schedules",
-  id: ID,
+  id: Ref,
   info: Info,
   list: { input: ListInput, page: Page },
   get: true,

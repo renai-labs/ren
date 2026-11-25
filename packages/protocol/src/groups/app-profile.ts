@@ -7,6 +7,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 import { Primitive } from "../primitive.js"
 
 const errors = [NotFoundError, ForbiddenError, ConflictError]
@@ -17,7 +18,7 @@ export const AppProfileGroup = Primitive.group(AppProfile.definition, "sdk", [
   Primitive.create(AppProfile.definition),
   Primitive.update(AppProfile.definition),
   HttpApiEndpoint.post("app-profile.access", "/app-profiles/:id/access", {
-    params: { id: AppProfile.ID },
+    params: { id: AppProfile.Ref },
     payload: AppProfile.AccessInput,
     success: AppProfile.Info,
     error: errors,
@@ -31,7 +32,7 @@ export const AppProfileGroup = Primitive.group(AppProfile.definition, "sdk", [
   ),
   Primitive.action(AppProfile.definition, "link"),
   HttpApiEndpoint.post("app-profile.promote", "/app-profiles/:id/promote", {
-    params: { id: AppProfile.ID },
+    params: { id: AppProfile.Ref },
     payload: AppProfile.PromoteInput,
     success: AppProfile.Info,
     error: errors,
@@ -47,7 +48,7 @@ export const AppProfileGroup = Primitive.group(AppProfile.definition, "sdk", [
 export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
   .add(
     HttpApiEndpoint.delete("app-profile.delete", "/app-profiles/:id", {
-      params: { id: AppProfile.ID },
+      params: { id: AppProfile.Ref },
       success: AppProfile.Info,
       error: [NotFoundError, ForbiddenError],
     }).annotateMerge(
@@ -73,7 +74,7 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
   )
   .add(
     HttpApiEndpoint.get("space.profiles", "/spaces/:id/profiles", {
-      params: { id: Space.ID },
+      params: { id: Space.Ref },
       success: AppProfile.Reach,
       error: NotFoundError,
     }).annotateMerge(
@@ -98,6 +99,7 @@ export const AppProfileReachGroup = HttpApiGroup.make("app-profile-reach")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

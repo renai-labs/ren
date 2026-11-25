@@ -40,7 +40,7 @@ export const Info = Schema.Struct({
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
   installId: Schema.optional(ChannelInstall.ID),
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.Ref),
   ...Pagination.fields(100),
 }).annotate({ identifier: "ChannelMapping.ListInput" })
 
@@ -50,8 +50,8 @@ export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   installId: ChannelInstall.ID,
   place: Schema.NonEmptyString,
-  spaceId: Space.ID,
-  agentId: Schema.optional(Agent.ID).annotate({ description: "Without it, the place reaches the ren agent." }),
+  spaceId: Space.Ref,
+  agentId: Schema.optional(Agent.Ref).annotate({ description: "Without it, the place reaches the ren agent." }),
   fallback: Schema.optional(Schema.Boolean).annotate({
     description: "On by default, and off by default for a public GitHub repository.",
   }),

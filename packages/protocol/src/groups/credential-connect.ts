@@ -7,6 +7,7 @@ import { Exposure } from "../exposure.js"
 import { Mcp } from "../mcp.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const CredentialConnectGroup = HttpApiGroup.make("credential-connect")
   .add(
@@ -25,6 +26,7 @@ export const CredentialConnectGroup = HttpApiGroup.make("credential-connect")
       )
       .annotate(Mcp.Hidden, "A sign-in for a credential, which stays out of Ren MCP."),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

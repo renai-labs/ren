@@ -9,6 +9,7 @@ import { InvalidRequestError, NotFoundError, TooLargeError, UnavailableError } f
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const ChatGroup = HttpApiGroup.make("chat")
   .add(
@@ -65,7 +66,7 @@ export const ChatGroup = HttpApiGroup.make("chat")
   )
   .add(
     HttpApiEndpoint.post("chat.prepare", "/spaces/:id/chat/prepare", {
-      params: { id: Space.ID },
+      params: { id: Space.Ref },
       success: HttpApiSchema.NoContent,
       error: NotFoundError,
     }).annotateMerge(
@@ -94,6 +95,7 @@ export const ChatGroup = HttpApiGroup.make("chat")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

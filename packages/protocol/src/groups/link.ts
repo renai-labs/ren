@@ -9,6 +9,7 @@ import { NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 export const LinkGroup = HttpApiGroup.make("link")
   .add(
@@ -55,7 +56,7 @@ export const LinkGroup = HttpApiGroup.make("link")
   )
   .add(
     HttpApiEndpoint.get("task.pullRequests", "/tasks/:id/pull-requests", {
-      params: { id: Task.ID },
+      params: { id: Task.Ref },
       success: Schema.Array(PullRequest.Info),
       error: NotFoundError,
     }).annotateMerge(
@@ -67,6 +68,7 @@ export const LinkGroup = HttpApiGroup.make("link")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

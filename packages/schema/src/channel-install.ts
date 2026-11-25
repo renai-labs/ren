@@ -42,7 +42,7 @@ const Page = Pagination.Page(Info).annotate({ identifier: "ChannelInstall.Page" 
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  defaultSpaceId: Schema.NullOr(Space.ID).annotate({
+  defaultSpaceId: Schema.NullOr(Space.Ref).annotate({
     description: "A space the caller is a member of, or null for the oldest active space.",
   }),
 }).annotate({ identifier: "ChannelInstall.UpdateInput" })

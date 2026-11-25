@@ -27,7 +27,7 @@ export type Files = typeof Files.Type
 
 const scope = {
   spaceId: Schema.optional(
-    Space.ID.annotate({ description: "The space whose memory to use. Omit it for the organization’s memory." }),
+    Space.Ref.annotate({ description: "The space whose memory to use. Omit it for the organization’s memory." }),
   ),
 }
 

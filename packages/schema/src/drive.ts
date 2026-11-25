@@ -49,7 +49,7 @@ export type Kind = typeof Kind.Type
 
 const scope = {
   spaceId: Schema.optional(
-    Space.ID.annotate({ description: "The space whose drive to use. Omit it for the organization’s drive." }),
+    Space.Ref.annotate({ description: "The space whose drive to use. Omit it for the organization’s drive." }),
   ),
 }
 

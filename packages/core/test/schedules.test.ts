@@ -399,7 +399,7 @@ describe("Schedules", () => {
   )
 
   it.live(
-    "a schedule takes a slug from its name, unique among the live schedules of its space, and keeps it when renamed",
+    "a schedule takes a slug from its name, unique among the live schedules of its space, and keeps it when renamed; the slug names it unless another space has it too",
     () =>
       Effect.gen(function* () {
         const schedules = yield* Schedules.Service
@@ -421,6 +421,11 @@ describe("Schedules", () => {
         const other = yield* Seed.space(t.organizationId)
         yield* Seed.join(other, t.createdBy)
         expect((yield* create(other, { name: "Daily digest" })).slug).toBe("daily-digest")
+        expect((yield* schedules.get(t.ada, "morning")).slug).toBe("morning")
+        expect(yield* Effect.flip(schedules.get(t.ada, "daily-digest"))).toMatchObject({
+          _tag: "Primitive.NotFound",
+          message: "More than one schedule has the slug “daily-digest”. Use its ID.",
+        })
       }),
   )
 

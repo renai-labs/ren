@@ -179,13 +179,17 @@ describe("Webhooks", () => {
     }),
   )
 
-  it.live("a member outside the space does not see its webhooks", () =>
+  it.live("its slug names a webhook to a member of its space, and not to a member outside it", () =>
     Effect.gen(function* () {
       const webhooks = yield* Webhooks.Service
       const t = yield* WebhookFixture.team
       const outsider = yield* Seed.actor(t.organizationId, "member")
       const created = yield* webhooks.create(t.ada, WebhookFixture.signups(t.spaceId))
+      expect(yield* webhooks.get(t.bob, "posthog-signups")).toEqual(created)
       expect(yield* Effect.flip(webhooks.get(outsider, created.id))).toMatchObject({ _tag: "Primitive.NotFound" })
+      expect(yield* Effect.flip(webhooks.get(outsider, "posthog-signups"))).toMatchObject({
+        _tag: "Primitive.NotFound",
+      })
       expect((yield* webhooks.list(outsider, { page: 1, pageSize: 50 })).items).toEqual([])
     }),
   )

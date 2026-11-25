@@ -5,6 +5,8 @@ import { Auth } from "./auth.js"
 import { Primitive } from "./primitive.js"
 import { Settings } from "./settings.js"
 
+export const Ref = Primitive.reference("organization-settings", Auth.OrganizationID, "The organization’s slug or ID.")
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Auth.OrganizationID,
@@ -21,7 +23,7 @@ export const UpdateInput = Schema.Struct({ settings: Settings.Info }).annotate({
 export const definition = Primitive.define({
   name: "organization-settings",
   plural: "organization-settings",
-  id: Auth.OrganizationID,
+  id: Ref,
   info: Info,
   get: true,
   update: { input: UpdateInput, result: Info },

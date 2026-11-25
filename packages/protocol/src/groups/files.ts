@@ -4,6 +4,7 @@ import { ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } 
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
+import { References } from "../middleware/references.js"
 
 const scope =
   "source picks the files: `drive` for a drive, `memory` for a memory. Pass spaceId for a space’s; omit it for the organization’s."
@@ -50,6 +51,7 @@ export const FilesGroup = HttpApiGroup.make("files")
       }),
     ),
   )
+  .middleware(References)
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

@@ -245,11 +245,11 @@ export type OrderBy = typeof OrderBy.Type
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Schema.Array(Space.ID)).annotate({
+  spaceId: Schema.optional(Schema.Array(Space.Ref)).annotate({
     description: "Chats in any of these spaces. Without it or `createdBy`, only the caller’s own chats.",
   }),
   createdBy: Schema.optional(Schema.Array(Auth.UserID)).annotate({ description: "Chats any of these people started." }),
-  agentId: Schema.optional(Schema.Array(AgentIdentity.ID)),
+  agentId: Schema.optional(Schema.Array(AgentIdentity.Ref)),
   origin: Schema.optional(Schema.Array(Origin)),
   status: Schema.optional(Status),
   search: Search.field("the title or of a message from a person or an assistant"),
@@ -276,7 +276,7 @@ export const FirstMessage = Schema.Struct({
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   id: ID,
-  spaceId: Space.ID,
+  spaceId: Space.Ref,
   message: Schema.optional(FirstMessage),
   defaultModels: Schema.optional(ModelTypes.Defaults),
   model: Schema.optional(SessionModel.Ref).annotate({

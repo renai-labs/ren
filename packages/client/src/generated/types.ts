@@ -2351,8 +2351,8 @@ export type SpaceJoinRequestListInput = {
 export type SpaceJoinRequestListOutput = SpaceJoinRequestPage
 
 export type SpaceJoinRequestCreateInput = {
-  readonly spaceId: { readonly spaceId: string; readonly note?: string | undefined }["spaceId"]
-  readonly note?: { readonly spaceId: string; readonly note?: string | undefined }["note"]
+  readonly spaceId: { readonly spaceId: string; readonly note?: string | null }["spaceId"]
+  readonly note?: { readonly spaceId: string; readonly note?: string | null }["note"]
 }
 
 export type SpaceJoinRequestCreateOutput = SpaceJoinRequestInfo
@@ -2736,39 +2736,39 @@ export type MemoryWriteOutput = void
 
 export type MemoryEditInput = {
   readonly spaceId?: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: string | null
     readonly path: string
     readonly oldString: string
     readonly newString: string
-    readonly replaceAll?: boolean | undefined
+    readonly replaceAll?: boolean | null
   }["spaceId"]
   readonly path: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: string | null
     readonly path: string
     readonly oldString: string
     readonly newString: string
-    readonly replaceAll?: boolean | undefined
+    readonly replaceAll?: boolean | null
   }["path"]
   readonly oldString: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: string | null
     readonly path: string
     readonly oldString: string
     readonly newString: string
-    readonly replaceAll?: boolean | undefined
+    readonly replaceAll?: boolean | null
   }["oldString"]
   readonly newString: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: string | null
     readonly path: string
     readonly oldString: string
     readonly newString: string
-    readonly replaceAll?: boolean | undefined
+    readonly replaceAll?: boolean | null
   }["newString"]
   readonly replaceAll?: {
-    readonly spaceId?: string | undefined
+    readonly spaceId?: string | null
     readonly path: string
     readonly oldString: string
     readonly newString: string
-    readonly replaceAll?: boolean | undefined
+    readonly replaceAll?: boolean | null
   }["replaceAll"]
 }
 
@@ -7147,63 +7147,63 @@ export type AppProfileCreateInput = {
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["appId"]
   readonly name: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["name"]
   readonly slug: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["slug"]
   readonly kind: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["kind"]
   readonly allSpaces?: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["allSpaces"]
   readonly spaceIds?: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["spaceIds"]
   readonly links?: {
     readonly appId: string
     readonly name: string
     readonly slug: string
     readonly kind: "shared" | "private"
-    readonly allSpaces?: boolean | undefined
-    readonly spaceIds?: ReadonlyArray<string> | undefined
-    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+    readonly allSpaces?: boolean | null
+    readonly spaceIds?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | null
   }["links"]
 }
 
@@ -7219,19 +7219,19 @@ export type AppProfileUpdateOutput = AppProfileInfo
 export type AppProfileAccessInput = {
   readonly id: { readonly id: string }["id"]
   readonly add?: {
-    readonly add?: ReadonlyArray<string> | undefined
-    readonly remove?: ReadonlyArray<string> | undefined
-    readonly allSpaces?: boolean | undefined
+    readonly add?: ReadonlyArray<string> | null
+    readonly remove?: ReadonlyArray<string> | null
+    readonly allSpaces?: boolean | null
   }["add"]
   readonly remove?: {
-    readonly add?: ReadonlyArray<string> | undefined
-    readonly remove?: ReadonlyArray<string> | undefined
-    readonly allSpaces?: boolean | undefined
+    readonly add?: ReadonlyArray<string> | null
+    readonly remove?: ReadonlyArray<string> | null
+    readonly allSpaces?: boolean | null
   }["remove"]
   readonly allSpaces?: {
-    readonly add?: ReadonlyArray<string> | undefined
-    readonly remove?: ReadonlyArray<string> | undefined
-    readonly allSpaces?: boolean | undefined
+    readonly add?: ReadonlyArray<string> | null
+    readonly remove?: ReadonlyArray<string> | null
+    readonly allSpaces?: boolean | null
   }["allSpaces"]
 }
 
@@ -7711,7 +7711,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
@@ -7726,7 +7726,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["status"]
@@ -7741,7 +7741,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["includeDone"]
@@ -7756,7 +7756,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["priority"]
@@ -7771,7 +7771,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["agentId"]
@@ -7786,7 +7786,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["ownerId"]
@@ -7801,7 +7801,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["search"]
@@ -7816,7 +7816,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["label"]
@@ -7831,7 +7831,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["humanReview"]
@@ -7846,7 +7846,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["linkedTo"]
@@ -7861,7 +7861,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["parentId"]
@@ -7876,7 +7876,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
@@ -7891,7 +7891,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
-    readonly parentId?: string | "none" | undefined
+    readonly parentId?: "none" | string | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]
@@ -9907,64 +9907,64 @@ export type ChannelMappingCreateInput = {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["installId"]
   readonly place: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["place"]
   readonly spaceId: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["spaceId"]
   readonly agentId?: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["agentId"]
   readonly fallback?: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["fallback"]
   readonly fallbackUserId?: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["fallbackUserId"]
   readonly triggers?: {
     readonly installId: string
     readonly place: string
     readonly spaceId: string
-    readonly agentId?: string | undefined
-    readonly fallback?: boolean | undefined
-    readonly fallbackUserId?: string | undefined
-    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+    readonly agentId?: string | null
+    readonly fallback?: boolean | null
+    readonly fallbackUserId?: string | null
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | null
   }["triggers"]
 }
 
