@@ -70,7 +70,8 @@ function ProviderCard(props: { provider: ProviderInfo; onConnect: () => void }) 
         </div>
         {connected(provider) ? (
           <Badge variant={provider.enabled ? "secondary" : "outline"}>{provider.enabled ? "On" : "Off"}</Badge>
-        ) : provider.canManage && provider.fields.length > 0 ? (
+        ) : null}
+        {!connected(provider) && provider.canManage && provider.fields.length > 0 ? (
           <Button
             size="sm"
             variant="outline"
@@ -132,9 +133,8 @@ export function ProvidersPage() {
         />
       </InputGroup>
       <Loading id={shapeId} loading={list.isPending} label="Loading providers">
-        {list.isError ? (
-          <EmptyState>Providers aren’t available on this server yet.</EmptyState>
-        ) : shown.length === 0 && !list.isPending ? (
+        {list.isError ? <EmptyState>Providers aren’t available on this server yet.</EmptyState> : null}
+        {!list.isError && shown.length === 0 && !list.isPending ? (
           <EmptyState
             action={
               <Button variant="outline" onClick={() => setQuery("")}>
@@ -144,13 +144,14 @@ export function ProvidersPage() {
           >
             {`No provider matches “${query}”`}
           </EmptyState>
-        ) : (
+        ) : null}
+        {!list.isError && shown.length > 0 ? (
           <ul aria-label="Providers" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {shown.map((provider) => (
               <ProviderCard key={provider.id} provider={provider} onConnect={() => setConnecting(provider)} />
             ))}
           </ul>
-        )}
+        ) : null}
       </Loading>
       {connecting ? (
         <ConnectDialog

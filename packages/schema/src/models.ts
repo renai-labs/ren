@@ -89,6 +89,9 @@ export const Info = Schema.Struct({
   runtime: Schema.optionalKey(Runtime).annotate({ description: "Absent: `http`." }),
   price: Schema.optionalKey(Price).annotate({ description: "Absent for a model the organization pays itself." }),
   free: Schema.optionalKey(Schema.Boolean),
+  released: Schema.optionalKey(Schema.String).annotate({
+    description: "The release date on models.dev, such as `2026-10-02`.",
+  }),
   client: Schema.optionalKey(
     Schema.Struct({
       effortUpdates: Schema.optionalKey(Schema.Boolean).annotate({

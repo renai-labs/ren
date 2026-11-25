@@ -18,10 +18,7 @@ export function ProviderMark(props: {
     return (
       <span
         aria-hidden
-        className={cn(
-          "size-4 shrink-0 bg-current mask-contain mask-center mask-no-repeat",
-          props.className,
-        )}
+        className={cn("size-4 shrink-0 bg-current mask-contain mask-center mask-no-repeat", props.className)}
         // oxlint-disable-next-line react/forbid-dom-props -- the mask is the logo's address, which the gateway gives as data
         style={{ maskImage: `url("${props.logo}")` }}
       />

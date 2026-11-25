@@ -176,6 +176,22 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     }),
   )
 
+  it.live("a provider's models list the latest release first, and a model without a date last", () =>
+    Effect.gen(function* () {
+      const found = yield* setup
+      yield* found.test.setModels("groq", {
+        revision: "2",
+        models: [
+          { ...TestModelGateway.model("undated"), gateway: "groq/undated" },
+          { ...TestModelGateway.model("older"), gateway: "groq/older", released: "2025-01-23" },
+          { ...TestModelGateway.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
+        ],
+      })
+      const listed = yield* found.providers.models(found.member, "groq")
+      expect(listed.models.map((model) => model.id)).toEqual(["groq/newest", "groq/older", "groq/undated"])
+    }),
+  )
+
   it.live("a model switched off leaves only its organization's list, after the gateway heard it", () =>
     Effect.gen(function* () {
       const found = yield* setup

@@ -168,17 +168,21 @@ export const layer = Layer.effect(
       const state = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
       return {
         canManage: canManage(actor),
-        models: (yield* lists.models(actor.organizationId, owned)).map((model) => ({
-          id: ModelLists.switchId(model),
-          name: model.name ?? model.id,
-          type: model.type,
-          input: model.input ?? ["text"],
-          reasoning: (model.efforts?.length ?? 0) > 0,
-          context: model.limit?.context,
-          price: model.price,
-          free: model.free === true,
-          enabled: !state.off.includes(ModelLists.switchId(model)),
-        })),
+        // oxlint-disable-next-line ren/no-comments -- The latest release first; a model without a date goes last. ISO dates sort as text.
+        models: (yield* lists.models(actor.organizationId, owned))
+          .toSorted((left, right) => (right.released ?? "").localeCompare(left.released ?? ""))
+          .map((model) => ({
+            id: ModelLists.switchId(model),
+            name: model.name ?? model.id,
+            type: model.type,
+            input: model.input ?? ["text"],
+            reasoning: (model.efforts?.length ?? 0) > 0,
+            context: model.limit?.context,
+            released: model.released,
+            price: model.price,
+            free: model.free === true,
+            enabled: !state.off.includes(ModelLists.switchId(model)),
+          })),
       } satisfies Provider.ModelList
     })
 

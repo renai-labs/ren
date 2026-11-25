@@ -80,6 +80,7 @@ export const Model = Schema.Struct({
   input: Schema.Array(Models.Modality).annotate({ description: "What the model reads." }),
   reasoning: Schema.Boolean.annotate({ description: "The model has reasoning efforts." }),
   context: Schema.optional(Schema.Int).annotate({ description: "The context window, in tokens." }),
+  released: Schema.optional(Schema.String).annotate({ description: "The release date, such as `2026-10-02`." }),
   price: Schema.optional(Models.Price).annotate({ description: "Absent for a model the organization pays itself." }),
   free: Schema.Boolean,
   enabled: Schema.Boolean,
@@ -91,7 +92,7 @@ export const ModelList = Schema.Struct({
   models: Schema.Array(Model),
 }).annotate({
   identifier: "Provider.ModelList",
-  description: "A provider’s models and their switches. A new model is always on.",
+  description: "A provider’s models and their switches, the latest release first. A new model is always on.",
 })
 
 export interface ModelListInput extends Schema.Schema.Type<typeof ModelListInput> {}

@@ -12,7 +12,7 @@ import { toast } from "@ren/ui/sonner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { formatDateTime } from "@ren/ui/time"
+import { formatDateTime, formatUtcDate } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
@@ -48,8 +48,15 @@ const shownBy: Readonly<Record<Filter, (model: ProviderModel) => boolean>> = {
 
 const usd = (value: number | undefined) => (value === undefined ? "–" : `$${value.toFixed(2)}`)
 
-const tokens = (value: number | undefined) =>
-  value === undefined ? "–" : value >= 1_000_000 ? `${value / 1_000_000}M` : `${Math.round(value / 1000)}K`
+const tokens = (value: number | undefined) => {
+  if (value === undefined) return "–"
+  if (value >= 1_000_000) return `${value / 1_000_000}M`
+  return `${Math.round(value / 1000)}K`
+}
+
+// oxlint-disable-next-line ren/no-comments -- models.dev dates are `YYYY-MM-DD` or `YYYY-MM`.
+const released = (value: string | undefined) =>
+  value ? formatUtcDate(value.length === 7 ? `${value}-01` : value) : "–"
 
 const sample: ProviderModelList = {
   canManage: false,
@@ -78,7 +85,9 @@ function Features(props: { model: ProviderModel }) {
         .filter((feature) => feature.has(props.model))
         .map((feature) => (
           <Tooltip key={feature.label}>
-            <TooltipTrigger render={<span tabIndex={0} aria-label={feature.label} className="rounded-sm" />}>
+            <TooltipTrigger
+              render={<Button variant="ghost" size="icon-sm" className="size-6" aria-label={feature.label} />}
+            >
               <feature.icon className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{feature.label}</TooltipContent>
@@ -100,16 +109,21 @@ function ModelName(props: { model: ProviderModel }) {
   )
 }
 
+const emptyText = (name: string, type: string, filter: Filter) => {
+  const kind = ModelTypes.labelOf(type).toLowerCase()
+  return filter === "All" ? `${name} has no ${kind} models.` : `No ${kind} models match “${filter}”.`
+}
+
 function Models(props: { providerId: string; name: string }) {
   const { api } = RouterContext.useRouterContext()
   const list = useQuery(api.provider.models.list.queryOptions({ id: props.providerId }))
   const update = useMutation(api.provider.models.update.mutationOptions())
   const [filter, setFilter] = useState<Filter>("All")
-  const [chosenType, setType] = useState<string>()
+  const [typeChoice, setTypeChoice] = useState<string>()
   const shapeId = useShapeId("provider-models")
   const data = list.data ?? sample
   const types = ModelTypes.labels.filter((each) => data.models.some((model) => model.type === each[0]))
-  const type = chosenType && types.some((each) => each[0] === chosenType) ? chosenType : (types.at(0)?.[0] ?? "chat")
+  const type = typeChoice && types.some((each) => each[0] === typeChoice) ? typeChoice : (types.at(0)?.[0] ?? "chat")
   const shown = data.models.filter((model) => model.type === type && shownBy[filter](model))
   const failed = (error: unknown) => toast.error("Couldn’t change the models", { description: errorMessage(error) })
   return (
@@ -125,7 +139,7 @@ function Models(props: { providerId: string; name: string }) {
           </TabsList>
         </Tabs>
         {types.length > 1 ? (
-          <Tabs value={type} onValueChange={(value) => setType(String(value))}>
+          <Tabs value={type} onValueChange={(value) => setTypeChoice(String(value))}>
             <TabsList aria-label="Model type">
               {types.map((each) => (
                 <TabsTrigger key={each[0]} value={each[0]}>
@@ -140,19 +154,14 @@ function Models(props: { providerId: string; name: string }) {
       </div>
       <Loading id={shapeId} loading={list.isPending} label="Loading models">
         {(list.isError || shown.length === 0) && !list.isPending ? (
-          <EmptyState>
-            {list.isError
-              ? errorMessage(list.error)
-              : filter === "All"
-                ? `${props.name} has no ${ModelTypes.labelOf(type).toLowerCase()} models.`
-                : `No ${ModelTypes.labelOf(type).toLowerCase()} models match “${filter}”.`}
-          </EmptyState>
+          <EmptyState>{list.isError ? errorMessage(list.error) : emptyText(props.name, type, filter)}</EmptyState>
         ) : (
           <Table aria-label="Models">
             <TableHeader>
               <TableRow>
                 <TableHead>Model</TableHead>
                 <TableHead>Features</TableHead>
+                <TableHead className="text-right">Released</TableHead>
                 <TableHead className="text-right">Context</TableHead>
                 <TableHead className="text-right">Input /1M</TableHead>
                 <TableHead className="text-right">Output /1M</TableHead>
@@ -168,6 +177,9 @@ function Models(props: { providerId: string; name: string }) {
                   </TableCell>
                   <TableCell>
                     <Features model={model} />
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap tabular-nums">
+                    {released(model.released)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{tokens(model.context)}</TableCell>
                   <TableCell className="text-right tabular-nums">{usd(model.price?.input)}</TableCell>
@@ -317,23 +329,65 @@ function Subscriptions(props: {
   )
 }
 
-export function ProviderPage() {
+function ProviderControls(props: { provider: ProviderInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.provider.update.mutationOptions())
+  const provider = props.provider
+  const failed = (error: unknown) => toast.error("Couldn’t change the provider", { description: errorMessage(error) })
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <ProviderMark provider={provider.name} logo={provider.logo} letter className="size-6" />
+      {provider.methods.length > 1 ? (
+        <Select
+          items={methods}
+          value={provider.method}
+          disabled={!provider.canManage}
+          onValueChange={(value) => {
+            if (value === "key" || value === "subscription")
+              update.mutate({ id: provider.id, method: value }, { onError: failed })
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={`${provider.name} method`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {methods.map((method) => (
+                <SelectItem key={method.value} value={method.value}>
+                  {method.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ) : null}
+      <label className="flex items-center gap-2 text-sm">
+        <Switch
+          aria-label={`${provider.name} on`}
+          checked={provider.enabled}
+          disabled={!provider.canManage}
+          onCheckedChange={(enabled) => update.mutate({ id: provider.id, enabled }, { onError: failed })}
+        />
+        {provider.enabled ? "On" : "Off"}
+      </label>
+    </div>
+  )
+}
+
+function ProviderConnection(props: { provider: ProviderInfo }) {
   const { api } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
-  const id = route.useParams({ select: (params) => params.id })
-  const list = useQuery({ ...api.provider.list.queryOptions(), retry: false })
-  const update = useMutation(api.provider.update.mutationOptions())
   const removeKey = useMutation(api.provider.key.remove.mutationOptions())
   const connectSeat = useMutation(api["ren-inference"].connect.mutationOptions())
   const rename = useMutation(api["ren-inference"].connection.rename.mutationOptions())
   const removeSeat = useMutation(api["ren-inference"].connection.remove.mutationOptions())
   const [connecting, setConnecting] = useState(false)
   const [removing, setRemoving] = useState<{ title: string; run: () => Promise<unknown> }>()
-  const provider = list.data?.providers.find((each) => each.id === id)
+  const provider = props.provider
   const failed = (action: string) => (error: unknown) => toast.error(action, { description: errorMessage(error) })
   const startSignIn = (connectionId?: string) =>
     connectSeat.mutate(
-      { returnUrl: `${platform.appUrl}/settings/providers/${id}`, ...(connectionId && { connectionId }) },
+      { returnUrl: `${platform.appUrl}/settings/providers/${provider.id}`, ...(connectionId && { connectionId }) },
       {
         onSuccess: (result) => {
           platform.openExternal(result.url)
@@ -342,6 +396,65 @@ export function ProviderPage() {
         onError: failed("Couldn’t start the sign-in"),
       },
     )
+  return (
+    <div className="flex flex-col gap-6">
+      {provider.methods.includes("key") ? (
+        <KeySection
+          provider={provider}
+          onConnect={() => setConnecting(true)}
+          onRemove={() =>
+            setRemoving({
+              title: `Remove the ${provider.name} key?`,
+              run: () => removeKey.mutateAsync({ id: provider.id }, { onError: failed("Couldn’t remove the key") }),
+            })
+          }
+        />
+      ) : null}
+      {provider.methods.includes("subscription") ? (
+        <Subscriptions
+          provider={provider}
+          onSignIn={startSignIn}
+          onRename={(seat, label) => rename.mutateAsync({ id: seat, label }, { onError: failed("Couldn’t rename") })}
+          onRemove={(connection) =>
+            setRemoving({
+              title: `Remove ${connection.label}?`,
+              run: () => removeSeat.mutateAsync({ id: connection.id }, { onError: failed("Couldn’t remove") }),
+            })
+          }
+        />
+      ) : null}
+      {connecting ? (
+        <ConnectDialog
+          provider={provider}
+          onOpenChange={(open) => {
+            if (!open) setConnecting(false)
+          }}
+          onConnected={() => setConnecting(false)}
+        />
+      ) : null}
+      {removing ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setRemoving(undefined)
+          }}
+          confirmation={{
+            title: removing.title,
+            description: "New requests stop using it right away.",
+            action: "Remove",
+          }}
+          onConfirm={removing.run}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+export function ProviderPage() {
+  const { api } = RouterContext.useRouterContext()
+  const id = route.useParams({ select: (params) => params.id })
+  const list = useQuery({ ...api.provider.list.queryOptions(), retry: false })
+  const provider = list.data?.providers.find((each) => each.id === id)
   const name = provider?.name ?? "Provider"
   return (
     <Page
@@ -365,108 +478,14 @@ export function ProviderPage() {
           Back to providers
         </Link>
       }
-      aside={
-        provider ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <ProviderMark provider={provider.name} logo={provider.logo} letter className="size-6" />
-            {provider.methods.length > 1 ? (
-              <Select
-                items={methods}
-                value={provider.method}
-                disabled={!provider.canManage}
-                onValueChange={(value) => {
-                  if (value === "key" || value === "subscription")
-                    update.mutate({ id, method: value }, { onError: failed("Couldn’t change the provider") })
-                }}
-              >
-                <SelectTrigger size="sm" aria-label={`${provider.name} method`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {methods.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        {method.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            ) : null}
-            <label className="flex items-center gap-2 text-sm">
-              <Switch
-                aria-label={`${provider.name} on`}
-                checked={provider.enabled}
-                disabled={!provider.canManage}
-                onCheckedChange={(enabled) =>
-                  update.mutate({ id, enabled }, { onError: failed("Couldn’t change the provider") })
-                }
-              />
-              {provider.enabled ? "On" : "Off"}
-            </label>
-          </div>
-        ) : null
-      }
+      aside={provider ? <ProviderControls provider={provider} /> : null}
     >
       {list.isError ? <EmptyState>{errorMessage(list.error)}</EmptyState> : null}
-      {provider && !provider.builtIn ? (
-        <div className="flex flex-col gap-6">
-          {provider.methods.includes("key") ? (
-            <KeySection
-              provider={provider}
-              onConnect={() => setConnecting(true)}
-              onRemove={() =>
-                setRemoving({
-                  title: `Remove the ${provider.name} key?`,
-                  run: () => removeKey.mutateAsync({ id }, { onError: failed("Couldn’t remove the key") }),
-                })
-              }
-            />
-          ) : null}
-          {provider.methods.includes("subscription") ? (
-            <Subscriptions
-              provider={provider}
-              onSignIn={startSignIn}
-              onRename={(seat, label) =>
-                rename.mutateAsync({ id: seat, label }, { onError: failed("Couldn’t rename") })
-              }
-              onRemove={(connection) =>
-                setRemoving({
-                  title: `Remove ${connection.label}?`,
-                  run: () => removeSeat.mutateAsync({ id: connection.id }, { onError: failed("Couldn’t remove") }),
-                })
-              }
-            />
-          ) : null}
-        </div>
-      ) : null}
+      {provider && !provider.builtIn ? <ProviderConnection provider={provider} /> : null}
       {provider && !provider.enabled ? (
         <p className="text-sm text-muted-foreground">Off. Its models are not in your team’s pickers.</p>
       ) : null}
       <Models providerId={id} name={name} />
-      {connecting && provider ? (
-        <ConnectDialog
-          provider={provider}
-          onOpenChange={(open) => {
-            if (!open) setConnecting(false)
-          }}
-          onConnected={() => setConnecting(false)}
-        />
-      ) : null}
-      {removing ? (
-        <ConfirmDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setRemoving(undefined)
-          }}
-          confirmation={{
-            title: removing.title,
-            description: "New requests stop using it right away.",
-            action: "Remove",
-          }}
-          onConfirm={removing.run}
-        />
-      ) : null}
     </Page>
   )
 }

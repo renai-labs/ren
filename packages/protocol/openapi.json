@@ -13708,7 +13708,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A provider’s models and their switches. A new model is always on.",
+            "description": "A provider’s models and their switches, the latest release first. A new model is always on.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13795,7 +13795,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A provider’s models and their switches. A new model is always on.",
+            "description": "A provider’s models and their switches, the latest release first. A new model is always on.",
             "content": {
               "application/json": {
                 "schema": {
@@ -24147,6 +24147,17 @@
             ],
             "description": "The context window, in tokens."
           },
+          "released": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The release date, such as `2026-10-02`."
+          },
           "price": {
             "anyOf": [
               {
@@ -24183,7 +24194,7 @@
         },
         "required": ["canManage", "models"],
         "additionalProperties": false,
-        "description": "A provider’s models and their switches. A new model is always on."
+        "description": "A provider’s models and their switches, the latest release first. A new model is always on."
       },
       "Provider.ModelListInput": {
         "type": "object",

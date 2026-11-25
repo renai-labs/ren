@@ -1130,6 +1130,7 @@ export type ProviderModel = {
   input: Array<ModelsModality>
   reasoning: boolean
   context?: number | undefined
+  released?: string | undefined
   price?: ModelsPrice | undefined
   free: boolean
   enabled: boolean
