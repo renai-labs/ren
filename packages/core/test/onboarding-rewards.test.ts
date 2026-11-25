@@ -135,13 +135,20 @@ describe("OnboardingRewards", () => {
   )
 
   testEffect(
-    layer({ "made.up": { microUsd: 1 }, [Onboarding.steps.organization.slackConnected]: { microUsd: 2 } }),
-  ).live("ignores a reward for a step that does not exist and pays the others", () =>
+    layer({
+      "made.up": { microUsd: 1 },
+      [Onboarding.steps.personal.memoryImported]: { microUsd: 1 },
+      [Onboarding.steps.organization.slackConnected]: { microUsd: 2 },
+    }),
+  ).live("pays nothing for a step that does not exist or that the app marks itself, and pays the others", () =>
     Effect.gen(function* () {
       const onboarding = yield* Onboarding.Service
       const organizationId = yield* Seed.organization()
+      const ada = yield* Seed.actor(organizationId, "owner")
+      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.memoryImported)
       yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
       expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 2, "onboarding:slack.connected"))
+      expect(yield* Queue.size(grants)).toBe(0)
     }),
   )
 })

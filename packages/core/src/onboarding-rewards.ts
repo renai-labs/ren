@@ -30,18 +30,19 @@ export const layer = Layer.effect(
     const rules = yield* Schema.decodeEffect(Rules)(
       yield* Config.String("ONBOARDING_REWARDS").pipe(Config.withDefault("{}")),
     ).pipe(Effect.orDie)
-    const unknown = Object.keys(rules).filter((step) => !Schema.is(Onboarding.Step)(step))
-    if (unknown.length > 0)
-      yield* Effect.logWarning("ONBOARDING_REWARDS names steps that do not exist; they pay nothing").pipe(
-        Effect.annotateLogs({ steps: unknown }),
-      )
+    const payable = (step: string) => Schema.is(Onboarding.Step)(step) && !Schema.is(Onboarding.ReportedStep)(step)
+    const ignored = Object.keys(rules).filter((step) => !payable(step))
+    if (ignored.length > 0)
+      yield* Effect.logWarning(
+        "ONBOARDING_REWARDS names steps that do not exist or that the app marks itself; they pay nothing",
+      ).pipe(Effect.annotateLogs({ steps: ignored }))
     const billing = yield* Billing.Service
     const pay = yield* DurableRunner.supervised(GrantRun, (payload) =>
       billing.grant(payload.organizationId, { microUsd: payload.microUsd, key: payload.key }),
     )
     return {
       completed: Effect.fn("OnboardingRewards.completed")(function* (completion: Onboarding.Completion) {
-        const reward = rules[completion.step]
+        const reward = payable(completion.step) ? rules[completion.step] : undefined
         if (!reward) return
         const occurrences = completion.recorded.filter((key) => key.startsWith(`${completion.step}:`)).length
         if (completion.occurrence && occurrences > (reward.upTo ?? 1)) return

@@ -32,3 +32,16 @@ it.live("a member reads both onboarding checklists and hides each one", () =>
     expect((yield* owner.request("POST", "/onboarding/dismiss", { checklist: "everyone" })).status).toBe(400)
   }),
 )
+
+it.live("a person marks memory.imported done themselves, but not a step Ren records or rewards", () =>
+  Effect.gen(function* () {
+    const owner = yield* ApiFixture.owner()
+    const marked = yield* owner.request("POST", "/onboarding/complete", { step: "memory.imported" })
+    expect(marked.status).toBe(200)
+    expect(yield* json(marked)).toMatchObject({
+      personal: { steps: expect.arrayContaining([{ step: "memory.imported", completedAt: expect.any(String) }]) },
+    })
+    for (const step of ["gmail.connected", "slack.connected", "apps.connected"])
+      expect((yield* owner.request("POST", "/onboarding/complete", { step })).status).toBe(400)
+  }),
+)

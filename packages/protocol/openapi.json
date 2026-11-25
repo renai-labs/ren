@@ -14536,6 +14536,65 @@
         "summary": "Get the onboarding checklists"
       }
     },
+    "/onboarding/complete": {
+      "post": {
+        "tags": ["onboarding"],
+        "operationId": "onboarding.complete",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s onboarding checklists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Mark one of the caller’s own steps done that Ren cannot see happen, such as importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
+        "summary": "Mark a personal onboarding step done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Onboarding.CompleteInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/onboarding/dismiss": {
       "post": {
         "tags": ["onboarding"],
@@ -23435,6 +23494,16 @@
         "additionalProperties": false,
         "description": "The caller’s own checklist in the organization."
       },
+      "Onboarding.CompleteInput": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "$ref": "#/components/schemas/Onboarding.ReportedStep"
+          }
+        },
+        "required": ["step"],
+        "additionalProperties": false
+      },
       "Onboarding.DismissInput": {
         "type": "object",
         "properties": {
@@ -23476,8 +23545,24 @@
       },
       "Onboarding.PersonalStep": {
         "type": "string",
-        "enum": ["gmail.connected", "granola.connected", "github.app.connected", "drive.connected", "apps.connected"],
+        "enum": [
+          "gmail.connected",
+          "granola.connected",
+          "github.app.connected",
+          "drive.connected",
+          "apps.connected",
+          "memory.imported"
+        ],
         "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
+      },
+      "Onboarding.ReportedStep": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["memory.imported"]
+          }
+        ],
+        "description": "A personal step the app marks done when the person does it. It pays no reward."
       },
       "Onboarding.Step": {
         "anyOf": [

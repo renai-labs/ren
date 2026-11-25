@@ -15,6 +15,8 @@ export const PersonalStep = Onboarding.PersonalStep
 export type PersonalStep = Onboarding.PersonalStep
 export const Step = Onboarding.Step
 export type Step = Onboarding.Step
+export const ReportedStep = Onboarding.ReportedStep
+export type ReportedStep = Onboarding.ReportedStep
 export const appSteps = Onboarding.appSteps
 
 export interface Person {

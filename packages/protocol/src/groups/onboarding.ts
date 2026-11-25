@@ -20,6 +20,20 @@ export const OnboardingGroup = HttpApiGroup.make("onboarding")
     ),
   )
   .add(
+    HttpApiEndpoint.post("onboarding.complete", "/onboarding/complete", {
+      payload: Onboarding.CompleteInput,
+      success: Onboarding.Info,
+      error: ForbiddenError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "onboarding.complete",
+        summary: "Mark a personal onboarding step done",
+        description:
+          "Mark one of the caller’s own steps done that Ren cannot see happen, such as importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.post("onboarding.dismiss", "/onboarding/dismiss", {
       payload: Onboarding.DismissInput,
       success: Onboarding.Info,
