@@ -10,7 +10,7 @@ The product SPA and its web host, built from shadcn's components in `@ren/ui`. A
 - `src/routes/`: TanStack Router file routes. A route declares its loader, guard, search-param schema and pending and error components, then composes feature components. Keep logic out of routes.
 - `src/features/<domain>/`: product UI for one backend domain (components, query and mutation hooks, forms). Features never import each other; routes compose them. Each section of a page loads its own data; there is no page-level hook that returns a page object.
 - `src/components/`: app-wide compositions used by several features, such as the shell, the sidebars, the `Page` frame (`page.tsx`) and the theme provider.
-- `src/icons/`: every SVG the app draws. `heroicons.tsx` is the icon set (`vite.config.ts` aliases `@tabler/icons-react` to it), `brands.tsx` the brand marks, `preferences.tsx` the filled icons no set has for the Preferences menus and `logomark.tsx` Ren's mark.
+- `src/icons/`: the SVGs only the app draws: `brands.tsx` the brand marks, `preferences.tsx` the filled icons no set has for the Preferences menus and `logomark.tsx` Ren's mark. The icon set is `@ren/ui/heroicons`; `vite.config.ts` aliases `@tabler/icons-react` to it.
 - `src/lib/`: the runtime (query client, API factory, auth client, router), preferences and the chat runtime. This is where effects and subscriptions live.
 
 ## Conventions

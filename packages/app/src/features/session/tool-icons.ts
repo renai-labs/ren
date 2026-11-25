@@ -9,7 +9,7 @@ import {
   IconWorld,
   type Icon,
 } from "@tabler/icons-react"
-import { IconAgent } from "../../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import { IconRen } from "../../icons/logomark.js"
 
 export const toolIcons: Record<ToolDisplay.Kind, Icon | ComponentType<{ className?: string | undefined }>> = {

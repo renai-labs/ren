@@ -20,7 +20,7 @@ import {
   IconTag,
   IconArrowBackUp,
 } from "@tabler/icons-react"
-import { IconAgent, IconPaperclip } from "../../icons/heroicons.js"
+import { IconAgent, IconPaperclip } from "@ren/ui/heroicons"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ChatReact } from "@ren/chat/react"
 import { Tasks } from "@ren/client/react"
