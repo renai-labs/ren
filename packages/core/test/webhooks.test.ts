@@ -6,6 +6,7 @@ import { Webhook } from "@ren/schema/webhook"
 import { eq } from "drizzle-orm"
 import { Effect } from "effect"
 import type { Actor } from "../src/actor.js"
+import { Onboarding } from "../src/onboarding.js"
 import { Webhooks } from "../src/webhooks.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -40,6 +41,20 @@ describe("Webhooks", () => {
       })
       expect(created.url).toMatch(new RegExp(`^https://ren\\.test/webhooks/${created.id}/[A-Za-z0-9_-]{32,}$`, "u"))
       expect(yield* webhooks.get(t.bob, created.id)).toEqual(created)
+    }),
+  )
+
+  it.live("creating a webhook completes the organization's webhook.created onboarding step", () =>
+    Effect.gen(function* () {
+      const webhooks = yield* Webhooks.Service
+      const onboarding = yield* Onboarding.Service
+      const t = yield* WebhookFixture.team
+      yield* webhooks.create(t.ada, WebhookFixture.signups(t.spaceId))
+      expect(
+        (yield* onboarding.get(t.ada)).organization.steps.find(
+          (state) => state.step === Onboarding.steps.organization.webhookCreated,
+        )?.completedAt,
+      ).not.toBeNull()
     }),
   )
 

@@ -14,6 +14,7 @@ import { AgentQueries } from "./agent/queries.js"
 import { AppProfiles } from "./app/profiles.js"
 import { Envelope } from "./envelope.js"
 import { Intake } from "./intake.js"
+import { Onboarding } from "./onboarding.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
 import { WebhookDecide } from "./webhook/decide.js"
@@ -151,6 +152,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const envelope = yield* Envelope.Service
     const intake = yield* Intake.Service
+    const onboarding = yield* Onboarding.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
 
     const open = (row: Row, column: "token" | "signing_secret", sealed: EnvelopeSchema.Sealed) =>
@@ -582,7 +584,7 @@ export const layer = Layer.effect(
         const source = input.source
         if (source._tag === "custom") yield* checked(source.parser)
         const inherited = actor.agent?.spaceId === input.spaceId ? actor.agent.agentId : undefined
-        return yield* database.transaction((transaction) =>
+        const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const space = (yield* transaction
               .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
@@ -647,6 +649,8 @@ export const layer = Layer.effect(
             return yield* written(transaction, rows)
           }),
         )
+        yield* onboarding.record(actor.organizationId, Onboarding.steps.organization.webhookCreated)
+        return created
       }),
       update: Effect.fn("Webhooks.update")(function* (actor: Actor.Info, id: Webhook.ID, input: Webhook.UpdateInput) {
         const parser = input.parser ? yield* checked(input.parser) : undefined
