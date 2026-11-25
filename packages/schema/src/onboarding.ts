@@ -19,6 +19,7 @@ export const steps = {
     iacApplied: "iac.applied",
   },
   personal: {
+    githubStarred: "github.starred",
     gmailConnected: "gmail.connected",
     granolaConnected: "granola.connected",
     githubAppConnected: "github.app.connected",
@@ -77,7 +78,7 @@ export const Info = Schema.Struct({
   personal: Checklist.annotate({ description: "The caller’s own checklist in the organization." }),
 }).annotate({ identifier: "Onboarding.Info", description: "The caller’s onboarding checklists." })
 
-export const ReportedStep = Schema.Literals([steps.personal.memoryImported]).annotate({
+export const ReportedStep = Schema.Literals([steps.personal.githubStarred, steps.personal.memoryImported]).annotate({
   identifier: "Onboarding.ReportedStep",
   description: "A personal step the app marks done when the person does it. It pays no reward.",
 })

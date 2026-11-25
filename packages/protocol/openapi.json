@@ -14581,7 +14581,7 @@
             }
           }
         },
-        "description": "Mark one of the caller’s own steps done that Ren cannot see happen, such as importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
+        "description": "Mark one of the caller’s own steps done that Ren cannot see happen, such as starring Ren on GitHub or importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
         "summary": "Mark a personal onboarding step done",
         "requestBody": {
           "content": {
@@ -23546,6 +23546,7 @@
       "Onboarding.PersonalStep": {
         "type": "string",
         "enum": [
+          "github.starred",
           "gmail.connected",
           "granola.connected",
           "github.app.connected",
@@ -23556,12 +23557,8 @@
         "description": "An action that counts toward a person’s own onboarding in the organization, in checklist order."
       },
       "Onboarding.ReportedStep": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": ["memory.imported"]
-          }
-        ],
+        "type": "string",
+        "enum": ["github.starred", "memory.imported"],
         "description": "A personal step the app marks done when the person does it. It pays no reward."
       },
       "Onboarding.Step": {

@@ -29,7 +29,7 @@ export const OnboardingGroup = HttpApiGroup.make("onboarding")
         identifier: "onboarding.complete",
         summary: "Mark a personal onboarding step done",
         description:
-          "Mark one of the caller’s own steps done that Ren cannot see happen, such as importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
+          "Mark one of the caller’s own steps done that Ren cannot see happen, such as starring Ren on GitHub or importing memory from another agent. Only those steps are accepted, and none pays a reward. Marking it again keeps the first time.",
       }),
     ),
   )
