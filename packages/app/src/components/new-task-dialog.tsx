@@ -49,7 +49,9 @@ import { useAgents } from "../lib/use-agents.js"
 import { IconAgent } from "../icons/heroicons.js"
 
 // oxlint-disable-next-line ren/no-comments -- The editor (tiptap) is large and every page mounts this dialog for its shortcut, so it loads when a task form first opens.
-const MarkdownEditor = lazy(() => import("./markdown-editor.js").then((module) => ({ default: module.MarkdownEditor })))
+const loadEditor = () => import("./markdown-editor.js")
+const MarkdownEditor = lazy(() => loadEditor().then((module) => ({ default: module.MarkdownEditor })))
+const preloadEditor = () => void loadEditor()
 
 const isBareKey = (event: KeyboardEvent) =>
   !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat && !event.isComposing
@@ -62,6 +64,7 @@ export function useNewTaskShortcut(onOpen: () => void) {
   Keyboard.useKeyDown((event) => {
     if (event.defaultPrevented || event.key.toLowerCase() !== "c" || !isBareKey(event) || isTyping(event.target)) return
     event.preventDefault()
+    preloadEditor()
     onOpen()
   })
 }
@@ -337,7 +340,11 @@ export function NewTaskDialog(props: {
   const spaceId = draft.spaceId || defaultSpace
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {props.trigger ? <DialogTrigger render={props.trigger}>{props.children}</DialogTrigger> : null}
+      {props.trigger ? (
+        <DialogTrigger render={props.trigger} onPointerEnter={preloadEditor} onFocus={preloadEditor}>
+          {props.children}
+        </DialogTrigger>
+      ) : null}
       <DialogContent
         showCloseButton={false}
         initialFocus={titleRef}
