@@ -1,11 +1,19 @@
 ---
 title: Instructions
 icon: FileText
-description: Write the rules every agent follows, for the whole organization, for one space and for one agent, and see how Ren combines them.
+description: Give Ren lasting guidance for your team, for the whole organization, one space or one agent, and see how Ren combines them.
 summary: Tell every agent how your team works
 ---
 
-Instructions are the rules Ren follows in every chat, such as which repository to work in, how to name pull requests or who approves a deploy. You write them in Markdown, for the organization, for a space and for an [agent](/docs/agents/).
+Add instructions to give Ren lasting guidance on how your team works. Use them for the repository to work in, how to name pull requests, the tone of customer replies, or who approves a deploy.
+
+```md title="Engineering space instructions"
+- Work in the northwind/storefront repository unless the request names another.
+- Write a test first for every bug fix.
+- Never deploy to production. Ask Maya or Dev to deploy.
+```
+
+Ren reads them at the start of every chat, so you don't repeat them in each request.
 
 <Screenshot
   shot="instructions/space"
@@ -13,7 +21,9 @@ Instructions are the rules Ren follows in every chat, such as which repository t
   caption="The instructions of the Engineering space."
 />
 
-## Where to write them
+## Scope
+
+Write each rule at the level where it applies:
 
 | Level        | Where                                            | Applies to                     |
 | ------------ | ------------------------------------------------ | ------------------------------ |
@@ -21,9 +31,21 @@ Instructions are the rules Ren follows in every chat, such as which repository t
 | Space        | The space's **Instructions** page, then **Edit** | Every chat in that space       |
 | Agent        | The agent's page, in **Instructions**            | Chats where that agent works   |
 
-Ren reads all three in every chat, in that order: the organization's, then the space's, then the agent's. Put a rule at the widest level where it is true, and write exceptions at the narrower level, such as "In this space, deploys to staging need no approval."
+Keep company-wide rules, such as the brand name or the fiscal year, in the organization's instructions. Put a team's way of working in its space, and a role's job in its agent.
 
-Changes apply from the next message of each chat.
+## Order
+
+Ren combines the levels in this order:
+
+1. The organization's instructions
+2. The space's instructions
+3. The agent's instructions
+
+Ren uses all of them together. It doesn't pick one when two disagree, so write a narrower rule as a clear exception, such as "In this space, staging deploys need no approval."
+
+## Updates
+
+Edit instructions at any time. Each chat uses the new text from its next message.
 
 ## Instructions, skills or the prompt
 
