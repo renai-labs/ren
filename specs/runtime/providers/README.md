@@ -327,6 +327,14 @@ Ren core stores no list. At each pull it asks the plug-in for the organization's
 
 The 30 s pull stays as the backup. A push that changes nothing costs the brain one pull.
 
+### 6.4.1 Which cards reach the brain, and plans
+
+1. **Connected.** A card's access group enters the organization's team allowlist only while the card is on and connected: a saved key for a key card, a signed-in seat for the subscription method. Ren's card needs no connection, so its group is in while the card is on. A card that is on without a key never reaches the brain or the harness.
+2. **Plans (designed, built later).** A plan is a set of allowed access groups. Example: Free allows `ren-free` only; Pro allows `ren`, every provider group and the seat groups. The operator picks a plan's Ren models in LiteLLM: those entries also carry `ren-free` in `access_groups`.
+3. **The rule.** Team allowlist = the groups the plan allows ∩ the groups of cards that are on and connected. With switched-off models, a card's part is its explicit model list without them. LiteLLM refuses every call outside the allowlist.
+4. **One writer.** Only the inference service writes allowlists. It applies the rule on each change of a setting, a key, a seat or the plan (billing tells it the plan), then tells Ren `changed`. LiteLLM Organizations would also refuse a team write outside a plan, but they need LiteLLM Enterprise; Ren does not use them.
+5. The Providers page shows a card that the plan does not allow as locked (a flag in `settings`).
+
 ### 6.5 Other model types
 
 A card's models can be of any type LiteLLM serves (`model_info.mode`). Built first: chat and image. Later: transcription, speech, video, decision and others. The contract does not change with a new type.
