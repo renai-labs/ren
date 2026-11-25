@@ -23,8 +23,12 @@ When nobody picks one, Ren uses the first that is set: the chat's model, the [ag
 
 If your organization already pays for Claude or ChatGPT, agents can run on that subscription instead of Ren credits.
 
+<Steps>
+
 1. An admin opens **Settings → Providers** and picks **Anthropic** or **OpenAI**.
 2. Select **Connect Claude** or **Connect ChatGPT**, and sign in to the subscription in the tab that opens.
+
+</Steps>
 
 The subscription shows with its usage limits and when they reset. Calls to that provider's models then use it. When the sign-in expires, it shows **Expired**: sign in again to keep using it.
 
@@ -32,9 +36,13 @@ The subscription shows with its usage limits and when they reset. Calls to that 
 
 An inference key lets Claude Code, Codex or your own scripts call the models Ren offers, billed to your organization.
 
+<Steps>
+
 1. Open **Settings → Providers → Inference keys** and select **Create inference key**.
 2. Name it, such as `Work laptop`, and pick when it expires.
 3. Copy the key and the base URL into the tool. Ren shows the key only once.
+
+</Steps>
 
 Each key shows its calls, tokens and cost. **Revoke** stops it at once. For setup in each tool, see [Inference setup](/docs/developers/inference-setup/).
 

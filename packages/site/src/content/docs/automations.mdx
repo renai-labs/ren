@@ -17,11 +17,15 @@ An automation starts a chat in a [space](/docs/spaces/) for you, from a **Schedu
 
 ## Create an automation
 
+<Steps>
+
 1. Select **New automation**, and pick the space.
 2. Name it, and write the instructions: what the agent should do each time it runs.
 3. Pick the agent. Without one, Ren runs it with the space's settings, then the organization's, then Ren's defaults.
 4. Select **Add trigger** and pick **Schedule** or **Webhook**. **From an app** turns on a webhook that one of the space's [apps](/docs/apps/) offers, with its instructions already written.
 5. Select **Save**, then **Test** to run it once now.
+
+</Steps>
 
 Use the switch in the header to turn it on or off. **Duplicate** and **Delete** are in `⋯`. Deleting an automation stops its trigger. The chats it started stay.
 
@@ -39,11 +43,15 @@ A webhook is a URL that another app sends requests to, such as Stripe on a faile
 
 ### Set up a webhook
 
+<Steps>
+
 1. Save the automation to get its URL, then select **Requests, filter and signature**.
 2. Copy the URL into the other app. It holds a token, so treat it like a password.
 3. If the other app signs its requests, set the [signature](#signature).
 4. Send a test event from the other app. It shows under **Requests**.
 5. Switch it from **Debug** to **Live**. **Debug** only records requests. **Live** runs the agent on them.
+
+</Steps>
 
 ### Signature
 
