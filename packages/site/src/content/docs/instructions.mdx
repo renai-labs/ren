@@ -1,8 +1,38 @@
 ---
 title: Instructions
 icon: FileText
-description: This page is not written yet.
+description: Write the rules every agent follows, for the whole organization, for one space and for one agent, and see how Ren combines them.
 summary: Tell every agent how your team works
 ---
 
-This page is not written yet.
+Instructions are the rules Ren follows in every chat, such as which repository to work in, how to name pull requests or who approves a deploy. You write them in Markdown, for the organization, for a space and for an [agent](/docs/agents/).
+
+<Screenshot
+  shot="instructions/space"
+  alt="The Instructions page of the Engineering space with rules for code, pull requests and deploys"
+  caption="The instructions of the Engineering space."
+/>
+
+## Where to write them
+
+| Level        | Where                                            | Applies to                     |
+| ------------ | ------------------------------------------------ | ------------------------------ |
+| Organization | **Settings → General → Instructions**            | Every chat in the organization |
+| Space        | The space's **Instructions** page, then **Edit** | Every chat in that space       |
+| Agent        | The agent's page, in **Instructions**            | Chats where that agent works   |
+
+Ren reads all three in every chat, in that order: the organization's, then the space's, then the agent's. Put a rule at the widest level where it is true, and write exceptions at the narrower level, such as "In this space, deploys to staging need no approval."
+
+Changes apply from the next message of each chat.
+
+## Instructions, skills or the prompt
+
+| Use                           | For                                                    | Ren reads it            |
+| ----------------------------- | ------------------------------------------------------ | ----------------------- |
+| Instructions                  | Rules for every chat, such as tone or which repository | On every turn           |
+| A [skill](/docs/apps/#skills) | A procedure that only some requests need               | When a request needs it |
+| The chat prompt               | A one-off request                                      | In that chat            |
+
+Instructions take space in every turn, so keep them short. Move a long procedure, such as how to write release notes, into a skill.
+
+Ren keeps what it learns by itself, such as facts about your customers, in [Memory](/docs/memory/).

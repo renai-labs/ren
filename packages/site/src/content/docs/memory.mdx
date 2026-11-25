@@ -1,8 +1,46 @@
 ---
 title: Memory
 icon: Brain
-description: This page is not written yet.
+description: See and edit the files where Ren keeps what it learns, for the organization and for each space, and choose what every chat reads.
 summary: What agents remember across chats
 ---
 
-This page is not written yet.
+Memory is where Ren keeps what it learns between chats, such as facts about your customers or how your team ships. It is a set of Markdown files: one memory for the organization, and one for each [space](/docs/spaces/).
+
+<Screenshot
+  shot="memory/space"
+  alt="The Memory page of the Customer Success space with memory.md marked In every chat, the customers and macros folders, and shipping.md"
+  caption="The memory of the Customer Success space."
+/>
+
+## How Ren uses memory
+
+- **memory.md**, marked **In every chat**, goes into every chat of its space, or of the organization. Ren reads its first 16,000 characters.
+- Ren reads the other files when a request needs them, and writes new facts to them as it works.
+
+Keep `memory.md` short: the rules and facts every chat needs, with links to other files for detail, such as "Shipping rules are in shipping.md."
+
+## Organization and space memory
+
+| Memory       | Where                       | Ren reads it          | Ren writes it | You can edit it     |
+| ------------ | --------------------------- | --------------------- | ------------- | ------------------- |
+| Organization | **Settings → Memory**       | In every chat         | No            | If you are an admin |
+| Space        | The space's **Memory** page | In chats of the space | Yes           | If you are a member |
+
+Put facts that are true for the whole company, such as your fiscal year, in the organization's memory. Ren learns into the space's memory.
+
+## Edit memory
+
+- Select **New file**, type a path such as `customers/acme-hotels.md`, and write the content. A path with `/` makes a folder.
+- Select a file to read or edit it.
+- To delete a file, select **Delete** in `⋯`. Ren stops remembering what it says.
+
+You can also tell Ren in a chat, such as "Remember that refunds over $500 need Priya's approval."
+
+## Memory, instructions or Drive
+
+| Use                                 | For                                                 |
+| ----------------------------------- | --------------------------------------------------- |
+| [Instructions](/docs/instructions/) | Rules that you write and Ren must follow            |
+| Memory                              | Facts that Ren learns and keeps up to date          |
+| [Drive](/docs/drive/)               | Documents and data, such as price lists and reports |
