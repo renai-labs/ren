@@ -153,6 +153,11 @@ export const Spec = Schema.Struct({
         ),
       }
       const apps = [...owners.apps.values()].flatMap((owned) => owned.slice(0, 1))
+      const subagents = new Set(
+        spaces.flatMap(([, declaration]) =>
+          Object.entries(declaration.agents).flatMap(([name, owned]) => (owned.isSubagent ? [name] : [])),
+        ),
+      )
       return [
         ...App.dependencyIssues(new Map(apps.map((owned) => [owned.name, owned.app])))
           .filter((issue) => issue.kind !== "missing")
@@ -235,6 +240,48 @@ export const Spec = Schema.Struct({
             })),
           ),
         ),
+        ...spaces.flatMap(([space, declaration]) =>
+          Object.entries(declaration.agents)
+            .filter(([, owned]) => owned.isSubagent)
+            .flatMap(([name, owned]) =>
+              [
+                {
+                  failed: !owned.description?.trim(),
+                  path: ["spaces", space, "agents", name, "description"],
+                  issue: "A subagent needs a description, so other agents know when to use it.",
+                },
+                {
+                  failed: owned.settings.references.length > 0,
+                  path: ["spaces", space, "agents", name, "settings", "references"],
+                  issue: "A subagent cannot have references.",
+                },
+              ]
+                .filter((check) => check.failed)
+                .map((check) => ({ path: check.path, issue: check.issue })),
+            ),
+        ),
+        ...[
+          { path: ["org", "settings"], settings: spec.org.settings },
+          ...spaces.flatMap(([space, declaration]) => [
+            { path: ["spaces", space, "settings"], settings: declaration.settings },
+            ...Object.entries(declaration.agents).map(([name, owned]) => ({
+              path: ["spaces", space, "agents", name, "settings"],
+              settings: owned.settings,
+            })),
+          ]),
+        ].flatMap((owner) => {
+          const aliases = owner.settings.references.map((reference) => reference.alias)
+          return aliases.flatMap((alias, index) =>
+            aliases.indexOf(alias) === index
+              ? []
+              : [
+                  {
+                    path: [...owner.path, "references", index, "alias"],
+                    issue: `Two references use the alias ${alias}.`,
+                  },
+                ],
+          )
+        }),
         ...spaces.flatMap(([space, declaration]) => {
           const agents = new Set([...Object.keys(declaration.agents), ...declaration.uses.agents])
           return [
@@ -253,29 +300,46 @@ export const Spec = Schema.Struct({
               name,
               agent: channel.agent,
             })),
-          ].flatMap((runner) =>
-            !runner.agent || agents.has(runner.agent)
-              ? []
-              : [
+          ].flatMap((runner) => {
+            const path = ["spaces", space, runner.kind, runner.name, "agent"]
+            if (!runner.agent) return []
+            if (!agents.has(runner.agent))
+              return [
+                {
+                  path,
+                  issue: `${runners[runner.kind]} "${runner.name}" in space "${space}" runs on agent "${runner.agent}", which is not in the space.`,
+                },
+              ]
+            return subagents.has(runner.agent)
+              ? [
                   {
-                    path: ["spaces", space, runner.kind, runner.name, "agent"],
-                    issue: `${runners[runner.kind]} "${runner.name}" in space "${space}" runs on agent "${runner.agent}", which is not in the space.`,
+                    path,
+                    issue: `Agent "${runner.agent}" is a subagent, so it cannot run a ${runners[runner.kind].toLowerCase()}. Pick another agent.`,
                   },
-                ],
-          )
+                ]
+              : []
+          })
         }),
         ...spaces.flatMap(([space, declaration]) => {
           const agents = new Set(["ren", ...Object.keys(declaration.agents), ...declaration.uses.agents])
-          return (declaration.factory?.agents ?? []).flatMap((entry, index) =>
-            agents.has(entry.agent)
-              ? []
-              : [
+          return (declaration.factory?.agents ?? []).flatMap((entry, index) => {
+            const path = ["spaces", space, "factory", "agents", index, "agent"]
+            if (!agents.has(entry.agent))
+              return [
+                {
+                  path,
+                  issue: `The factory of space "${space}" names agent "${entry.agent}", which is not in the space.`,
+                },
+              ]
+            return subagents.has(entry.agent)
+              ? [
                   {
-                    path: ["spaces", space, "factory", "agents", index, "agent"],
-                    issue: `The factory of space "${space}" names agent "${entry.agent}", which is not in the space.`,
+                    path,
+                    issue: `Agent "${entry.agent}" is a subagent, so it cannot be in the factory. Pick another agent.`,
                   },
-                ],
-          )
+                ]
+              : []
+          })
         }),
       ]
     }),
@@ -309,6 +373,50 @@ export const Bindings = Schema.Struct({
   profiles: Profiles.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   spaces: Schema.Record(Primitive.Slug, SpaceBindings).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "Infra.Bindings" })
+
+export const bindingIssues = (spec: Spec, bindings: Bindings) => {
+  const bound = Object.entries(bindings.spaces)
+  return [
+    ...bound
+      .filter(([slug]) => !(slug in spec.spaces))
+      .map(([slug]) => ({ path: ["spaces", slug], issue: `The spec declares no space "${slug}".` })),
+    ...bound.flatMap(([slug, space]) => {
+      const declaration = spec.spaces[slug]
+      if (!declaration) return []
+      return Object.entries(space.channels).flatMap(([name, target]) => {
+        const path = ["spaces", slug, "channels", name]
+        const declared = declaration.channels[name]
+        if (!declared) return [{ path, issue: `spaces/${slug}/channels.yaml declares no channel "${name}".` }]
+        const title = Channel.titles[declared.kind]
+        return declared.kind === target.kind
+          ? []
+          : [{ path, issue: `Channel "${name}" is a ${title} channel, so bind it to a ${title} place.` }]
+      })
+    }),
+    ...bound.flatMap(([slug, space]) =>
+      Object.entries(space.profiles).flatMap(([app, slugs]) =>
+        slugs.flatMap((profile, index) =>
+          bindings.profiles[app]?.[profile]?.allSpaces
+            ? [
+                {
+                  path: ["spaces", slug, "profiles", app, String(index)],
+                  issue: `Profile ${profile} of ${app} is shared with every space. Remove it from this list.`,
+                },
+              ]
+            : [],
+        ),
+      ),
+    ),
+    ...Object.entries(spec.spaces).flatMap(([slug, declaration]) =>
+      Object.entries(declaration.channels)
+        .filter(([name]) => !(name in (bindings.spaces[slug]?.channels ?? {})))
+        .map(([name, declared]) => ({
+          path: ["spaces", slug, "channels", name],
+          issue: `Bind channel "${name}" to a ${Channel.titles[declared.kind]} place.`,
+        })),
+    ),
+  ]
+}
 
 export const Kind = Schema.Literals([
   "organization",

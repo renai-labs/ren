@@ -19,20 +19,80 @@ export type Validated =
 
 const records = ["schedules", "webhooks", "channels"] as const
 
+const either = (words: ReadonlyArray<string>, last: "and" | "or") =>
+  [words.slice(0, -1).join(", "), words.at(-1)].filter(Boolean).join(` ${last} `)
+
+const tagged = (members: ReadonlyArray<SchemaAST.AST>) => {
+  const objects = members.filter(SchemaAST.isObjects)
+  if (objects.length === 0 || objects.length !== members.length) return
+  const tagOf = (member: SchemaAST.Objects, key: PropertyKey) =>
+    member.propertySignatures
+      .filter((field) => field.name === key)
+      .flatMap((field) => (field.type._tag === "Literal" ? [String(field.type.literal)] : []))
+  const key = objects
+    .at(0)
+    ?.propertySignatures.map((field) => field.name)
+    .find((name) => objects.every((member) => tagOf(member, name).length > 0))
+  return Predicate.isUndefined(key)
+    ? undefined
+    : `a map whose ${String(key)} is ${either([...new Set(objects.flatMap((member) => tagOf(member, key)))], "or")}`
+}
+
+const plain: Partial<Record<SchemaAST.AST["_tag"], string>> = {
+  Boolean: "true or false",
+  Number: "a number",
+  String: "text",
+  TemplateLiteral: "text",
+  Null: "null",
+  Arrays: "a list",
+}
+
+const expected = (ast: SchemaAST.AST): string | undefined => {
+  const encoded = SchemaAST.toEncoded(ast)
+  if (encoded._tag === "Literal") return String(encoded.literal)
+  if (encoded._tag === "Suspend") return expected(encoded.thunk())
+  if (encoded._tag === "Objects") {
+    const required = encoded.propertySignatures
+      .filter((field) => !SchemaAST.isOptional(field.type))
+      .map((field) => String(field.name))
+    return required.length > 0 ? `a map with ${either(required, "and")}` : "a map"
+  }
+  if (encoded._tag !== "Union") return plain[encoded._tag]
+  const members = encoded.types.map(expected)
+  return tagged(encoded.types) ?? (members.every(Predicate.isString) ? either([...new Set(members)], "or") : undefined)
+}
+
+const allowed = (ast: SchemaAST.AST) => {
+  const found = Predicate.isString(ast.annotations?.["message"]) ? undefined : expected(ast)
+  return found && `Use ${found}.`
+}
+
 const formatter = SchemaIssue.makeFormatterStandardSchemaV1({
   leafHook: (issue) => {
+    if (issue._tag === "InvalidType") return allowed(issue.ast) ?? SchemaIssue.defaultLeafHook(issue)
     if (issue._tag !== "UnexpectedKey") return SchemaIssue.defaultLeafHook(issue)
     const names = SchemaAST.isObjects(issue.ast) ? issue.ast.propertySignatures.map((field) => String(field.name)) : []
-    return names.length > 0
-      ? `Unknown key. Use ${[names.slice(0, -1).join(", "), names.at(-1)].filter(Boolean).join(" or ")}.`
-      : "Unknown key."
+    return names.length > 0 ? `Unknown key. Use ${either(names, "or")}.` : "Unknown key."
   },
 })
 
-const flatten = (
-  issue: SchemaIssue.Issue,
-  path: ReadonlyArray<PropertyKey>,
-): Array<{ readonly keys: Array<string>; readonly message: string }> => {
+interface Found {
+  readonly keys: Array<string>
+  readonly message: string
+  readonly isName?: boolean
+}
+
+const unnamed = (ast: SchemaAST.AST, key: PropertyKey) => {
+  if (!SchemaAST.isObjects(ast) || !Predicate.isString(key)) return []
+  return ast.indexSignatures.flatMap((index) => {
+    const decoded = Schema.decodeUnknownResult(Schema.make<Schema.Codec<unknown>>(index.parameter))(key, {
+      errors: "all",
+    })
+    return Result.isFailure(decoded) ? formatter(decoded.failure.issue).issues.map((found) => found.message) : []
+  })
+}
+
+const flatten = (issue: SchemaIssue.Issue, path: ReadonlyArray<PropertyKey>): Array<Found> => {
   if (issue._tag === "Pointer") return flatten(issue.issue, [...path, ...issue.path])
   if (issue._tag === "Encoding") return flatten(issue.issue, path)
   if (issue._tag === "Composite") return issue.issues.flatMap((inner) => flatten(inner, path))
@@ -40,6 +100,16 @@ const flatten = (
     return issue.issues
       .map((inner) => flatten(inner, path))
       .reduce((closest, next) => (next.length < closest.length ? next : closest))
+  const keys = path.map(String)
+  if (issue._tag === "AnyOf") {
+    const message = allowed(issue.ast)
+    if (message) return [{ keys, message }]
+  }
+  if (issue._tag === "UnexpectedKey") {
+    const rules = [...new Set(unnamed(issue.ast, path.at(-1) ?? ""))]
+    if (rules.length > 0)
+      return [{ keys, message: `“${keys.at(-1)}” is not a valid name. ${rules.join(" ")}`, isName: true }]
+  }
   return formatter(issue).issues.map((formatted) => ({
     keys: [...path, ...(formatted.path ?? [])].map((segment) =>
       String(typeof segment === "object" ? segment.key : segment),
@@ -77,7 +147,7 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
     return isInstructions(rest.slice(2)) ? [`${agent}/instructions.md`, []] : [`${agent}/agent.yaml`, rest.slice(2)]
   }
   if (kind === "apps" && rest.length >= 2) return inApp(`${space}/apps/${rest.at(1)}`, rest.slice(2))
-  if (kind === "memory") return [`${space}/memory`, []]
+  if (kind === "memory") return [[`${space}/memory`, ...rest.slice(1, 2)].join("/"), []]
   if (records.some((record) => record === kind)) return [`${space}/${kind}.yaml`, rest.slice(1)]
   if (isInstructions(rest)) return [`${space}/instructions.md`, []]
   return [`${space}/space.yaml`, rest]
@@ -85,10 +155,15 @@ const inSpace = (space: string, rest: ReadonlyArray<string>): Place => {
 
 const locate = (keys: ReadonlyArray<string>): Place => {
   if (keys.at(0) === "org") return isInstructions(keys.slice(1)) ? ["instructions.md", []] : ["org.yaml", keys.slice(1)]
-  if (keys.at(0) === "memory") return ["memory", []]
+  if (keys.at(0) === "memory") return [["memory", ...keys.slice(1, 2)].join("/"), []]
   if (keys.at(0) === "environments") return [environmentsFile, keys.slice(1)]
   if (keys.at(0) !== "spaces" || keys.length < 2) return [".", keys]
   return inSpace(`spaces/${keys.at(1)}`, keys.slice(2))
+}
+
+const place = (found: Found, files: ReadonlyArray<string>): Place => {
+  const folder = found.keys.join("/")
+  return found.isName && files.some((file) => file.startsWith(`${folder}/`)) ? [folder, []] : locate(found.keys)
 }
 
 const list = async (root: string) =>
@@ -277,8 +352,14 @@ export const validate = async (root: string): Promise<Validated> => {
     ...problems,
     ...locked.problems,
     ...[
-      ...issues(spec).map((issue) => problem(...locate(issue.keys), issue.message)),
+      ...issues(spec).map((issue) => problem(...place(issue, files), issue.message)),
       ...issues(bindings).map((issue) => problem("deploy.yaml", issue.keys, issue.message)),
+      ...Result.all([spec, bindings ?? Result.fail(undefined)]).pipe(
+        Result.map(([declared, bound]) =>
+          Infra.bindingIssues(declared, bound).map((found) => problem("deploy.yaml", found.path, found.issue)),
+        ),
+        Result.getOrElse(() => []),
+      ),
     ].filter((found) => !named.has(`${found.path}: ${found.field}`)),
   ].toSorted((left, right) => Output.formatProblem(left).localeCompare(Output.formatProblem(right)))
   if (all.length > 0 || Result.isFailure(spec) || (bindings && Result.isFailure(bindings)))
@@ -367,6 +448,7 @@ const writeApp = async (folder: string, app: PulledApp) => {
         ...nonEmpty("requiredCredentials", app.requiredCredentials),
         ...(app.environment && { environment: app.environment }),
         ...nonEmpty("dependsOn", app.dependsOn),
+        ...(app.webhooks && Object.keys(app.webhooks).length > 0 && { webhooks: app.webhooks }),
       }),
     ),
     record(join(folder, "mcps.yaml"), app.mcps),

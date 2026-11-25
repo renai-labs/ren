@@ -113,7 +113,7 @@ describe("InfraFolder.validate", () => {
       "deploy.yaml: spaces.support.timezone: A space has no time zone. Each schedule has its own.",
       "environments.yaml: Python.sessionsPerEnvironment: Use 1 to 100 sessions per environment.",
       "memory/logo.png: A memory holds text files only.",
-      "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
+      "spaces/engineering/agents/build/agent.yaml: isSubagent: Use true or false.",
       "spaces/engineering/space.yaml: name: Missing key",
       "spaces/support/agents/qa: Put the instructions in instructions.md only.",
       "spaces/support/apps/notes/app.yaml: renamedFrom: Ren cannot rename an app.",
@@ -157,11 +157,86 @@ describe("InfraFolder.validate", () => {
     ])
   })
 
+  test("says what a name must be when a folder or key has one that is not allowed", async () => {
+    const root = await folder({
+      "org.yaml": "settings: {}\n",
+      "deploy.yaml":
+        "organization: acme\nprofiles:\n  tools:\n    platform-deploy-bot-for-acme-example: { name: Bot }\nspaces:\n  engineering:\n    channels:\n      Bad_Channel: { kind: github, repository: acme/ren }\n    profiles:\n      Bad_App: [acme]\n",
+      "environments.yaml": "' Python':\n  provider: docker\n  config: {}\n",
+      "spaces/Eng_1/space.yaml": "name: Eng\n",
+      "spaces/engineering/space.yaml": "name: Engineering\n",
+      "spaces/engineering/agents/Bad_Name/agent.yaml": "{}\n",
+      "spaces/engineering/apps/Bad_App/app.yaml": "name: Bad\ndescription: Bad.\n",
+      "spaces/engineering/apps/notes/app.yaml":
+        "name: Notes\ndescription: Writes notes.\nwebhooks:\n  Bad_Preset: {}\n",
+      "spaces/engineering/apps/notes/mcps.yaml": "Bad_Mcp: {}\n",
+      "spaces/engineering/apps/notes/skills/Bad_Skill/SKILL.md": skill("Bad_Skill", "# Write\n"),
+      "spaces/engineering/schedules.yaml": "Bad_Schedule: {}\n",
+      "spaces/engineering/webhooks.yaml": "Bad_Webhook: {}\n",
+      "spaces/engineering/channels.yaml": "Bad_Channel: {}\n",
+      "spaces/engineering/memory/memory.md": "- Ship it.\n",
+      "spaces/engineering/memory/${filename}.md": "Ana.\n",
+    })
+
+    const result = await InfraFolder.validate(root)
+
+    const slug = "Use lowercase letters and digits, joined by single dashes."
+    expect(result.problems.map(Output.formatProblem)).toEqual([
+      `deploy.yaml: profiles.tools.platform-deploy-bot-for-acme-example: “platform-deploy-bot-for-acme-example” is not a valid name. Use 32 characters or fewer.`,
+      `deploy.yaml: spaces.engineering.channels.Bad_Channel: “Bad_Channel” is not a valid name. ${slug}`,
+      `deploy.yaml: spaces.engineering.profiles.Bad_App: “Bad_App” is not a valid name. ${slug}`,
+      "environments.yaml:  Python: “ Python” is not a valid name. Remove spaces at the start and end.",
+      `spaces/Eng_1: “Eng_1” is not a valid name. ${slug}`,
+      `spaces/engineering/agents/Bad_Name: “Bad_Name” is not a valid name. ${slug}`,
+      `spaces/engineering/apps/Bad_App: “Bad_App” is not a valid name. ${slug}`,
+      `spaces/engineering/apps/notes/app.yaml: webhooks.Bad_Preset: “Bad_Preset” is not a valid name. ${slug}`,
+      `spaces/engineering/apps/notes/mcps.yaml: Bad_Mcp: “Bad_Mcp” is not a valid name. ${slug}`,
+      `spaces/engineering/apps/notes/skills/Bad_Skill: “Bad_Skill” is not a valid name. ${slug}`,
+      `spaces/engineering/channels.yaml: Bad_Channel: “Bad_Channel” is not a valid name. ${slug}`,
+      "spaces/engineering/memory/${filename}.md: A path has no ${filename}.",
+      `spaces/engineering/schedules.yaml: Bad_Schedule: “Bad_Schedule” is not a valid name. ${slug}`,
+      `spaces/engineering/webhooks.yaml: Bad_Webhook: “Bad_Webhook” is not a valid name. ${slug}`,
+    ])
+  })
+
+  test("names the values a field takes, not the schema behind it", async () => {
+    const root = await folder({
+      "org.yaml":
+        "settings:\n  model: gpt\n  steps: many\n  permissions:\n    - { action: bash, resource: '*', effect: allow }\n",
+      "spaces/engineering/space.yaml": "name: Engineering\nbrainScope: org\nhand:\n  placement: far\n",
+      "spaces/engineering/apps/notes/app.yaml":
+        "name: Notes\ndescription: Writes notes.\nicon: http://acme.test/notes.svg\n",
+      "spaces/engineering/schedules.yaml":
+        "nightly:\n  cron: 5\n  timeZone: UTC\n  message: Build it.\n  enabled: 'yes'\n",
+      "spaces/engineering/webhooks.yaml":
+        "pull-requests:\n  message: Review it.\n  signature: { kind: rsa }\n  mode: on-call\n",
+      "spaces/engineering/channels.yaml": "ren:\n  kind: gitlab\n  purpose: GitLab acme/ren\n",
+    })
+
+    const result = await InfraFolder.validate(root)
+
+    expect(result.problems.map(Output.formatProblem)).toEqual([
+      "org.yaml: settings.model: Use a map with endpointId and modelId.",
+      "org.yaml: settings.permissions.0.effect: Use ask or deny.",
+      "org.yaml: settings.steps: Use a number.",
+      "spaces/engineering/apps/notes/app.yaml: icon: Use an https URL.",
+      "spaces/engineering/channels.yaml: ren: Use a map whose kind is slack or github.",
+      "spaces/engineering/schedules.yaml: nightly.cron: Use text.",
+      "spaces/engineering/schedules.yaml: nightly.enabled: Use true or false.",
+      "spaces/engineering/space.yaml: brainScope: Use session or space.",
+      "spaces/engineering/space.yaml: hand: Use a map whose placement is colocated, remote or none.",
+      "spaces/engineering/webhooks.yaml: pull-requests.mode: Use listening or live.",
+      "spaces/engineering/webhooks.yaml: pull-requests.signature: Use a map whose kind is none, header, hmac, standard or stripe.",
+    ])
+  })
+
   test("checks the rules across spaces once each file is valid", async () => {
     const root = await folder({
       "org.yaml": "settings: {}\n",
-      "spaces/engineering/space.yaml": "name: Engineering\nbrain:\n  environment: Python\n",
+      "spaces/engineering/space.yaml":
+        "name: Engineering\nbrain:\n  environment: Python\nfactory:\n  maxHandoffs: 3\n  agents:\n    - agent: helper\n",
       "spaces/engineering/agents/ren/agent.yaml": "{}\n",
+      "spaces/engineering/agents/helper/agent.yaml": "isSubagent: true\n",
       "spaces/engineering/schedules.yaml":
         "nightly:\n  agent: review\n  cron: '0 3 * * *'\n  timeZone: UTC\n  message: Review it.\n",
     })
@@ -169,9 +244,25 @@ describe("InfraFolder.validate", () => {
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
+      "spaces/engineering/agents/helper/agent.yaml: description: A subagent needs a description, so other agents know when to use it.",
       "spaces/engineering/agents/ren/agent.yaml: The name ren is reserved.",
       'spaces/engineering/schedules.yaml: nightly.agent: Schedule "nightly" in space "engineering" runs on agent "review", which is not in the space.',
       'spaces/engineering/space.yaml: brain.environment: The brain of space "engineering" names environment template "Python", which the spec does not declare.',
+      'spaces/engineering/space.yaml: factory.agents.0.agent: Agent "helper" is a subagent, so it cannot be in the factory. Pick another agent.',
+    ])
+  })
+
+  test("checks deploy.yaml against the spec once both are valid", async () => {
+    const root = await folder({
+      "org.yaml": "settings: {}\n",
+      "deploy.yaml": "organization: acme\nspaces:\n  ops: {}\n",
+      "spaces/engineering/space.yaml": "name: Engineering\n",
+    })
+
+    const result = await InfraFolder.validate(root)
+
+    expect(result.problems.map(Output.formatProblem)).toEqual([
+      'deploy.yaml: spaces.ops: The spec declares no space "ops".',
     ])
   })
 
@@ -284,6 +375,17 @@ describe("InfraFolder.write", () => {
                   },
                   timeouts: { startup: 1000 },
                   requiredCredentials: [],
+                },
+              },
+              webhooks: {
+                release: {
+                  name: "Release",
+                  description: "A new release.",
+                  message: "Write the notes.",
+                  signature: { kind: "header" as const, header: "x-release-token" },
+                  filter: 'body.action == "published"',
+                  secret: "ren" as const,
+                  setup: "Paste the URL in the release settings.",
                 },
               },
               dependsOn: [],

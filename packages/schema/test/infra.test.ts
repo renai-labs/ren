@@ -126,6 +126,50 @@ describe("Infra.Spec", () => {
     )
   })
 
+  test("a subagent has a description and no references, and runs no factory, schedule, webhook or channel", () => {
+    const helper = { isSubagent: true, description: "Checks the work." }
+    const runner = { agent: "helper" }
+    const declared = (fields: Record<string, unknown>) =>
+      decode({ engineering: { name: "Engineering", agents: { build: agent, helper }, ...fields } })
+    expect(Exit.isSuccess(declared({ factory: { agents: [{ agent: "build" }] } }))).toBe(true)
+    const exit = String(
+      declared({
+        factory: { agents: [{ agent: "build" }, { agent: "helper" }] },
+        schedules: { nightly: { ...runner, cron: "0 3 * * *", timeZone: "UTC", message: "Check." } },
+        webhooks: { builds: { ...runner, message: "Check." } },
+        channels: { ren: { ...runner, kind: "github", purpose: "GitHub acme/ren" } },
+      }),
+    )
+    expect(exit).toContain('Agent "helper" is a subagent, so it cannot be in the factory. Pick another agent.')
+    for (const kind of ["schedule", "webhook", "channel"])
+      expect(exit).toContain(`Agent "helper" is a subagent, so it cannot run a ${kind}. Pick another agent.`)
+    const reference = { alias: "docs", repository: "https://github.com/acme/docs", description: "Docs." }
+    const subagent = String(
+      decode({
+        engineering: {
+          name: "Engineering",
+          agents: { helper: { isSubagent: true, description: " ", settings: { references: [reference] } } },
+        },
+      }),
+    )
+    expect(subagent).toContain("A subagent needs a description, so other agents know when to use it.")
+    expect(subagent).toContain("A subagent cannot have references.")
+  })
+
+  test("rejects two references with one alias, in the org, a space or an agent", () => {
+    const reference = { alias: "docs", repository: "https://github.com/acme/docs", description: "Docs." }
+    const settings = { references: [reference, { ...reference, repository: "https://github.com/acme/site" }] }
+    for (const exit of [
+      Schema.decodeUnknownExit(Infra.Spec)({ org: { settings }, spaces: {} }),
+      decode({ engineering: { name: "Engineering", settings } }),
+      decode({ engineering: { name: "Engineering", agents: { build: { ...agent, settings } } } }),
+    ])
+      expect(String(exit)).toContain("Two references use the alias docs.")
+    expect(
+      Exit.isSuccess(decode({ engineering: { name: "Engineering", settings: { references: [reference] } } })),
+    ).toBe(true)
+  })
+
   test("rejects a renamedFrom name that the spec still defines", () => {
     const exit = decode({
       engineering: {
@@ -248,6 +292,70 @@ describe("Infra.Spec", () => {
     expect(String(memory({ "people/ana.md": "Ana leads design." }))).toContain("A memory folder needs memory.md.")
     for (const path of ["/people.md", "../people.md", "people//ana.md", "people/../ana.md", "people/.ana.md"])
       expect(Exit.isFailure(memory({ "memory.md": "", [path]: "Ana." }))).toBe(true)
+  })
+})
+
+describe("Infra.bindingIssues", () => {
+  const spec = Schema.decodeUnknownSync(Infra.Spec)({
+    org: { settings: {} },
+    spaces: {
+      engineering: {
+        name: "Engineering",
+        channels: {
+          ren: { kind: "github", purpose: "GitHub acme/ren" },
+          chat: { kind: "slack", purpose: "Slack #eng" },
+          help: { kind: "slack", purpose: "Slack #help" },
+        },
+      },
+    },
+  })
+  const issues = (bindings: unknown) =>
+    Infra.bindingIssues(spec, Schema.decodeUnknownSync(Infra.Bindings)(bindings))
+      .map((found) => `${found.path.join(".")}: ${found.issue}`)
+      .toSorted()
+
+  test("binds each channel of the spec once to a place of its kind, and only the spaces and channels it declares", () => {
+    expect(
+      issues({
+        organization: "acme",
+        spaces: {
+          engineering: {
+            channels: {
+              ren: { kind: "slack", channelId: "C1" },
+              chat: { kind: "slack", channelId: "C2" },
+              gone: { kind: "github", repository: "acme/gone" },
+            },
+          },
+          ops: {},
+        },
+      }),
+    ).toEqual([
+      'spaces.engineering.channels.gone: spaces/engineering/channels.yaml declares no channel "gone".',
+      'spaces.engineering.channels.help: Bind channel "help" to a Slack place.',
+      'spaces.engineering.channels.ren: Channel "ren" is a GitHub channel, so bind it to a GitHub place.',
+      'spaces.ops: The spec declares no space "ops".',
+    ])
+  })
+
+  test("a space does not list a profile that deploy.yaml shares with every space", () => {
+    expect(
+      issues({
+        organization: "acme",
+        profiles: { github: { everyone: { name: "Everyone", allSpaces: true }, acme: { name: "Acme" } } },
+        spaces: {
+          engineering: {
+            channels: {
+              ren: { kind: "github", repository: "acme/ren" },
+              chat: { kind: "slack", channelId: "C2" },
+              help: { kind: "slack", channelId: "C3" },
+            },
+            profiles: { github: ["acme", "everyone"] },
+          },
+        },
+      }),
+    ).toEqual([
+      "spaces.engineering.profiles.github.1: Profile everyone of github is shared with every space. Remove it from this list.",
+    ])
   })
 })
 
