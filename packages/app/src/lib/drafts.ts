@@ -1,7 +1,7 @@
 export * as Drafts from "./drafts.js"
 
 import { Composer, ComposerHistory } from "@ren/chat"
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Platform } from "../platform/platform.js"
 import { useMe } from "./use-me.js"
 
@@ -42,6 +42,44 @@ export function useDraft(key: string, initial?: Composer.Draft) {
     set(change(latest.current.key === key ? latest.current.draft : read()))
   return { draft, set, update }
 }
+
+export interface Store {
+  readonly get: () => Composer.Draft
+  readonly set: (next: Composer.Draft) => void
+  readonly update: (change: (current: Composer.Draft) => Composer.Draft) => void
+  readonly subscribe: (listener: () => void) => () => void
+}
+
+const makeStore = (drafts: Pick<Platform.Drafts, "get" | "set" | "remove">, key: string): Store => {
+  let current = Composer.decode(drafts.get(key))
+  const listeners = new Set<() => void>()
+  const set = (next: Composer.Draft) => {
+    current = next
+    const encoded = Composer.encode(next)
+    if (encoded === undefined) drafts.remove(key)
+    else drafts.set(key, encoded)
+    for (const listener of listeners) listener()
+  }
+  return {
+    get: () => current,
+    set,
+    update: (change) => set(change(current)),
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
+}
+
+// oxlint-disable-next-line ren/no-comments -- A draft kept outside React state: only components that read it with useValue re-render as it changes, so typing does not re-render the chat around the composer.
+export function useStore(key: string) {
+  const platform = Platform.usePlatform()
+  const drafts = platform.drafts ?? platform.storage
+  return useMemo(() => makeStore(drafts, key), [drafts, key])
+}
+
+export const useValue = <A>(store: Store, select: (draft: Composer.Draft) => A) =>
+  useSyncExternalStore(store.subscribe, () => select(store.get()))
 
 export function useHistory() {
   const platform = Platform.usePlatform()

@@ -5,7 +5,7 @@ import { FileName } from "@ren/util/file-name"
 import { errorMessage } from "../lib/errors.js"
 import { useDriveDownload, useDriveLink } from "../lib/use-drive-file.js"
 import { ImageThumbnail } from "./image-set.js"
-import { blockImage } from "./markdown.js"
+import { blockImage } from "./markdown-image.js"
 
 export const DriveSpace = createContext<string | undefined>(undefined)
 

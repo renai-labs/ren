@@ -1,8 +1,12 @@
+import { lazy, Suspense } from "react"
 import { createLazyFileRoute } from "@tanstack/react-router"
-import { SessionThread } from "../../../../../features/session/chat-page.js"
 import { TaskPage } from "../../../../../features/tasks/task-page.js"
 
 export const Route = createLazyFileRoute("/_authed/_shell/tasks/$taskId/")({ component: TaskRoute })
+
+const SessionThread = lazy(() =>
+  import("../../../../../features/session/chat-page.js").then((module) => ({ default: module.SessionThread })),
+)
 
 function TaskRoute() {
   const params = Route.useParams()
@@ -15,7 +19,11 @@ function TaskRoute() {
       onOpenSession={(session) => void navigate({ search: (previous) => ({ ...previous, session }) })}
       session={
         search.session
-          ? (dock) => <SessionThread key={search.session} sessionId={search.session ?? ""} dock={dock} />
+          ? (dock) => (
+              <Suspense fallback={null}>
+                <SessionThread key={search.session} sessionId={search.session ?? ""} dock={dock} />
+              </Suspense>
+            )
           : null
       }
     />

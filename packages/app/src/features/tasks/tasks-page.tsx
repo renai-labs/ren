@@ -38,7 +38,7 @@ import type { Assignee } from "../../components/assignee.js"
 import { useMembers } from "../../lib/use-members.js"
 import { cn } from "cn"
 import { Keyboard } from "../../platform/keyboard.js"
-import { useState, type ComponentType } from "react"
+import { useCallback, useMemo, useState, type ComponentType } from "react"
 import type { TaskInfo } from "@ren/client"
 import { Debounce, Tasks } from "@ren/client/react"
 import { FilterMatch } from "@ren/util/filter-match"
@@ -203,7 +203,7 @@ function TaskGroups(props: {
                 spaceName={spaces.spaceName(task.spaceId)}
                 owner={members.member(task.ownerId)}
                 selected={props.selected.includes(task.id)}
-                onSelect={(checked) => props.onSelect({ taskId: task.id, checked })}
+                onSelect={props.onSelect}
               />
             ))}
           </CollapsibleContent>
@@ -267,6 +267,11 @@ export function TasksPage(props: {
     labels,
   }
   const [selected, setSelected] = useState<string[]>([])
+  const select = useCallback(
+    ({ taskId, checked }: { taskId: string; checked: boolean }) =>
+      setSelected((current) => (checked ? [...current, taskId] : current.filter((id) => id !== taskId))),
+    [],
+  )
   Keyboard.useKeyDown((event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return
     if (event.target instanceof Element && event.target.closest("[role=menu],[role=dialog],[role=listbox]")) return
@@ -307,7 +312,7 @@ export function TasksPage(props: {
     setQuery("")
     views.setFilters(views.viewFilters)
   }
-  const shown = TaskDisplay.scoped(display, spaceId)
+  const shown = useMemo(() => TaskDisplay.scoped(display, spaceId), [display, spaceId])
   const groupBy = shown.groupBy
   const properties = shown.properties
   const run = (done: string, call: (id: string) => Promise<unknown>) => {
@@ -421,9 +426,7 @@ export function TasksPage(props: {
             properties={properties}
             idWidth={idWidth}
             selected={selected}
-            onSelect={({ taskId, checked }) =>
-              setSelected((current) => (checked ? [...current, taskId] : current.filter((id) => id !== taskId)))
-            }
+            onSelect={select}
           />
         )}
       </Loading>

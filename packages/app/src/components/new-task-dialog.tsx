@@ -1,6 +1,8 @@
 import { Tasks } from "@ren/client/react"
 import { Breadcrumb } from "./breadcrumb.js"
 import {
+  lazy,
+  Suspense,
   useEffect,
   useId,
   useRef,
@@ -28,7 +30,6 @@ import { cn } from "cn"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
 import { Switch } from "@ren/ui/switch"
 import { useHeldFiles } from "../lib/task-files.js"
-import { MarkdownEditor } from "./markdown-editor.js"
 import { Textarea } from "@ren/ui/textarea"
 import { formatDate } from "@ren/ui/time"
 import { PriorityIcon, StatusGlyph, UnassignedIcon, priorityLabelOf, statusOf } from "./task-meta.js"
@@ -46,6 +47,9 @@ import { DueDatePicker } from "./due-date-picker.js"
 import { SpacePicker } from "./space-picker.js"
 import { useAgents } from "../lib/use-agents.js"
 import { IconAgent } from "../icons/heroicons.js"
+
+// oxlint-disable-next-line ren/no-comments -- The editor (tiptap) is large and every page mounts this dialog for its shortcut, so it loads when a task form first opens.
+const MarkdownEditor = lazy(() => import("./markdown-editor.js").then((module) => ({ default: module.MarkdownEditor })))
 
 const isBareKey = (event: KeyboardEvent) =>
   !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat && !event.isComposing
@@ -390,15 +394,17 @@ export function NewTaskDialog(props: {
         >
           <div className="flex flex-col gap-2 px-6 pt-2">
             <TitleField ref={titleRef} value={draft.title} missing={form.missing} onChange={form.setTitle} />
-            <MarkdownEditor
-              key={created}
-              value={draft.description}
-              label="Task description"
-              placeholder="Add description…"
-              media={form.held.hold}
-              onChange={(description) => set({ description })}
-              className={expanded ? "[&_.tiptap]:min-h-80" : "[&_.tiptap]:min-h-20"}
-            />
+            <Suspense fallback={<div className={expanded ? "min-h-80" : "min-h-20"} />}>
+              <MarkdownEditor
+                key={created}
+                value={draft.description}
+                label="Task description"
+                placeholder="Add description…"
+                media={form.held.hold}
+                onChange={(description) => set({ description })}
+                className={expanded ? "[&_.tiptap]:min-h-80" : "[&_.tiptap]:min-h-20"}
+              />
+            </Suspense>
           </div>
           <TaskChips draft={draft} spaceId={spaceId} onChange={set} />
           <div className="flex items-center justify-end gap-4 px-4 pt-2 pb-4">
@@ -447,14 +453,16 @@ export function SubtaskComposer(props: {
         className="min-h-6 text-sm md:text-sm"
         onChange={form.setTitle}
       />
-      <MarkdownEditor
-        value={form.draft.description}
-        label="Sub-task description"
-        placeholder="Add description…"
-        media={form.held.hold}
-        className="[&_.tiptap]:min-h-6"
-        onChange={(description) => form.set({ description })}
-      />
+      <Suspense fallback={<div className="min-h-6" />}>
+        <MarkdownEditor
+          value={form.draft.description}
+          label="Sub-task description"
+          placeholder="Add description…"
+          media={form.held.hold}
+          className="[&_.tiptap]:min-h-6"
+          onChange={(description) => form.set({ description })}
+        />
+      </Suspense>
       <div className="flex flex-wrap items-center gap-2">
         <TaskChips draft={form.draft} spaceId={props.spaceId} className="p-0" onChange={form.set} />
         <div className="ml-auto flex items-center gap-2">

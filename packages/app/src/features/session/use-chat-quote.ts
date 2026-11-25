@@ -9,24 +9,26 @@ export const quoteOf = (input: {
   readonly blocked: boolean
   readonly running: boolean
   readonly followUp: SessionInbox.Delivery
-  readonly draft: Composer.Draft
+  readonly shell: boolean
   readonly canQueue: boolean
-  readonly model: SessionModel.Ref | undefined
+  readonly model: () => SessionModel.Ref | undefined
   readonly update: (change: (current: Composer.Draft) => Composer.Draft) => void
   readonly send: (request: ChatSession.PromptInput & { text: string }) => Promise<unknown>
 }): QuoteProps | undefined => {
-  if (input.child || input.blocked || Composer.isShell(input.draft)) return undefined
+  if (input.child || input.blocked || input.shell) return undefined
   return {
     working: input.running && input.canQueue,
     followUp: input.followUp,
     onQuote: (quote: QuoteDraft) =>
       input.update((current) => Composer.withQuote(current, { id: crypto.randomUUID(), ...quote })),
-    onSend: (quote: QuoteDraft, delivery: SessionInbox.Delivery) =>
-      input.send({
+    onSend: (quote: QuoteDraft, delivery: SessionInbox.Delivery) => {
+      const model = input.model()
+      return input.send({
         ...Composer.request({ text: "", pasted: [], quotes: [{ id: "quote", ...quote }] }),
         id: SessionMessage.ID.create(),
         delivery: input.running ? delivery : "steer",
-        ...(input.model && { model: input.model }),
-      }),
+        ...(model && { model }),
+      })
+    },
   }
 }

@@ -35,7 +35,7 @@
       html.dark #boot .bar {
         color: #a3a3a3;
       }
-      body:has(#root > :not(section, output)) #boot {
+      #root:has(> :not(section, output)) + #boot {
         display: none;
       }
       @keyframes boot-progress {

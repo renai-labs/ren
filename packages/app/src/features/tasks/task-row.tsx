@@ -1,4 +1,5 @@
 import type { Tasks } from "@ren/client/react"
+import { memo } from "react"
 import { IconAlertTriangle, IconHandStop, IconLink, IconSubtask } from "@tabler/icons-react"
 import { IconAgent } from "../../icons/heroicons.js"
 import { Badge } from "@ren/ui/badge"
@@ -201,7 +202,8 @@ function RowAssignees(props: {
   )
 }
 
-export function TaskRow(props: {
+// oxlint-disable-next-line ren/no-comments -- Memoized: a list renders hundreds of rows with menus each, and a search keystroke, a selection or a refetch should only re-render the rows that changed.
+export const TaskRow = memo(function TaskRow(props: {
   task: Task
   parent?: { readonly identifier: string; readonly title: string } | null
   branch?: Tasks.Branch | undefined
@@ -211,7 +213,7 @@ export function TaskRow(props: {
   agentName: string | null
   spaceName: string
   owner: Member | undefined
-  onSelect?: ((selected: boolean) => void) | undefined
+  onSelect?: ((selection: { taskId: string; checked: boolean }) => void) | undefined
 }) {
   const task = props.task
   const show = (property: string) => props.show.includes(property)
@@ -235,14 +237,14 @@ export function TaskRow(props: {
       render={
         <div
           data-selected={props.selected || undefined}
-          className="group/row relative flex h-11 items-center gap-2 rounded-lg px-2 text-sm hover:bg-muted data-selected:bg-muted"
+          className="group/row relative flex h-11 items-center gap-2 rounded-lg px-2 text-sm [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto] hover:bg-muted data-selected:bg-muted"
         />
       }
     >
       {props.onSelect ? (
         <Checkbox
           checked={props.selected}
-          onCheckedChange={props.onSelect}
+          onCheckedChange={(checked) => props.onSelect?.({ taskId: task.id, checked })}
           aria-label={`Select ${task.title}`}
           className="relative z-10 mx-1 size-3.5 border-muted-foreground/70 opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 @max-sm/tasks:hidden dark:bg-card data-checked:opacity-100 [&_[data-slot=checkbox-indicator]>svg]:size-3"
         />
@@ -304,4 +306,4 @@ export function TaskRow(props: {
       />
     </RowContextMenu>
   )
-}
+})

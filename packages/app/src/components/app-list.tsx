@@ -1,6 +1,6 @@
 import { Search } from "@ren/schema/search"
 import { Link } from "@ren/ui/link"
-import { useState, type ReactNode } from "react"
+import { lazy, Suspense, useState, type ReactNode } from "react"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
@@ -18,7 +18,6 @@ import { AccountMenu } from "./account-menu.js"
 import { DefaultIcon } from "./default-icon.js"
 import { GitHubMark } from "../icons/brands.js"
 import { StatusDot } from "./status-dot.js"
-import { Markdown } from "./markdown.js"
 import { ReadMore } from "./read-more.js"
 import { ToolbarSearch } from "./toolbar-search.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
@@ -32,6 +31,9 @@ import { useSpaces } from "../lib/use-spaces.js"
 import type { CatalogApp } from "../lib/apps.js"
 
 type App = CatalogApp
+
+// oxlint-disable-next-line ren/no-comments -- Markdown brings Streamdown and its plugins; the app shell's loading skeleton imports this file, so it loads only when a skill or tool opens.
+const Markdown = lazy(() => import("./markdown.js").then((module) => ({ default: module.Markdown })))
 type AppProfile = AppProfileInfo
 
 function AttentionDot() {
@@ -429,7 +431,9 @@ function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClo
           </DialogHeader>
           {skill.instructions.trim() ? (
             <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
-              <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0">{skill.instructions}</Markdown>
+              <Suspense fallback={null}>
+                <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0">{skill.instructions}</Markdown>
+              </Suspense>
             </div>
           ) : null}
         </DialogContent>
@@ -553,7 +557,9 @@ export function ToolGroup(props: { title: string; tools: ReadonlyArray<AppListin
               </div>
               {tool.description ? (
                 <ReadMore>
-                  <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+                  <Suspense fallback={null}>
+                    <Markdown className="text-sm/6 text-muted-foreground">{tool.description}</Markdown>
+                  </Suspense>
                 </ReadMore>
               ) : null}
               {tool.price?.note ? <p className="text-xs/5 text-muted-foreground">{tool.price.note}</p> : null}

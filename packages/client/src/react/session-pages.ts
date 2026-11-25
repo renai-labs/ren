@@ -24,7 +24,9 @@ export const options = (client: ReturnType<typeof Ren.make>, filter: Filter = {}
     initialPageParam: 1,
     getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
     staleTime: 30_000,
-    refetchInterval: 10_000,
+    // oxlint-disable-next-line ren/no-comments -- Chats change on their own only while one is busy; otherwise the list refreshes on mount, focus and mutations.
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((page) => page.items.some((session) => session.status === "busy")) ? 10_000 : false,
   })
 
 export const patch = (

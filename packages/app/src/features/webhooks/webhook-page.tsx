@@ -67,7 +67,6 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
       pageSize: 1,
     }),
     select: (page) => page.total,
-    refetchInterval: Webhooks.refreshEvery,
   })
   const webhook = props.webhook
   const live = webhook.mode === "live"

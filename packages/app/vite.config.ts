@@ -33,6 +33,46 @@ const preloadFonts: Plugin = {
   },
 }
 
+const rootHas = /(^|[\s,>~+(])(html|body|:root)(\[[^\]]*\]|[.#:][\w-]+)*:has\(/u
+
+const nestedHas = (selector: string) => {
+  if (rootHas.test(selector)) return true
+  const open: string[] = []
+  for (const [index, char] of [...selector].entries()) {
+    if (char === ")") open.pop()
+    if (char !== "(") continue
+    const name = /:([a-z-]+)$/u.exec(selector.slice(0, index))?.[1] ?? ""
+    if (name === "has" && open.some((outer) => outer === "is" || outer === "not" || outer === "where")) return true
+    open.push(name)
+  }
+  return false
+}
+
+const slowHas = (css: string) =>
+  css
+    .split("{")
+    .map((part) => part.slice(Math.max(part.lastIndexOf("}"), part.lastIndexOf(";")) + 1).trim())
+    .filter((selector) => !selector.startsWith("@") && nestedHas(selector))
+
+const slowHasError = (found: ReadonlyArray<string>) =>
+  `CSS puts :has() inside :is()/:not()/:where() or on html/body, which makes Chrome restyle the whole page on every DOM change:\n${found.join("\n")}`
+
+// oxlint-disable-next-line ren/no-comments -- Chrome restyles the whole page on every DOM change while a rule nests :has() inside :is(), :not() or :where() (what Tailwind's group-has-* and not-has-* emit) or anchors it on html or body, so the build fails on one; @ren/ui/styles has custom variants with the plain forms.
+const noSlowHas: Plugin = {
+  name: "ren:no-slow-has",
+  apply: "build",
+  transformIndexHtml(html) {
+    const found = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gu)].flatMap((match) => slowHas(match[1] ?? ""))
+    if (found.length > 0) throw new Error(slowHasError(found))
+  },
+  generateBundle(_options, bundle) {
+    const found = Object.values(bundle).flatMap((output) =>
+      output.type === "asset" && output.fileName.endsWith(".css") ? slowHas(String(output.source)) : [],
+    )
+    if (found.length > 0) this.error(slowHasError(found))
+  },
+}
+
 const pdfjsAssets: Plugin = (() => {
   const root = new URL("node_modules/pdfjs-dist/", import.meta.url).pathname
   const folders = ["cmaps", "standard_fonts", "wasm"]
@@ -75,6 +115,7 @@ export default defineConfig((env) => ({
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     preloadFonts,
+    noSlowHas,
   ],
   build: { sourcemap: "hidden" },
   define:

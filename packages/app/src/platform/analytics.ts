@@ -5,15 +5,16 @@ export interface Interface {
   readonly reset: () => void
   readonly capture: (event: string, properties: Readonly<Record<string, string>>) => void
   readonly captureException: (error: unknown) => void
+  readonly replaySession: () => string | undefined
 }
 
 export function make(options: {
   readonly key: string
   readonly apiHost: string
   readonly uiHost?: string
-  readonly serverHost: string
   readonly autocaptureUrls: ReadonlyArray<RegExp>
 }): Interface {
+  let ready: { readonly get_session_id: () => string } | undefined
   const posthog = new Promise((resolve) =>
     typeof requestIdleCallback === "function"
       ? requestIdleCallback(resolve, { timeout: 2000 })
@@ -27,8 +28,8 @@ export function make(options: {
         defaults: "2026-08-30",
         capture_exceptions: true,
         autocapture: { url_allowlist: [...options.autocaptureUrls] },
-        tracing_headers: [options.serverHost],
       })
+      ready = loaded.default
       return loaded.default
     })
     .catch(() => undefined)
@@ -39,5 +40,6 @@ export function make(options: {
     reset: () => run((client) => client.reset()),
     capture: (event, properties) => run((client) => void client.capture(event, properties)),
     captureException: (error) => run((client) => void client.captureException(error)),
+    replaySession: () => ready?.get_session_id() || undefined,
   }
 }

@@ -1,5 +1,5 @@
 import { Seed, SessionPages } from "@ren/client/react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
 import {
   ChatState,
@@ -265,10 +265,9 @@ export function useChat(
   const models = ChatReact.useModels(root)
   const catalog = useModels(root, spaceId)
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
-  const kept = Drafts.useDraft(Drafts.session(root))
-  const draft = kept.draft
-  const history = Drafts.useHistory()
-  const setDraft = kept.set
+  const draftStore = Drafts.useStore(Drafts.session(root))
+  const shell = Drafts.useValue(draftStore, Composer.isShell)
+  const runner = useRef<Runner | undefined>(undefined)
   const [reverting, setReverting] = useState(false)
   const [picking, setPicking] = useState(false)
   const abilities = capabilitiesOf(info)
@@ -310,25 +309,8 @@ export function useChat(
   SessionPages.useLive(api, root, SessionLive.of(state, root))
 
   const chatModel = ChatState.model(state, root)
-  const model = pickModel(modelList, [draft.model, chatModel, catalog.fallback])
-  const switchTo = Composer.switching(draft, chatModel)
-  const suggestions = useChatSuggestions({
-    root,
-    capabilities: info?.capabilities,
-    messages: view.messages,
-    reverted,
-    model: switchTo,
-    spaceId,
-    mentions: Composer.mentions(draft),
-    picked: Composer.picked(draft),
-    canChooseModel: abilities.canChooseModel,
-    onChooseModel: () => setPicking(true),
-    workspace: options.workspace,
-    onRename: options.onRename,
-    onNew: options.onNew,
-    rename,
-    apps: () => setAppsOpen(true),
-  })
+  const switchTo = () => Composer.switching(draftStore.get(), chatModel)
+  const run: Runner = (request, send) => (runner.current ? runner.current(request, send) : send(request))
   const statuses = ChatState.pendingStatuses(state, view.viewed)
   const bootStatus = bootStatusOf(
     { status: connection, retryAt: AsyncResult.getOrElse(view.session.retryAt, () => 0) },
@@ -388,84 +370,55 @@ export function useChat(
     reverting,
     failed: AsyncResult.isFailure(view.session.state),
     boot,
-    draft,
-    setDraft,
-    files: { sessionId: root, spaceId, update: kept.update },
-    suggest: suggestions.suggest,
+    draftStore,
+    chatModel,
+    fallbackModel: catalog.fallback,
+    registerRunner: (next: Runner) => {
+      runner.current = next
+    },
+    prompt,
+    runShell,
+    workspace: options.workspace,
+    onRename: options.onRename,
+    onNew: options.onNew,
     models: modelList,
     modelsLoading: AsyncResult.isInitial(models) && catalog.loading,
-    model,
     ...abilities,
     picking,
     setPicking,
     chooseModel: (next: SessionModel.Ref) => {
-      kept.update((current) => Composer.withModel(current, next))
+      draftStore.update((current) => Composer.withModel(current, next))
     },
     quote: quoteOf({
       child,
       blocked,
-      draft,
+      shell,
       canQueue: abilities.canQueue,
       running,
       followUp: ChatPreferences.followUp.read(platform.storage),
       model: switchTo,
-      update: kept.update,
-      send: (request) => suggestions.run(request, prompt),
+      update: draftStore.update,
+      send: (request) => run(request, prompt),
     }),
     shellHistory,
-    send: (options: { readonly alternative: boolean }) => {
-      if (Composer.isShell(draft)) {
-        const command = Composer.message(draft).trim()
-        if (!command) return
-        const sent = draft
-        shellHistory.add(command)
-        setDraft(Composer.emptyShell)
-        void runShell(command).catch((error: unknown) => {
-          kept.update((current) => (Composer.isBlank(current) ? sent : current))
-          toast.error("Couldn’t run the command", { description: errorMessage(error) })
-        })
-        return
-      }
-      const request = Composer.request(draft)
-      const text = request.text.trim()
-      if (!text) return
-      const id = Composer.messageID(draft) ?? SessionMessage.ID.create()
-      const submission = Composer.submission(draft, {
-        working: running,
-        behavior: ChatPreferences.followUp.read(platform.storage),
-        alternative: options.alternative,
-        queue: abilities.canQueue,
-        current: chatModel,
-      })
-      if (!submission) return
-      void platform.requestNotifications?.()
-      history.prepend(submission.sent)
-      setDraft(submission.next)
-      const selection = { delivery: submission.delivery, ...(submission.model && { model: submission.model }) }
-      void suggestions
-        .run({ ...request, id, text, ...selection, files: Composer.files(draft) }, prompt)
-        .catch((error: unknown) => {
-          history.remove(submission.sent)
-          kept.update((current) => Composer.restore(current, submission.sent, id))
-          toast.error("Could not send your message", {
-            description: `${errorMessage(error)} Your draft has been kept.`,
-          })
-        })
-    },
-    connected: (app: string) =>
+    connected: (app: string) => {
+      const model = switchTo()
       void prompt({
         id: SessionMessage.ID.create(),
         text: `I connected ${app}.`,
         delivery: running ? ChatPreferences.followUp.read(platform.storage) : "steer",
-        ...(switchTo && { model: switchTo }),
-      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
-    resend: (text: string) =>
+        ...(model && { model }),
+      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }))
+    },
+    resend: (text: string) => {
+      const model = switchTo()
       void prompt({
         id: SessionMessage.ID.create(),
         text,
         delivery: "steer",
-        ...(switchTo && { model: switchTo }),
-      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) })),
+        ...(model && { model }),
+      }).catch((error: unknown) => toast.error("Could not send your message", { description: errorMessage(error) }))
+    },
     retryUnsent: (id: SessionMessage.ID) =>
       void retryMessage(id).catch((error: unknown) =>
         toast.error("Could not send your message", { description: errorMessage(error) }),
@@ -474,7 +427,7 @@ export function useChat(
       void removeMessage(id).then(
         (item) => {
           if (!item) return
-          kept.update((current) => {
+          draftStore.update((current) => {
             const next = Composer.recall(current, item)
             return item.files?.length && spaceId && !next.chat
               ? Composer.withChat(next, { sessionId: root, spaceId })
@@ -498,13 +451,14 @@ export function useChat(
     edit: (message: SessionMessage.User, text: string) => {
       setReverting(true)
       const request = Composer.request({ ...Composer.fromMessage(message), text })
+      const model = switchTo()
       void revert(message.id)
         .then(() =>
           prompt({
             id: SessionMessage.ID.create(),
             ...request,
             delivery: "steer",
-            ...(switchTo && { model: switchTo }),
+            ...(model && { model }),
           }),
         )
         .catch((error: unknown) => toast.error("Could not edit your message", { description: errorMessage(error) }))
@@ -517,12 +471,12 @@ export function useChat(
       void undo().then(
         (message) => {
           if (Option.isSome(message))
-            kept.update((current) => Composer.fromHistory(current, Composer.fromMessage(message.value)))
+            draftStore.update((current) => Composer.fromHistory(current, Composer.fromMessage(message.value)))
         },
         (error: unknown) => toast.error("Could not undo the last message", { description: errorMessage(error) }),
       ),
     compact: () =>
-      void compact(switchTo).catch((error: unknown) =>
+      void compact(switchTo()).catch((error: unknown) =>
         toast.error("Could not compact the chat", { description: errorMessage(error) }),
       ),
     restore: () =>
@@ -546,6 +500,86 @@ export function useChat(
           },
         },
       ),
+  }
+}
+
+type Runner = (
+  request: ChatSession.PromptInput & { text: string },
+  send: (request: ChatSession.PromptInput) => Promise<unknown>,
+) => Promise<unknown>
+
+// oxlint-disable-next-line ren/no-comments -- The draft and its suggestions live here, under the composer, so typing re-renders the composer and not the transcript beside it.
+export function useChatComposer(chat: ReturnType<typeof useChat>) {
+  const { platform } = RouterContext.useRouterContext()
+  const store = chat.draftStore
+  const draft = Drafts.useValue(store, (current) => current)
+  const history = Drafts.useHistory()
+  const switchTo = Composer.switching(draft, chat.chatModel)
+  const suggestions = useChatSuggestions({
+    root: chat.root,
+    capabilities: chat.capabilities,
+    messages: chat.messages,
+    reverted: chat.reverted,
+    model: switchTo,
+    spaceId: chat.spaceId,
+    mentions: Composer.mentions(draft),
+    picked: Composer.picked(draft),
+    canChooseModel: chat.canChooseModel,
+    onChooseModel: () => chat.setPicking(true),
+    workspace: chat.workspace,
+    onRename: chat.onRename,
+    onNew: chat.onNew,
+    rename: chat.rename,
+    apps: () => chat.apps.onOpenChange(true),
+  })
+  const register = chat.registerRunner
+  const run = suggestions.run
+  useEffect(() => register(run), [register, run])
+  return {
+    draft,
+    setDraft: store.set,
+    files: { sessionId: chat.root, spaceId: chat.spaceId, update: store.update },
+    suggest: suggestions.suggest,
+    model: pickModel(chat.models, [draft.model, chat.chatModel, chat.fallbackModel]),
+    send: (options: { readonly alternative: boolean }) => {
+      const current = store.get()
+      if (Composer.isShell(current)) {
+        const command = Composer.message(current).trim()
+        if (!command) return
+        chat.shellHistory.add(command)
+        store.set(Composer.emptyShell)
+        void chat.runShell(command).catch((error: unknown) => {
+          store.update((now) => (Composer.isBlank(now) ? current : now))
+          toast.error("Couldn’t run the command", { description: errorMessage(error) })
+        })
+        return
+      }
+      const request = Composer.request(current)
+      const text = request.text.trim()
+      if (!text) return
+      const id = Composer.messageID(current) ?? SessionMessage.ID.create()
+      const submission = Composer.submission(current, {
+        working: chat.running,
+        behavior: ChatPreferences.followUp.read(platform.storage),
+        alternative: options.alternative,
+        queue: chat.canQueue,
+        current: chat.chatModel,
+      })
+      if (!submission) return
+      void platform.requestNotifications?.()
+      history.prepend(submission.sent)
+      store.set(submission.next)
+      const selection = { delivery: submission.delivery, ...(submission.model && { model: submission.model }) }
+      void suggestions
+        .run({ ...request, id, text, ...selection, files: Composer.files(current) }, chat.prompt)
+        .catch((error: unknown) => {
+          history.remove(submission.sent)
+          store.update((now) => Composer.restore(now, submission.sent, id))
+          toast.error("Could not send your message", {
+            description: `${errorMessage(error)} Your draft has been kept.`,
+          })
+        })
+    },
   }
 }
 

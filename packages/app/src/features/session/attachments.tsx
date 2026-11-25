@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type Ref } from "react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { IconDownload, IconRefresh, IconX } from "@tabler/icons-react"
 import {
@@ -22,6 +22,7 @@ import { MediaUnavailable } from "../../components/media-unavailable.js"
 import { formatBytes } from "../../lib/format.js"
 import { playableKind, useDriveFile } from "../../lib/use-drive-file.js"
 import type { Upload } from "../../lib/use-uploads.js"
+import { useSeen } from "../../lib/use-seen.js"
 import { HtmlPage } from "./html-page.js"
 import { HtmlPageBridge } from "./html-page-bridge.js"
 
@@ -57,11 +58,13 @@ function DriveFileCard(props: {
   disabled?: boolean | undefined
   onRemove?: (() => void) | undefined
 }) {
-  const drive = useDriveFile(props.spaceId, props.file)
+  const seen = useSeen()
+  const drive = useDriveFile(props.spaceId, props.file, { near: seen.seen })
   if (drive.image && drive.deleted && !props.onRemove)
     return <MediaUnavailable reason="Not in the drive" title={props.file.name} />
   return (
     <DriveFileChip
+      ref={seen.ref}
       spaceId={props.spaceId}
       file={props.file}
       drive={drive}
@@ -72,6 +75,7 @@ function DriveFileCard(props: {
 }
 
 function DriveFileChip(props: {
+  ref: Ref<HTMLDivElement>
   spaceId: string | undefined
   file: SessionMessage.DriveFile
   drive: ReturnType<typeof useDriveFile>
@@ -84,7 +88,7 @@ function DriveFileChip(props: {
   const navigate = useNavigate()
   const [previewing, setPreviewing] = useState(false)
   return (
-    <Attachment size="sm" state={drive.deleted ? "error" : "done"}>
+    <Attachment ref={props.ref} size="sm" state={drive.deleted ? "error" : "done"}>
       <DriveFileThumbnail file={file} thumbnail={thumbnail} onError={drive.reload} onDownload={drive.download} />
       <AttachmentContent>
         <AttachmentTitle>{file.name}</AttachmentTitle>

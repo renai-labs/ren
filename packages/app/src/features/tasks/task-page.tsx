@@ -111,7 +111,7 @@ export function TaskPage(props: {
   const openSession = props.onOpenSession
   const stored = useSuspenseQuery({
     ...api.task.get.queryOptions({ idOrSlug: props.taskId }),
-    refetchInterval: Tasks.refreshEvery,
+    refetchInterval: (query) => Tasks.pollWhileWorking(query.state.data && [query.state.data]),
     ...Seed.fromList<TaskInfo>(queryClient, [api.task.list.queryKey(), Tasks.allKey()], props.taskId),
   }).data
   const update = useMutation(api.task.update.mutationOptions())
@@ -272,6 +272,7 @@ function ParentPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void 
   const task = props.task
   const [query, setQuery] = useState("")
   const search = query.trim()
+  const [open, setOpen] = useState(false)
   const roots =
     useQuery({
       ...api.task.list.queryOptions({
@@ -282,10 +283,10 @@ function ParentPicker(props: { task: TaskInfo; onChange: (patch: Patch) => void 
         page: 1,
         pageSize: pickerPageSize,
       }),
+      enabled: open,
       placeholderData: keepPreviousData,
     }).data?.items ?? []
   const parent = task.parent
-  const [open, setOpen] = useState(false)
   const choose = (parentId: string | null) => {
     setOpen(false)
     props.onChange({ parentId })
@@ -753,8 +754,8 @@ function SubtaskList(props: { task: TaskInfo }) {
   const { api } = RouterContext.useRouterContext()
   const task = props.task
   const listed = useQuery({
-    ...api.task.list.queryOptions({ parentId: task.id, includeDone: true, page: 1, pageSize: pickerPageSize }),
-    refetchInterval: Tasks.refreshEvery,
+    ...api.task.list.queryOptions(Tasks.subtasksInput(task.id)),
+    refetchInterval: (query) => Tasks.pollWhileWorking([task, ...(query.state.data?.items ?? [])]),
   })
   const subtasks = listed.data?.items ?? []
   const total = task.subtasks?.total ?? 0
