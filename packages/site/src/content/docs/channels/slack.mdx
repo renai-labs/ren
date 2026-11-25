@@ -26,6 +26,19 @@ Mention `@Ren` in a Slack channel, or send Ren a direct message. Each Slack thre
 
 Then [link each Slack channel to a space](/docs/channels/#link-a-place-to-a-space). If a channel is missing from the list, run `/invite @Ren` in it.
 
+Any member can connect Slack. That person becomes the fallback user of Slack channels that are not linked.
+
+## Talk to Ren
+
+| Where            | Start a chat   | Continue it                                                 |
+| ---------------- | -------------- | ----------------------------------------------------------- |
+| A Slack channel  | Mention `@Ren` | Reply in the Slack thread and mention `@Ren` again          |
+| A direct message | Send a message | Reply in its Slack thread. A new message starts a new chat. |
+
+Ren reacts 👀 when it starts, then ✅ when it is done or ❌ when it fails. If only 👀 shows, open the chat in the app.
+
+When you mention Ren in a Slack thread, it reads the messages since its last mention, up to 12,000 characters and 10 files.
+
 ## Where Ren works
 
 | Message from                              | Space                                                           |
@@ -56,4 +69,6 @@ When you paste the link of a [task](/docs/tasks/) in Slack, Ren shows a card wit
 
 ## Good to know
 
-- Ren reads the files in your message, up to 32 MB each.
+- Ren reads the files in your message, up to 32 MB each. It skips a larger file and gets a note about it.
+- Ren ignores direct messages from other bots. A mention from another app in a channel runs as the fallback user.
+- Ren can't show a connect card in Slack. To connect an app, open the chat in the app.

@@ -33,7 +33,9 @@ Use the switch in the header to turn it on or off. **Duplicate** and **Delete** 
 
 Pick how often it runs: **Hourly**, **Daily**, **Weekdays**, **Weekly**, **Monthly**, **Once** on a date, or **Custom (cron)**.
 
-Under **Advanced**, set the time zone, which starts as yours from **Settings → Preferences**, and an end date. Each run starts a new chat.
+Under **Advanced**, set the time zone, which starts as your browser's, and an end date.
+
+Each run starts a new chat. If you ask Ren in a chat to run something on a schedule in that chat, **Each run** shows **Goes to one chat**. Select **Start a new chat instead** to change it.
 
 A space can have 50 active schedules, each at least 5 minutes apart.
 
@@ -97,7 +99,7 @@ The webhook lists its requests from the last 30 days, with their outcome:
 | Started   | It started a chat.                               |
 | Continued | It continued a chat.                             |
 | Recorded  | Kept without a run: the webhook is in **Debug**. |
-| Ignored   | The condition was false.                         |
+| Ignored   | The condition was false, or a rule failed.       |
 | Duplicate | Ren saw its event identifier before.             |
 | Rejected  | Wrong or missing signature, or a body over 1 MB. |
 | Throttled | Over 60 requests in one minute.                  |
@@ -116,13 +118,14 @@ Select **Run history** on an automation to see each run from the last 30 days. S
 
 Ren stops an automation and marks it **Needs attention** when it cannot run as set up:
 
-| Cause                                         | Fix                                      |
-| --------------------------------------------- | ---------------------------------------- |
-| Its owner left the space                      | Save it to run it as you                 |
-| Its agent left the space                      | Pick another agent                       |
-| The last 5 runs failed                        | Open the failed runs, fix it, turn it on |
-| A webhook's rule broke on 5 requests in a row | Fix the rule, then turn it **Live**      |
-| The app no longer offers the webhook          | Delete it                                |
+| Cause                                                | Fix                                                         |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| A schedule's owner left the space                    | Save it to run it as you                                    |
+| A webhook's owner and fallback user left the space   | It switches to **Debug**. Turn it **Live** to run it as you |
+| Its agent left the space                             | Pick another agent                                          |
+| The last 5 runs failed, such as when credits ran out | Open the failed runs, fix it, turn it on                    |
+| A webhook's rule broke on 5 requests in a row        | Fix the rule, then turn it **Live**                         |
+| The app no longer offers the webhook                 | Delete it                                                   |
 
 <Screenshot
   shot="automations/webhook-warning"

@@ -31,13 +31,13 @@ A chat can also start from a [channel](/docs/channels/), an [automation](/docs/a
 
 ## Chat visibility
 
-Every member of a space can see its chats. Chats in your personal space are visible only to you.
+Every member of a space can see its chats and send messages in them. Chats in your personal space are visible only to you. Admins see a space's chats only after they join it.
 
 ## Model
 
 Select the model name in the composer to choose another model. For models that support it, the dropdown next to the model sets the reasoning effort. You can also press `⌘` + `'` or send `/model`.
 
-A new model applies from your next message. If you do not pick one, Ren uses the default model of the space, or of the organization if the space has none.
+A new model applies from your next message. If you do not pick one, Ren uses the [default model](/docs/model-providers/#pick-a-model). If a model is not available, Ren uses the next one in that order.
 
 ## Mentions
 
@@ -60,7 +60,9 @@ Type `@` in the composer, then pick a category and an item to mention it in that
 
 ## Attach files
 
-Select **+** in the composer, drag a file onto it, or paste it. Ren reads images, PDFs and text files directly. It saves other files to the computer of the chat and opens them with its tools.
+Select **+** in the composer, drag a file onto it, or paste it. A message can have up to 10 files, 100 MB each.
+
+Ren reads images up to 20 MB, and PDFs and text files up to 10 MB, directly. It opens other files with its tools.
 
 ## Send while Ren works
 
@@ -78,8 +80,9 @@ You do not have to wait for Ren to finish. A message you send while Ren works wa
 | `⌘Enter` | Steer the message            |
 | `⌘↑`     | Edit the last queued message |
 | Esc      | Stop Ren                     |
+| `↑` `↓`  | Show your earlier messages   |
 
-To make steer the default, open **Settings → Preferences** and set **Messages sent while Ren works** to **Steer the current turn**.
+To make steer the default, open **Settings → Preferences** and set **Messages sent while Ren works** to **Steer the current turn**. Enter and `⌘Enter` then swap.
 
 ## Questions and permission requests
 
@@ -203,3 +206,4 @@ Type `/` in the composer to see the commands. Keep typing to filter them, then p
 
 - On Windows and Linux, use Ctrl instead of `⌘`.
 - A chat from a channel or a schedule denies any action that needs approval, unless you allow it in the [permissions](/docs/permissions/).
+- If credits run out during a reply, Ren stops. After an admin adds credits, select **Continue**.
