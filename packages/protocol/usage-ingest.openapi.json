@@ -3,7 +3,7 @@
   "info": {
     "title": "Ren Usage Ingest API",
     "version": "1",
-    "description": "Internal API where a trusted producer, such as the model gateway, sends the costs that it saw."
+    "description": "Internal API where a trusted producer, such as the inference service, sends the costs that it saw."
   },
   "paths": {
     "/usage/v1/events": {
@@ -117,13 +117,13 @@
             }
           }
         },
-        "description": "The model gateway says that a provider’s models changed: for one organization (a seat) or, without `organizationId`, for every organization (models.dev, Ren’s list). Ren tells the brains of those organizations to pull. Only the usage ingest key.",
+        "description": "The inference service says that one organization’s models of a provider changed, such as after a seat sign-in. Ren tells that organization’s brains to pull. Only the usage ingest key.",
         "summary": "A provider’s models changed",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModelGateway.Changed"
+                "$ref": "#/components/schemas/InferencePlugin.Changed"
               }
             }
           },
@@ -158,6 +158,22 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
+      "InferencePlugin.Changed": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["provider", "organizationId"],
+        "additionalProperties": false,
+        "description": "One organization’s models of a provider changed, such as after a seat sign-in. A change for every organization reaches brains at their next pull."
+      },
       "InvalidRequestErrorEncoded": {
         "type": "object",
         "properties": {
@@ -181,22 +197,6 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
-      },
-      "ModelGateway.Changed": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "minLength": 1
-          },
-          "organizationId": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": ["provider"],
-        "additionalProperties": false,
-        "description": "A provider’s models changed: for one organization, or for every organization without `organizationId`."
       },
       "Space.ID": {
         "type": "string",
@@ -385,7 +385,7 @@
           },
           "operation": {
             "type": "string",
-            "description": "The gateway’s call type, such as completion, image_generation, speech, transcription or decisions."
+            "description": "The inference service’s call type, such as completion, image_generation, speech, transcription or decisions."
           },
           "kind": {
             "type": "string"

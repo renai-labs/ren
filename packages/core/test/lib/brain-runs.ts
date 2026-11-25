@@ -18,13 +18,13 @@ import { join } from "node:path"
 import { Models } from "../../src/models.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
+import { ModelsStub } from "./models-stub.js"
 
 export const stub = Shared.stub()
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.sync(() => Models.catalog(Shared.access({ stub: Shared.apiKey("sk-lifecycle") }, stub.url))),
     providers: () =>
       Effect.sync(() =>

@@ -19,6 +19,7 @@ import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
 import { TestDrives } from "./lib/drives.js"
 import { testEffect } from "./lib/effect.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 const key = await Effect.runPromise(Signature.generate("brain"))
 const integrationsKey = await Effect.runPromise(Signature.generate("ren-integrations"))
@@ -31,11 +32,10 @@ const failuresLeft = Ref.makeUnsafe(0)
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
+  ModelsStub.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
     providers: () => Effect.succeed([]),
     baseUrls: Effect.succeed([]),
-    forget: () => Effect.void,
     grant: () =>
       Effect.gen(function* () {
         if ((yield* Ref.getAndUpdate(failuresLeft, (left) => Math.max(0, left - 1))) > 0)

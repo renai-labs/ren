@@ -8,8 +8,8 @@ import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Schema, Stru
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import { ModelLists } from "../src/model-lists.js"
-import { ModelGateway } from "../src/model-gateway.js"
-import { RenGateway } from "../src/model-gateway/ren-gateway.js"
+import { InferencePlugin } from "../src/inference-plugin.js"
+import { RenInferencePlugin } from "../src/inference-plugin/ren.js"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
 import { Signer } from "../src/signer.js"
@@ -52,8 +52,7 @@ const service = Bun.serve({
 const it = testEffect(
   Models.layer.pipe(
     Layer.provideMerge(ModelLists.layer),
-    Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
-    Layer.provideMerge(RenGateway.layerChanges),
+    Layer.provideMerge(InferencePlugin.layer([RenInferencePlugin.plugin])),
     Layer.provideMerge(RenInference.layer),
     Layer.provide([Signer.layerLocal, FetchHttpClient.layer, Access.layer]),
     Layer.provideMerge(Testing.layer),
@@ -81,9 +80,9 @@ const renCard = {
   models: "shared",
 }
 
-describe("RenGateway with the Ren Inference Service (Providers §6.2, §10)", () => {
+describe("RenInferencePlugin with the Ren Inference Service (Providers §6.2, §10)", () => {
   it.live(
-    "reads the providers and a shared provider's models Ren-wide, and grants each provider the brains' gateway URL with a brain key",
+    "reads the providers and a shared provider's models Ren-wide, and grants each provider the brains' LiteLLM URL with a brain key",
     () =>
       Effect.gen(function* () {
         const models = yield* Models.Service

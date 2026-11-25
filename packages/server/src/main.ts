@@ -46,8 +46,8 @@ import { Docker } from "@ren/core/machine-provider/docker"
 import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { ModelLists } from "@ren/core/model-lists"
-import { ModelGateway } from "@ren/core/model-gateway"
-import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
+import { InferencePlugin } from "@ren/core/inference-plugin"
+import { RenInferencePlugin } from "@ren/core/inference-plugin/ren"
 import { Models } from "@ren/core/models"
 import { ProviderSettings } from "@ren/core/provider-settings"
 import { RenInference } from "@ren/core/ren-inference"
@@ -166,22 +166,16 @@ const artifactProvider = Layer.unwrap(
   ),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Providers §6.1: the deployment's model gateways. Hosted Ren uses the Ren gateway; a Ren without one has no models.
+// oxlint-disable-next-line ren/no-comments -- Providers §6.1: the deployment's inference plugins. Hosted Ren uses Ren's inference plugin; a Ren without one has no models.
 const models = Layer.unwrap(
-  Effect.map(RenGateway.configured, (isConfigured) =>
+  Effect.map(RenInferencePlugin.configured, (isConfigured) =>
     Models.layer.pipe(
       Layer.provideMerge(ProviderSettings.layer),
-      Layer.provideMerge(ModelLists.layerJob),
       Layer.provideMerge(ModelLists.layer),
-      Layer.provideMerge(ModelGateway.layer(isConfigured ? [RenGateway.gateway] : [])),
+      Layer.provideMerge(InferencePlugin.layer(isConfigured ? [RenInferencePlugin.plugin] : [])),
     ),
   ),
-).pipe(
-  Layer.provideMerge(RenGateway.layerChanges),
-  Layer.provide(FetchHttpClient.layer),
-  Layer.provideMerge(RenInference.layerConfig),
-  Layer.provide(Access.layer),
-)
+).pipe(Layer.provide(FetchHttpClient.layer), Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),

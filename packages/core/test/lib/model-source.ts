@@ -11,6 +11,7 @@ import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
+import { ModelsStub } from "./models-stub.js"
 
 export const stub = Shared.stub()
 const hourMs = 60 * 60_000
@@ -23,8 +24,7 @@ export const source: { access: Models.Access } = { access: access({ stub: lastin
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.sync(() => Models.catalog(source.access)),
     providers: () => Effect.sync(() => Models.registrations(Models.catalog(source.access))),
     baseUrls: Effect.sync(() => Models.catalog(source.access).endpoints.map((endpoint) => endpoint.baseUrl)),

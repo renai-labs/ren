@@ -3,10 +3,11 @@ export * as RenInference from "./ren-inference.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import { ModelGateway } from "@ren/schema/model-gateway"
+import { InferencePlugin } from "@ren/schema/inference-plugin"
 import { Models } from "@ren/schema/models"
 import type { Usage } from "@ren/schema/usage"
 import { RenInference } from "@ren/schema/ren-inference"
+import type { Provider } from "@ren/schema/provider"
 import type { Space } from "@ren/schema/space"
 import { and, eq, gte, inArray, max, type SQL, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
@@ -26,19 +27,12 @@ export interface KeyFields {
   readonly [name: string]: Redacted.Redacted
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers §10: a provider's settings as the gateway takes them: on or off, method, the models switched off.
-export interface ProviderState {
-  readonly enabled: boolean
-  readonly method: Models.Method
-  readonly off: ReadonlyArray<string>
-}
-
 export interface SavedKey {
   readonly last4: string
   readonly testedAt: DateTime.Utc
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers P29, §10: the organization's settings of each provider, as the gateway reads them from its LiteLLM team and credentials.
+// oxlint-disable-next-line ren/no-comments -- Providers P29, §10: the organization's settings of each provider, as the inference service reads them from its LiteLLM team and credentials.
 export const ProviderSettings = Schema.Record(
   Schema.String,
   Schema.Struct({
@@ -94,12 +88,17 @@ export interface Interface {
     actor: Actor.Info,
     input: RenInference.HarnessPlanInput,
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
-  readonly providers: Effect.Effect<ReadonlyArray<ModelGateway.Provider>, Failure>
+  readonly providers: Effect.Effect<ReadonlyArray<InferencePlugin.Provider>, Failure>
   readonly providerSettings: (organizationId: Auth.OrganizationID) => Effect.Effect<ProviderSettings, Failure>
-  readonly configureProvider: (
+  readonly updateProvider: (
     organizationId: Auth.OrganizationID,
     provider: string,
-    state: ProviderState,
+    change: Provider.UpdateInput,
+  ) => Effect.Effect<void, Failure>
+  readonly switchModels: (
+    organizationId: Auth.OrganizationID,
+    provider: string,
+    models: Provider.ModelListInput["models"],
   ) => Effect.Effect<void, Failure>
   readonly testKey: (
     organizationId: Auth.OrganizationID,
@@ -116,13 +115,12 @@ export interface Interface {
   readonly models: (
     provider: string,
     organizationId?: Auth.OrganizationID,
-  ) => Effect.Effect<ModelGateway.Listed, Failure>
-  readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Failure>
+  ) => Effect.Effect<InferencePlugin.Listed, Failure>
   readonly limits: (
     organizationId: Auth.OrganizationID,
     provider: string,
     query: { readonly model: string; readonly seat?: string },
-  ) => Effect.Effect<ReadonlyArray<ModelGateway.Limit>, Failure>
+  ) => Effect.Effect<ReadonlyArray<InferencePlugin.Limit>, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
@@ -138,7 +136,7 @@ const TestAnswer = Schema.Struct({ ok: Schema.Boolean, message: Schema.optional(
 
 const SavedAnswer = Schema.Struct({ last4: Schema.String, testedAt: Schema.DateTimeUtc })
 
-// oxlint-disable-next-line ren/no-comments -- Providers P17: the fields go to the gateway in this one body and nowhere else.
+// oxlint-disable-next-line ren/no-comments -- Providers P17: the fields go to the inference service in this one body and nowhere else.
 const revealed = (fields: KeyFields) =>
   Object.fromEntries(
     Object.keys(fields).flatMap((name) => {
@@ -493,8 +491,11 @@ export const layer = Layer.effect(
       providerSettings: Effect.fn("RenInference.providerSettings")(function* (organizationId) {
         return yield* call({ org: organizationId }, "GET", "/v1/providers/settings", ProviderSettings)
       }),
-      configureProvider: Effect.fn("RenInference.configureProvider")(function* (organizationId, provider, state) {
-        yield* send({ org: organizationId }, "PUT", providerPath(provider), state)
+      updateProvider: Effect.fn("RenInference.updateProvider")(function* (organizationId, provider, change) {
+        yield* send({ org: organizationId }, "PUT", providerPath(provider), change)
+      }),
+      switchModels: Effect.fn("RenInference.switchModels")(function* (organizationId, provider, models) {
+        yield* send({ org: organizationId }, "PATCH", `${providerPath(provider)}/models`, { models })
       }),
       testKey: Effect.fn("RenInference.testKey")(function* (organizationId, provider, fields) {
         const answer = yield* call({ org: organizationId }, "POST", `${providerPath(provider)}/test`, TestAnswer, {
@@ -502,7 +503,7 @@ export const layer = Layer.effect(
         })
         return answer.message ? { ok: answer.ok, message: answer.message } : { ok: answer.ok }
       }),
-      // oxlint-disable-next-line ren/no-comments -- The token names the member who saves the key; the gateway keeps it with the key.
+      // oxlint-disable-next-line ren/no-comments -- The token names the member who saves the key; the inference service keeps it with the key.
       saveKey: Effect.fn("RenInference.saveKey")(function* (organizationId, provider, fields, savedBy) {
         return yield* call(
           { org: organizationId, member: savedBy },
@@ -516,23 +517,14 @@ export const layer = Layer.effect(
         yield* send({ org: organizationId }, "DELETE", `${providerPath(provider)}/key`)
       }),
       providers: Effect.gen(function* () {
-        return yield* call({ org: renOrganization }, "GET", "/v1/providers", Schema.Array(ModelGateway.Provider))
+        return yield* call({ org: renOrganization }, "GET", "/v1/providers", Schema.Array(InferencePlugin.Provider))
       }).pipe(Effect.withSpan("RenInference.providers")),
       models: Effect.fn("RenInference.models")(function* (provider, organizationId) {
         return yield* call(
           { org: organizationId ?? renOrganization },
           "GET",
           `/v1/providers/${encodeURIComponent(provider)}/models`,
-          ModelGateway.Listed,
-        )
-      }),
-      // oxlint-disable-next-line ren/no-comments -- Providers §6.4, §10: the organizations whose LiteLLM team allows the provider.
-      organizations: Effect.fn("RenInference.organizations")(function* (provider) {
-        return yield* call(
-          { org: renOrganization },
-          "GET",
-          `/v1/providers/${encodeURIComponent(provider)}/organizations`,
-          Schema.Array(Auth.OrganizationID),
+          InferencePlugin.Listed,
         )
       }),
       // oxlint-disable-next-line ren/no-comments -- Providers §9.3, §10: the free cap of a free model, and the windows of the seat when it is the provider's.
@@ -542,7 +534,7 @@ export const layer = Layer.effect(
           { org: organizationId },
           "GET",
           `${providerPath(provider)}/limits?${search.toString()}`,
-          Schema.Array(ModelGateway.Limit),
+          Schema.Array(InferencePlugin.Limit),
         )
       }),
     })
@@ -568,12 +560,12 @@ export const layerNone = Layer.succeed(
     harnessPlan: () => Effect.fail(notConfigured()),
     providers: Effect.fail(notConfigured()),
     providerSettings: () => Effect.fail(notConfigured()),
-    configureProvider: () => Effect.fail(notConfigured()),
+    updateProvider: () => Effect.fail(notConfigured()),
+    switchModels: () => Effect.fail(notConfigured()),
     testKey: () => Effect.fail(notConfigured()),
     saveKey: () => Effect.fail(notConfigured()),
     removeKey: () => Effect.fail(notConfigured()),
     models: () => Effect.fail(notConfigured()),
-    organizations: () => Effect.fail(notConfigured()),
     limits: () => Effect.fail(notConfigured()),
   }),
 )

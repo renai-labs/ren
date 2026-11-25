@@ -7,7 +7,7 @@ const listRead = 45_000
 
 test.describe.configure({ timeout: 120_000 })
 
-// oxlint-disable-next-line ren/no-comments -- The model gateway's final refusals carry `x-should-retry: false`, so the brain shows the error at once.
+// oxlint-disable-next-line ren/no-comments -- The inference service's final refusals carry `x-should-retry: false`, so the brain shows the error at once.
 const final = { "x-should-retry": "false" }
 
 const chooseModel = async (page: Page, name: RegExp) => {
@@ -28,10 +28,12 @@ test("the model chip names the provider, and Free on a free model", async ({ pag
   await expect(chip).toHaveText(/Stub Other\s*·\s*Ren$/u)
 })
 
-test("the gateway's refusals show their error card at once, and Change model opens the picker", async ({ page }) => {
+test("the inference service's refusals show their error card at once, and Change model opens the picker", async ({
+  page,
+}) => {
   await createOrganization(page.request, { name: "Hedy Lamarr" })
   await page.goto("/")
-  // oxlint-disable-next-line ren/no-comments -- An HTTP-runtime model: the Claude runtime passes on the gateway's message without its code.
+  // oxlint-disable-next-line ren/no-comments -- An HTTP-runtime model: the Claude runtime passes on the inference service's message without its code.
   await expect(async () => {
     await page.reload()
     await chooseModel(page, /^Stub Other/u)

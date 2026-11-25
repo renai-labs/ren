@@ -11,7 +11,7 @@ import { Billing } from "../src/billing.js"
 import { Limits } from "../src/limits.js"
 import { Signer } from "../src/signer.js"
 import { testEffect } from "./lib/effect.js"
-import { TestModelGateway } from "./lib/model-gateway.js"
+import { TestInferencePlugin } from "./lib/inference-plugin.js"
 import { ModelListsTest } from "./lib/model-lists.js"
 import { Seed } from "./lib/seed.js"
 
@@ -53,23 +53,23 @@ const it = testEffect(
 )
 
 // oxlint-disable-next-line ren/no-comments -- Ren (paid by Ren, a free and a paid model) and Anthropic's seats (paid by the customer), as a gateway offers them.
-const gateway = Effect.gen(function* () {
-  const test = yield* TestModelGateway.make({
+const plugin = Effect.gen(function* () {
+  const test = yield* TestInferencePlugin.make({
     providers: [
-      TestModelGateway.provider("ren", { name: "Ren" }),
-      TestModelGateway.provider("anthropic", { name: "Anthropic", payer: "customer", models: "organization" }),
+      TestInferencePlugin.provider("ren", { name: "Ren" }),
+      TestInferencePlugin.provider("anthropic", { name: "Anthropic", payer: "customer", models: "organization" }),
     ],
   })
   yield* test.setModels("ren", {
     revision: "1",
     models: [
-      { ...TestModelGateway.model("vendor/paid"), gateway: "ren/vendor/paid" },
-      { ...TestModelGateway.model("vendor/free"), gateway: "ren/vendor/free", free: true },
+      { ...TestInferencePlugin.model("vendor/paid"), gateway: "ren/vendor/paid" },
+      { ...TestInferencePlugin.model("vendor/free"), gateway: "ren/vendor/free", free: true },
     ],
   })
   yield* test.setModels("anthropic", {
     revision: "1",
-    models: [{ ...TestModelGateway.model("claude-opus-5-5"), gateway: "seat/anthropic/claude-opus-5-5" }],
+    models: [{ ...TestInferencePlugin.model("claude-opus-5-5"), gateway: "seat/anthropic/claude-opus-5-5" }],
   })
   return test
 })
@@ -131,12 +131,12 @@ const seatLimit = (id: string, connectedBy: string | undefined, percents: readon
   ],
 })
 
-// oxlint-disable-next-line ren/no-comments -- Runs `body` with Limits over the test gateway, which `body` drives.
-const withGateway = <A, E, R>(body: (test: Effect.Success<typeof gateway>) => Effect.Effect<A, E, R>) =>
+// oxlint-disable-next-line ren/no-comments -- Runs `body` with Limits over the test inference plugin, which `body` drives.
+const withPlugin = <A, E, R>(body: (test: Effect.Success<typeof plugin>) => Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
-    const test = yield* gateway
+    const test = yield* plugin
     return yield* body(test).pipe(
-      Effect.provide(Limits.layer.pipe(Layer.provideMerge(ModelListsTest.layer(test.gateway)))),
+      Effect.provide(Limits.layer.pipe(Layer.provideMerge(ModelListsTest.layer(test.plugin)))),
     )
   })
 
@@ -145,7 +145,7 @@ const get = (actor: Parameters<Limits.Interface["get"]>[0], id: Session.ID) =>
 
 describe("Limits.get (Providers §9.3)", () => {
   it.live("a seat model shows the windows of the seat that served the chat’s last seat call", () =>
-    withGateway((test) =>
+    withPlugin((test) =>
       Effect.gen(function* () {
         const found = yield* chat()
         const asha = yield* Seed.user({ name: "Asha" })
@@ -179,7 +179,7 @@ describe("Limits.get (Providers §9.3)", () => {
   )
 
   it.live("a paid Ren model shows the credit; a free one shows the free cap and no credit", () =>
-    withGateway((test) =>
+    withPlugin((test) =>
       Effect.gen(function* () {
         const found = yield* chat()
         const tomorrow = DateTime.makeUnsafe("2026-11-26T00:00:00.000Z")
@@ -207,7 +207,7 @@ describe("Limits.get (Providers §9.3)", () => {
   )
 
   it.live("a person outside the chat’s space cannot read it", () =>
-    withGateway(() =>
+    withPlugin(() =>
       Effect.gen(function* () {
         const found = yield* chat()
         const outsider = yield* Seed.actor(found.owner.organizationId, "member")

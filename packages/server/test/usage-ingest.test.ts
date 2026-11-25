@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import { Seed, testEffect } from "@ren/core/testing"
+import { ModelListsTest, Seed, testEffect } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
@@ -69,7 +69,7 @@ describe("usage ingest", () => {
     }),
   )
 
-  it.live("a call keeps the gateway's operation, access, seat and the usage the provider reported", () =>
+  it.live("a call keeps the inference service's operation, access, seat and the usage the provider reported", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
       const http = yield* HttpClient.HttpClient
@@ -152,6 +152,26 @@ describe("usage ingest", () => {
           .from(Database.Schema.usage_event)
           .pipe(Effect.orDie),
       ).toEqual([{ id: "kernel:abc", cost: 20 }])
+    }),
+  )
+
+  it.live("the inference service's change for one organization reaches that organization's brains", () =>
+    Effect.gen(function* () {
+      const owner = yield* Seed.owner()
+      const http = yield* HttpClient.HttpClient
+      const listener = yield* ModelListsTest.listening
+      yield* listener.collect
+      const send = (secret: string) =>
+        http
+          .execute(
+            HttpClientRequest.post("/internal/inference/changed").pipe(
+              HttpClientRequest.bearerToken(secret),
+              HttpClientRequest.bodyJsonUnsafe({ provider: "anthropic", organizationId: owner.organizationId }),
+            ),
+          )
+          .pipe(Effect.map((response) => response.status))
+      expect([yield* send("ren_integrations_test"), yield* send("ren_usage_test")]).toEqual([403, 204])
+      expect(yield* listener.collect).toEqual([`org:${owner.organizationId}`])
     }),
   )
 })

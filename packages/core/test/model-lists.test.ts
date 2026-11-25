@@ -1,10 +1,10 @@
 import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
-import { Effect, Exit, Layer } from "effect"
-import { ModelGateway } from "../src/model-gateway.js"
+import { Effect, Exit } from "effect"
+import { InferencePlugin } from "../src/inference-plugin.js"
 import { ModelLists } from "../src/model-lists.js"
 import { testEffect } from "./lib/effect.js"
-import { TestModelGateway } from "./lib/model-gateway.js"
+import { TestInferencePlugin } from "./lib/inference-plugin.js"
 import { ModelListsTest } from "./lib/model-lists.js"
 import { Seed } from "./lib/seed.js"
 
@@ -13,80 +13,47 @@ const it = testEffect(Testing.layer)
 const modelIds = (entries: ReadonlyArray<ModelLists.Entry>) =>
   entries.flatMap((entry) => entry.models.map((each) => each.id))
 
-describe("ModelGateway.registry (Providers §6.1)", () => {
+describe("InferencePlugin.registry (Providers §6.1)", () => {
   it.effect("refuses two providers with the same id", () =>
     Effect.gen(function* () {
-      const one = yield* TestModelGateway.make({ id: "one", providers: [TestModelGateway.provider("ren")] })
-      const two = yield* TestModelGateway.make({ id: "two", providers: [TestModelGateway.provider("ren")] })
-      const registry = yield* ModelGateway.registry([Effect.succeed(one.gateway), Effect.succeed(two.gateway)])
+      const one = yield* TestInferencePlugin.make({ id: "one", providers: [TestInferencePlugin.provider("ren")] })
+      const two = yield* TestInferencePlugin.make({ id: "two", providers: [TestInferencePlugin.provider("ren")] })
+      const registry = yield* InferencePlugin.registry([Effect.succeed(one.plugin), Effect.succeed(two.plugin)])
       expect(Exit.isFailure(yield* Effect.exit(registry.providers))).toBe(true)
     }),
   )
 })
 
 describe("ModelLists (Providers §6.4, P26)", () => {
-  it.live("Ren core stores no list: each pull asks the gateway and gets its current models", () =>
+  it.live("Ren core stores no list: each pull asks the inference service and gets its current models", () =>
     Effect.gen(function* () {
-      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const test = yield* TestInferencePlugin.make({ providers: [TestInferencePlugin.provider("ren")] })
       const organizationId = yield* Seed.organization()
       yield* Effect.gen(function* () {
         const lists = yield* ModelLists.Service
-        yield* test.setModels("ren", { revision: "1", models: [TestModelGateway.model("vendor/old")] })
+        yield* test.setModels("ren", { revision: "1", models: [TestInferencePlugin.model("vendor/old")] })
         expect(modelIds(yield* lists.list(organizationId))).toEqual(["vendor/old"])
-        yield* test.setModels("ren", { revision: "2", models: [TestModelGateway.model("vendor/new")] })
+        yield* test.setModels("ren", { revision: "2", models: [TestInferencePlugin.model("vendor/new")] })
         expect(modelIds(yield* lists.list(organizationId))).toEqual(["vendor/new"])
-      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
+      }).pipe(Effect.provide(ModelListsTest.layer(test.plugin)))
     }),
   )
 
-  it.live("a change for one organization notifies only that organization", () =>
+  it.live("a model carries its price only when Ren charges for it", () =>
     Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({
-        providers: [TestModelGateway.provider("seats", { models: "organization" })],
+      const priced = { ...TestInferencePlugin.model("vendor/model"), price: { input: 3, output: 15 } }
+      const test = yield* TestInferencePlugin.make({
+        providers: [TestInferencePlugin.provider("ren"), TestInferencePlugin.provider("owned", { payer: "customer" })],
       })
-      const first = yield* Seed.organization()
-      yield* Seed.organization()
-      yield* Effect.gen(function* () {
-        const lists = yield* ModelLists.Service
-        yield* listener.collect
-        yield* lists.changed({ provider: "seats", organizationId: first })
-        expect(yield* listener.collect).toEqual([`org:${first}`])
-      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
-    }),
-  )
-
-  it.live("a change for every organization notifies only those the gateway names, never 'all'", () =>
-    Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
-      const on = yield* Seed.organization()
-      yield* Seed.organization()
-      yield* test.setOrganizations("ren", [on])
-      yield* Effect.gen(function* () {
-        yield* listener.collect
-        yield* ModelLists.Service.use((lists) => lists.changed({ provider: "ren" }))
-        expect(yield* listener.collect).toEqual([`org:${on}`])
-      }).pipe(Effect.provide(ModelListsTest.layer(test.gateway)))
-    }),
-  )
-
-  it.live("a gateway's `changed` reaches the organization's brains", () =>
-    Effect.gen(function* () {
-      const listener = yield* ModelListsTest.listening
-      const test = yield* TestModelGateway.make({
-        providers: [TestModelGateway.provider("seats", { models: "organization" })],
-      })
+      yield* test.setModels("ren", { revision: "1", models: [priced] })
+      yield* test.setModels("owned", { revision: "1", models: [priced] })
       const organizationId = yield* Seed.organization()
-      yield* Effect.gen(function* () {
-        yield* listener.collect
-        yield* test.setModels(
-          "seats",
-          { revision: "2", models: [TestModelGateway.model("vendor/seat")] },
-          organizationId,
-        )
-        yield* listener.awaitPayload(`org:${organizationId}`)
-      }).pipe(Effect.provide(ModelLists.layerJob.pipe(Layer.provideMerge(ModelListsTest.layer(test.gateway)))))
+      const lists = yield* ModelLists.Service.pipe(Effect.provide(ModelListsTest.layer(test.plugin)))
+      const prices = (yield* lists.list(organizationId)).map((entry) => [entry.id, entry.models[0]?.price])
+      expect(prices).toEqual([
+        ["ren", { input: 3, output: 15 }],
+        ["owned", undefined],
+      ])
     }),
   )
 })

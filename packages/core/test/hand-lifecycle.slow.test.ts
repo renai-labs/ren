@@ -31,6 +31,7 @@ import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 setDefaultTimeout(90_000)
 
@@ -44,8 +45,7 @@ const encodedKeys = (keys: ReadonlyArray<Signature.PrivateKey>) =>
 
 const models = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     providers: () =>
       Effect.sync(() =>
         Models.registrations(Models.catalog(Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url))),

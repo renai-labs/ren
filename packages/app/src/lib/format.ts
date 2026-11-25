@@ -33,3 +33,9 @@ export const formatCount = NumberFormat.count
 export const formatTokens = NumberFormat.tokens
 
 export const formatMicroUsd = NumberFormat.microUsd
+
+// oxlint-disable-next-line ren/no-comments -- A price per 1M tokens: at most two decimals; a positive price below a cent never shows as $0.
+export const formatPerMillion = (value: number) => {
+  if (value > 0 && value < 0.01) return "<$0.01"
+  return `$${value < 10 ? value.toFixed(2).replace(/\.?0+$/u, "") : Math.round(value)}`
+}

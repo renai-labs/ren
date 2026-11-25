@@ -52,6 +52,7 @@ import { TestSandboxEgress } from "./lib/sandbox-egress.js"
 import { Seed } from "./lib/seed.js"
 import { Signer } from "../src/signer.js"
 import { SpaceShutdown } from "../src/space-shutdown.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 setDefaultTimeout(60_000)
 
@@ -63,8 +64,7 @@ const source: { available: boolean } = { available: true }
 
 const fixed = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.succeed(Models.catalog(configured)),
     providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
     baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),

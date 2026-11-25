@@ -1,6 +1,6 @@
 import { Provider } from "@ren/schema/provider"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } from "../errors.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
@@ -24,7 +24,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.patch("provider.update", "/providers/:id", {
       params: ProviderParams,
       payload: Provider.UpdateInput,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
@@ -46,7 +46,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
         identifier: "provider.test",
         summary: "Test a provider key",
         description:
-          "Send one small request with the fields, through the provider’s gateway, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
+          "Send one small request with the fields, through the provider’s inference service, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
       }),
     ),
   )
@@ -54,28 +54,28 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.put("provider.key.save", "/providers/:id/key", {
       params: ProviderParams,
       payload: Provider.KeyInput,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "provider.key.save",
         summary: "Save a provider key",
         description:
-          "Test the fields, then store them in the provider’s gateway. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
+          "Test the fields, then store them in the provider’s inference service. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
       }),
     ),
   )
   .add(
     HttpApiEndpoint.delete("provider.key.remove", "/providers/:id/key", {
       params: ProviderParams,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "provider.key.remove",
         summary: "Remove a provider key",
         description:
-          "Remove the key from the provider’s gateway. The provider’s models leave pickers at the next push. Only admins and owners.",
+          "Remove the key from the provider’s inference service. The provider’s models leave pickers at the next push. Only admins and owners.",
       }),
     ),
   )
@@ -97,7 +97,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.patch("provider.models.update", "/providers/:id/models", {
       params: ProviderParams,
       payload: Provider.ModelListInput,
-      success: Provider.ModelList,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({

@@ -107,7 +107,7 @@ const chatOn = Effect.fnUntraced(function* (endpointId: string, modelId: string)
 })
 
 it.live(
-  "a Claude model runs on `claude` through the gateway, under Ren's card, with Ren's key as its login and the chat's usage headers",
+  "a Claude model runs on `claude` through the inference service, under Ren's card, with Ren's key as its login and the usage headers that stay the same for the chat",
   () =>
     Effect.gen(function* () {
       const chat = yield* chatOn("ren", "anthropic/stub-claude")
@@ -131,7 +131,7 @@ it.live(
         authorization: "Bearer stub-key",
         client: "claude-cli",
         session: chat.sessionId,
-        kind: "primary",
+        kind: null,
         member: ada,
       })
       const page = yield* chat.harness.chat.messages(chat.sessionId, {})
@@ -150,15 +150,5 @@ it.live("a model's client settings reach OpenCode, as a ChatGPT seat model carri
       compaction: model?.settings?.compaction,
       cost: model?.cost,
     }).toEqual({ supportsEffortUpdates: false, compaction: { type: "summary" }, cost: [] })
-  }),
-)
-
-it.live("a ChatGPT refusal that names a token-sharing code is not retried", () =>
-  Effect.gen(function* () {
-    const chat = yield* chatOn("openai", "stub-gpt")
-    const script = stub.script({ status: 429, code: "subscription_sharing_usage_limit_exceeded" })
-    yield* chat.send(script.marker)
-    yield* chat.idle
-    expect(script.calls.length).toBe(1)
   }),
 )

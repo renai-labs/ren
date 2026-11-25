@@ -1,6 +1,7 @@
 export { TestDrives } from "./drives.js"
 export { testEffect } from "./effect.js"
 export { GitHubServer } from "./github-server.js"
+export { ModelListsTest } from "./model-lists.js"
 export { Postmark } from "./postmark.js"
 export { Seed } from "./seed.js"
 export { SyncFixture } from "./sync-fixture.js"

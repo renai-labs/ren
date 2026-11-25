@@ -26,6 +26,7 @@ import { testEffect } from "./lib/effect.js"
 import { HarnessDb } from "./lib/harness-db.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
+import { ModelsStub } from "./lib/models-stub.js"
 
 setDefaultTimeout(120_000)
 
@@ -35,8 +36,7 @@ const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.
 
 const fixed = Layer.succeed(
   Models.Service,
-  Models.Service.of({
-    forget: () => Effect.void,
+  ModelsStub.of({
     catalog: () => Effect.succeed(Models.catalog(configured)),
     providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
     baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),

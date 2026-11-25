@@ -69,7 +69,7 @@ interface Request {
 const asRenModel = (model: Models.Info): Models.Info =>
   Struct.assign({ gateway: `ren/${model.id}`, price: { input: 1, output: 2 } }, model)
 
-// oxlint-disable-next-line ren/no-comments -- A free Ren model: price 0, and the gateway counts its requests against the free cap.
+// oxlint-disable-next-line ren/no-comments -- A free Ren model: price 0, and the inference service counts its requests against the free cap.
 const freeModel: Models.Info = {
   id: "stub/stub-free",
   type: "chat",
@@ -84,16 +84,16 @@ const freeModel: Models.Info = {
 // oxlint-disable-next-line ren/no-comments -- An own-key provider: Groq, with one model.
 const groq = [{ id: "llama-5", type: "chat", name: "Llama 5", protocol: "openai-chat", gateway: "groq/llama-5" }]
 
-// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, Ren with the given models and a free one, the free cap, Groq for an own key, and one key for every brain, for the model gateway at `stub`.
+// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, Ren with the given models and a free one, the free cap, Groq for an own key, and one key for every brain, for the inference service at `stub`.
 export const start = (
   stub: string,
   options: { readonly models: () => ReadonlyArray<Models.Info>; readonly key?: string },
 ) => {
   const keys: Key[] = []
   const freeUsed = new Map<string, number>()
-  // oxlint-disable-next-line ren/no-comments -- Every organization that asked for a brain key has Ren on, as in the gateway's LiteLLM teams.
+  // oxlint-disable-next-line ren/no-comments -- Every organization that asked for a brain key has Ren on, as in the inference service's LiteLLM teams.
   const organizations = new Set<string>()
-  // oxlint-disable-next-line ren/no-comments -- Each organization's provider settings, as the gateway keeps them in LiteLLM (Providers P29).
+  // oxlint-disable-next-line ren/no-comments -- Each organization's provider settings, as the inference service keeps them in LiteLLM (Providers P29).
   const settings = new Map<string, Record<string, ProviderSettings>>()
   const change = (input: Request, next: (current: ProviderSettings) => ProviderSettings) => {
     const org = input.claims?.org ?? ""
@@ -238,7 +238,7 @@ export const start = (
   })
   return {
     url: `http://127.0.0.1:${server.port}`,
-    // oxlint-disable-next-line ren/no-comments -- A test sets an organization's free requests of today, as the gateway counts them.
+    // oxlint-disable-next-line ren/no-comments -- A test sets an organization's free requests of today, as the inference service counts them.
     setFreeUsed: (org: string, used: number) => void freeUsed.set(org, used),
     stop: () => server.stop(true),
   }

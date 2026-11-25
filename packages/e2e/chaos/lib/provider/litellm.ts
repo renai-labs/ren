@@ -9,11 +9,11 @@ export const url = (process.env.CHAOS_LITELLM_ADMIN_URL ?? "").replace(/\/$/, ""
 
 const Listed = Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) })
 
-// oxlint-disable-next-line ren/no-comments -- The models a gateway key may call, as one Ren endpoint: the gateway's OpenAI-compatible model list.
+// oxlint-disable-next-line ren/no-comments -- The models an inference key may call, as one Ren endpoint: the inference service's OpenAI-compatible model list.
 export const listed = async (baseUrl: string, key: string): Promise<Models.Catalog> => {
   const root = baseUrl.replace(/\/v1\/?$/u, "").replace(/\/$/u, "")
   const response = await fetch(`${root}/v1/models`, { headers: { authorization: `Bearer ${key}` } })
-  if (!response.ok) throw new Error(`The gateway's model list answered ${response.status}`)
+  if (!response.ok) throw new Error(`The inference service's model list answered ${response.status}`)
   const found = Schema.decodeUnknownSync(Listed)(await response.json())
   return {
     endpoints: [

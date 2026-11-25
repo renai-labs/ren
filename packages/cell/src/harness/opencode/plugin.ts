@@ -756,11 +756,6 @@ export const make = (
         )
         yield* context.session.hook("retry", (event) =>
           Effect.gen(function* () {
-            const body = event.error.response?.body ?? ""
-            if (Models.chatGptRefusals.some((code) => body.includes(code))) {
-              event.decision = { retry: false }
-              return
-            }
             if (event.error.status !== 401 || event.attempt !== 2) return
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
             if (yield* renew(event.model.providerID)) event.decision = { retry: true, delay: 0 }

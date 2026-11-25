@@ -10,31 +10,27 @@ import { Config, Context, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { ModelLists } from "./model-lists.js"
-import { ModelGateway } from "./model-gateway.js"
+import { InferencePlugin } from "./inference-plugin.js"
 import { Primitive } from "./primitive.js"
 import { ProviderPolicy } from "./provider-settings/policy.js"
 import { RenInference } from "./ren-inference.js"
 
-export type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | ModelGateway.Unavailable
+export type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | InferencePlugin.Unavailable
 
 type Fields = Provider.KeyInput["fields"]
 
 export interface Interface {
   readonly page: (actor: Actor.Info) => Effect.Effect<Provider.Page, Failure>
-  readonly update: (
-    actor: Actor.Info,
-    providerId: string,
-    input: Provider.UpdateInput,
-  ) => Effect.Effect<Provider.Page, Failure>
+  readonly update: (actor: Actor.Info, providerId: string, input: Provider.UpdateInput) => Effect.Effect<void, Failure>
   readonly test: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<Provider.TestResult, Failure>
-  readonly connect: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<Provider.Page, Failure>
-  readonly disconnect: (actor: Actor.Info, providerId: string) => Effect.Effect<Provider.Page, Failure>
+  readonly saveKey: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<void, Failure>
+  readonly removeKey: (actor: Actor.Info, providerId: string) => Effect.Effect<void, Failure>
   readonly models: (actor: Actor.Info, providerId: string) => Effect.Effect<Provider.ModelList, Failure>
   readonly updateModels: (
     actor: Actor.Info,
     providerId: string,
     input: Provider.ModelListInput,
-  ) => Effect.Effect<Provider.ModelList, Failure>
+  ) => Effect.Effect<void, Failure>
   readonly applyDefaultModel: (organizationId: Auth.OrganizationID) => Effect.Effect<void>
 }
 
@@ -43,18 +39,19 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Pr
 const notFound = new Primitive.NotFound({ message: "Provider not found." })
 const forbidden = new Primitive.Forbidden({ message: "Only organization admins and owners change providers." })
 
-const keyFields = (provider: ModelGateway.Provider) =>
+const keyFields = (provider: InferencePlugin.Provider) =>
   provider.auth.flatMap((auth) => (auth._tag === "key" ? auth.fields : []))
 
 const countTypes = (models: ReadonlyArray<Models.Info>) =>
-  models.reduce<Record<string, number>>(
-    (counts, model) => ({ ...counts, [model.type]: (counts[model.type] ?? 0) + 1 }),
-    {},
+  Object.fromEntries(
+    Object.entries(Object.groupBy(models, (model) => model.type)).map(([type, found]) => [type, found.length]),
   )
 
-const rejected = <A>(effect: Effect.Effect<A, ModelGateway.Unavailable | ModelGateway.Rejected>) =>
+const rejected = <A>(effect: Effect.Effect<A, InferencePlugin.Unavailable | InferencePlugin.Rejected>) =>
   effect.pipe(
-    Effect.catchTag("ModelGateway.Rejected", (error) => Effect.fail(new Primitive.Invalid({ message: error.message }))),
+    Effect.catchTag("InferencePlugin.Rejected", (error) =>
+      Effect.fail(new Primitive.Invalid({ message: error.message })),
+    ),
   )
 
 export const layer = Layer.effect(
@@ -64,7 +61,20 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const lists = yield* ModelLists.Service
     const inference = yield* RenInference.Service
-    const defaultModel = yield* Config.option(Config.String("REN_DEFAULT_MODEL"))
+    // oxlint-disable-next-line ren/no-comments -- Read once when Ren starts: a bad value stops the start, not each signup.
+    const defaultModel = yield* Config.option(
+      Config.schema(
+        Schema.String.check(Schema.isPattern(/^[^/]+\/.+$/u, { message: "REN_DEFAULT_MODEL is <provider>/<model>" })),
+        "REN_DEFAULT_MODEL",
+      ),
+    ).pipe(
+      Effect.map(
+        Option.map((value) => ({
+          endpointId: value.slice(0, value.indexOf("/")),
+          modelId: value.slice(value.indexOf("/") + 1),
+        })),
+      ),
+    )
 
     const canManage = (actor: Actor.Info) =>
       access.isAllowed({ actor, action: ProviderPolicy.actions.manage, resource: Access.organization })
@@ -84,10 +94,10 @@ export const layer = Layer.effect(
 
     const settingsOf = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
       const all = yield* lists.settings(organizationId)
-      return { all, stateOf: (provider: ModelGateway.Provider) => ModelLists.stateOf(provider, all[provider.id]) }
+      return { all, stateOf: (provider: InferencePlugin.Provider) => ModelLists.stateOf(provider, all[provider.id]) }
     })
 
-    const checked = Effect.fnUntraced(function* (provider: ModelGateway.Provider, fields: Fields) {
+    const checked = Effect.fnUntraced(function* (provider: InferencePlugin.Provider, fields: Fields) {
       const wanted = keyFields(provider)
       if (wanted.length === 0) return yield* new Primitive.Invalid({ message: `${provider.name} takes no key.` })
       const missing = wanted.filter((field) => !(field.name in fields))
@@ -99,12 +109,12 @@ export const layer = Layer.effect(
       yield* viewer(actor)
       const owned = yield* lists.providers
       const settings = yield* settingsOf(actor.organizationId)
-      // oxlint-disable-next-line ren/no-comments -- Seats come from the Ren Inference Service until the gateway gives connections (Providers §6.1). Without them the page still shows the providers.
+      // oxlint-disable-next-line ren/no-comments -- Seats come from the Ren Inference Service until the inference service gives connections (Providers §6.1). Without them the page still shows the providers.
       const seats = yield* inference.list(actor).pipe(
         Effect.tapError((error) => Effect.logWarning("The seats are unavailable for the Providers page", error)),
         Effect.orElseSucceed(() => []),
       )
-      const added = (provider: ModelGateway.Provider) => provider.id in settings.all
+      const added = (provider: InferencePlugin.Provider) => provider.id in settings.all
       const savers = Object.values(settings.all).flatMap((each) => (each.key?.savedBy ? [each.key.savedBy] : []))
       const names = new Map(
         savers.length === 0
@@ -117,7 +127,10 @@ export const layer = Layer.effect(
               .pipe(Effect.orDie)).map((row) => [row.id, row.name] as const),
       )
       const manages = canManage(actor)
-      const order = (each: ModelGateway.Owned) => (ModelLists.builtIn(each.provider) ? 0 : added(each.provider) ? 1 : 2)
+      const order = (each: InferencePlugin.Owned) => {
+        if (ModelLists.builtIn(each.provider)) return 0
+        return added(each.provider) ? 1 : 2
+      }
       const providers = yield* Effect.forEach(
         owned.toSorted((left, right) => order(left) - order(right)),
         (each) =>
@@ -125,7 +138,7 @@ export const layer = Layer.effect(
             const state = settings.stateOf(each.provider)
             const key = settings.all[each.provider.id]?.key
             const shown = ModelLists.builtIn(each.provider) || added(each.provider)
-            // oxlint-disable-next-line ren/no-comments -- A provider the organization did not add shows what it offers, from the gateway's list, without asking for its models.
+            // oxlint-disable-next-line ren/no-comments -- A provider the organization did not add shows what it offers, from the inference service's list, without asking for its models.
             const modelTypes = shown
               ? countTypes(
                   (yield* lists.models(actor.organizationId, each)).filter(
@@ -133,6 +146,9 @@ export const layer = Layer.effect(
                   ),
                 )
               : (each.provider.modelTypes ?? { chat: each.provider.modelCount ?? 0 })
+            const signIn = each.provider.auth
+              .flatMap((auth) => (auth._tag === "subscription" ? [auth.signIn] : []))
+              .at(0)
             return {
               id: each.provider.id,
               name: each.provider.name,
@@ -144,6 +160,7 @@ export const layer = Layer.effect(
               enabled: state.enabled,
               ...(state.method && { method: state.method }),
               methods: ModelLists.methodsOf(each.provider),
+              ...(signIn && { signIn }),
               fields: keyFields(each.provider),
               seats: seats.filter((seat) => seat.providerId === each.provider.id),
               key: key
@@ -188,45 +205,35 @@ export const layer = Layer.effect(
 
     return Service.of({
       page,
-      // oxlint-disable-next-line ren/no-comments -- The gateway hears a change first, so it refuses what is off before pickers change.
+      // oxlint-disable-next-line ren/no-comments -- The inference service hears a change first, so it refuses what is off before pickers change. A write answers nothing: a page read that fails after it must not make the client send the write again.
       update: Effect.fn("ProviderSettings.update")(function* (actor, providerId, input) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         if (input.method && !ModelLists.methodsOf(owned.provider).includes(input.method))
           return yield* new Primitive.Invalid({ message: `${owned.provider.name} has no ${input.method} method.` })
-        const current = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
-        const enabled = input.enabled ?? current.enabled
-        const method = input.method ?? current.method
-        yield* owned.gateway.configure(providerId, actor.organizationId, {
-          enabled,
-          ...(method && { method }),
-          off: current.off,
-        })
+        yield* rejected(owned.plugin.update(providerId, actor.organizationId, input))
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
       test: Effect.fn("ProviderSettings.test")(function* (actor, providerId, fields) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         yield* checked(owned.provider, fields)
-        return yield* rejected(owned.gateway.test(providerId, actor.organizationId, fields))
+        return yield* rejected(owned.plugin.test(providerId, actor.organizationId, fields))
       }),
-      connect: Effect.fn("ProviderSettings.connect")(function* (actor, providerId, fields) {
+      saveKey: Effect.fn("ProviderSettings.saveKey")(function* (actor, providerId, fields) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         yield* checked(owned.provider, fields)
         yield* rejected(
-          owned.gateway.connect(providerId, actor.organizationId, fields, yield* Actor.memberOf(database.db, actor)),
+          owned.plugin.saveKey(providerId, actor.organizationId, fields, yield* Actor.memberOf(database.db, actor)),
         )
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
-      disconnect: Effect.fn("ProviderSettings.disconnect")(function* (actor, providerId) {
+      removeKey: Effect.fn("ProviderSettings.removeKey")(function* (actor, providerId) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
-        yield* owned.gateway.disconnect(providerId, actor.organizationId)
+        yield* rejected(owned.plugin.removeKey(providerId, actor.organizationId))
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
       models,
       updateModels: Effect.fn("ProviderSettings.updateModels")(function* (actor, providerId, input) {
@@ -238,30 +245,14 @@ export const layer = Layer.effect(
           return yield* new Primitive.Invalid({
             message: `Unknown models: ${unknown.map((model) => model.id).join(", ")}.`,
           })
-        const current = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
-        const changed = new Set(input.models.map((model) => model.id))
-        const off = [
-          ...current.off.filter((id) => !changed.has(id)),
-          ...input.models.filter((model) => !model.enabled).map((model) => model.id),
-        ]
-        yield* owned.gateway.configure(providerId, actor.organizationId, {
-          enabled: current.enabled,
-          ...(current.method && { method: current.method }),
-          off,
-        })
+        yield* rejected(owned.plugin.switchModels(providerId, actor.organizationId, input.models))
         yield* lists.refresh(actor.organizationId)
-        return yield* models(actor, providerId)
       }),
       // oxlint-disable-next-line ren/no-comments -- Providers P15: a new organization starts on the deployment's default model, `<provider>/<model>`. Without the setting it takes Ren's settings.
       applyDefaultModel: Effect.fn("ProviderSettings.applyDefaultModel")(function* (organizationId) {
         if (Option.isNone(defaultModel)) return
-        const separator = defaultModel.value.indexOf("/")
-        if (separator < 1) return yield* Effect.die(new Error("REN_DEFAULT_MODEL is <provider>/<model>"))
         const encoded = yield* Schema.encodeEffect(Settings.Info)({
-          model: {
-            endpointId: defaultModel.value.slice(0, separator),
-            modelId: defaultModel.value.slice(separator + 1),
-          },
+          model: defaultModel.value,
           permissions: [],
           references: [],
         }).pipe(Effect.orDie)

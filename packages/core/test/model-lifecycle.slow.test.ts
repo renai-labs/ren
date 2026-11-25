@@ -9,19 +9,21 @@ setDefaultTimeout(60_000)
 const it = testEffect(ModelSource.layer)
 
 describe("models on a brain, from the inference service (HR14, HR16)", () => {
-  it.live("a model added in the gateway can be chosen by the next start: the brain reads the list again first", () =>
-    Effect.gen(function* () {
-      const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
-      ModelSource.stub.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry("later", "stub-model")])
-      yield* Effect.addFinalizer(() => Effect.sync(() => ModelSource.stub.modelInfo.set(StubModel.defaultModels)))
-      ModelSource.source.access = ModelSource.access({
-        stub: ModelSource.lasting("sk-stub"),
-        later: ModelSource.lasting("sk-later"),
-      })
-      const script = ModelSource.stub.script()
-      yield* opened.restart({ model: { endpointId: "later", modelId: "stub-model" } }, `later ${script.marker}`)
-      expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer sk-later")
-    }),
+  it.live(
+    "a model added in the inference service can be chosen by the next start: the brain reads the list again first",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
+        ModelSource.stub.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry("later", "stub-model")])
+        yield* Effect.addFinalizer(() => Effect.sync(() => ModelSource.stub.modelInfo.set(StubModel.defaultModels)))
+        ModelSource.source.access = ModelSource.access({
+          stub: ModelSource.lasting("sk-stub"),
+          later: ModelSource.lasting("sk-later"),
+        })
+        const script = ModelSource.stub.script()
+        yield* opened.restart({ model: { endpointId: "later", modelId: "stub-model" } }, `later ${script.marker}`)
+        expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer sk-later")
+      }),
   )
 
   it.live("an inference URL moved on Ren reaches the next turn, with the brain's key", () =>

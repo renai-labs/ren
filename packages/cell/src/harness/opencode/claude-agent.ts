@@ -24,15 +24,8 @@ import { Effect, Predicate, Stream } from "effect"
 // oxlint-disable-next-line ren/no-comments -- A model on the Claude runtime runs on this package. Its canonical provider keys the options the Claude Agent model reads.
 export const runtime = { package: Provider.aisdk(ClaudeProvider.PACKAGE), canonical: ClaudeProvider.ID }
 
-// oxlint-disable-next-line ren/no-comments -- The usage headers that stay the same for a chat. `ren-turn` changes each turn, and a changed connection restarts `claude`.
-const chatHeaders = [
-  Usage.headers.rootSession,
-  Usage.headers.session,
-  Usage.headers.agent,
-  Usage.headers.kind,
-  Usage.headers.variant,
-  Models.personHeader,
-]
+// oxlint-disable-next-line ren/no-comments -- The usage headers that stay the same for a chat. OpenCode restarts `claude` when its connection changes, so a header that changes within a chat stays out: `ren-turn` each turn, the request kind at a compaction, the variant at an effort change.
+const chatHeaders = [Usage.headers.rootSession, Usage.headers.session, Usage.headers.agent, Models.personHeader]
 
 // oxlint-disable-next-line ren/no-comments -- The `claude` program the SDK ships for this machine; OPENCODE_CLAUDE_PATH wins. Never a `claude` on PATH.
 const executable = () => {
@@ -73,7 +66,7 @@ const widen =
         )
       : hook(name, callback, options)
 
-// oxlint-disable-next-line ren/no-comments -- The env of one `claude` process (providers §7.3): the gateway, the chat's usage headers, no calls the turn does not need, and Ren's key as the login, which puts `claude` in subscription mode; the gateway puts the seat's login in. Behind the egress the key is `ren:MODELS`, which the egress fills in only for the gateway, so a call of `claude` to any other host is refused.
+// oxlint-disable-next-line ren/no-comments -- The env of one `claude` process (providers §7.3): the inference service, the chat's usage headers, no calls the turn does not need, and Ren's key as the login, which puts `claude` in subscription mode; the inference service puts the seat's login in. Behind the egress the key is `ren:MODELS`, which the egress fills in only for the inference service, so a call of `claude` to any other host is refused.
 const connectionOf = (options: Record<string, unknown>, headers: Record<string, string | undefined> = {}) => {
   const key = Predicate.isString(options.apiKey) ? options.apiKey : undefined
   const own = Predicate.isObject(options.headers) ? options.headers : {}

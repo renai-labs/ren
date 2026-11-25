@@ -383,9 +383,9 @@ export type RenInferenceHarnessTarget =
   | { kind: "hermes-provider-configuration" }
   | { kind: "hermes-environment" }
 
-export type ModelGatewayPayer = "ren" | "customer"
+export type InferencePluginPayer = "ren" | "customer"
 
-export type ModelGatewayField = {
+export type InferencePluginField = {
   name: string
   label: string
   secret: boolean
@@ -1722,13 +1722,14 @@ export type ProviderInfo = {
   name: string
   mark: string
   logo?: string
-  payer: ModelGatewayPayer
+  payer: InferencePluginPayer
   builtIn: boolean
   added: boolean
   enabled: boolean
   method?: ModelsMethod
   methods: Array<ModelsMethod>
-  fields: Array<ModelGatewayField>
+  signIn?: string
+  fields: Array<InferencePluginField>
   key: ProviderKey | null
   seats: Array<RenInferenceConnection>
   modelTypes: { [x: string]: number }
@@ -9573,7 +9574,7 @@ export type ProviderUpdateInput = {
   }["method"]
 }
 
-export type ProviderUpdateOutput = ProviderPage
+export type ProviderUpdateOutput = void
 
 export type ProviderTestInput = {
   readonly id: { readonly id: string }["id"]
@@ -9587,11 +9588,11 @@ export type ProviderKeySaveInput = {
   readonly fields: { readonly fields: { readonly [x: string]: string } }["fields"]
 }
 
-export type ProviderKeySaveOutput = ProviderPage
+export type ProviderKeySaveOutput = void
 
 export type ProviderKeyRemoveInput = { readonly id: { readonly id: string }["id"] }
 
-export type ProviderKeyRemoveOutput = ProviderPage
+export type ProviderKeyRemoveOutput = void
 
 export type ProviderModelsListInput = { readonly id: { readonly id: string }["id"] }
 
@@ -9602,7 +9603,7 @@ export type ProviderModelsUpdateInput = {
   readonly models: { readonly models: ReadonlyArray<{ readonly id: string; readonly enabled: boolean }> }["models"]
 }
 
-export type ProviderModelsUpdateOutput = ProviderModelList
+export type ProviderModelsUpdateOutput = void
 
 export type LimitsGetInput = { readonly id: { readonly id: string }["id"] }
 

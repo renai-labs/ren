@@ -84,7 +84,7 @@ export const Info = Schema.Struct({
   ),
   protocol: ModelProtocol,
   gateway: Schema.optionalKey(Schema.NonEmptyString).annotate({
-    description: "The name the model gateway knows the model by. Absent: the id.",
+    description: "The name the inference service knows the model by. Absent: the id.",
   }),
   runtime: Schema.optionalKey(Runtime).annotate({ description: "Absent: `http`." }),
   price: Schema.optionalKey(Price).annotate({ description: "Absent for a model the organization pays itself." }),
@@ -170,18 +170,6 @@ export const lookup = (catalog: Catalog) => {
   )
   return (ref: Ref) => models.get(JSON.stringify([ref.providerID, ref.id]))
 }
-
-// oxlint-disable-next-line ren/no-comments -- The codes of a ChatGPT seat's refusal that another try cannot fix (OpenCode `chatgpt.ts:58-67`). The first two are its usage limits.
-export const chatGptRefusals = [
-  "subscription_sharing_usage_limit_exceeded",
-  "subscription_sharing_workplace_individual_usage_limit_exceeded",
-  "subscription_sharing_user_not_eligible",
-  "subscription_sharing_unsupported_capability",
-  "subscription_sharing_route_not_supported",
-  "subscription_sharing_invalid_user",
-  "chatpass_v2_scope_not_authorized",
-  "chatpass_v2_invalid_authorization_context",
-] as const
 
 export const placeholderKey = "ren:MODELS"
 

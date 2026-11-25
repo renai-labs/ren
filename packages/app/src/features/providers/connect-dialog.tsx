@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { ModelGatewayField, ProviderTestResult } from "@ren/client"
+import type { InferencePluginField, ProviderTestResult } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
 import { IconCircleCheck } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
@@ -15,13 +15,14 @@ import { RouterContext } from "../../lib/router-context.js"
 export interface Connecting {
   readonly id: string
   readonly name: string
-  readonly fields: ReadonlyArray<ModelGatewayField>
+  readonly fields: ReadonlyArray<InferencePluginField>
 }
 
 function FieldInput(props: {
-  field: ModelGatewayField
+  field: InferencePluginField
   value: string
   invalid: boolean
+  disabled: boolean
   onChange: (value: string) => void
 }) {
   const field = props.field
@@ -31,6 +32,7 @@ function FieldInput(props: {
     value: props.value,
     placeholder: field.placeholder,
     autoComplete: "off",
+    disabled: props.disabled,
     "aria-invalid": props.invalid || undefined,
   }
   return (
@@ -45,7 +47,7 @@ function FieldInput(props: {
           onChange={(event) => props.onChange(event.currentTarget.value)}
         />
       )}
-      {props.invalid ? <FieldError>Enter {field.label.toLowerCase()}.</FieldError> : null}
+      {props.invalid ? <FieldError>{field.label} is required.</FieldError> : null}
     </Field>
   )
 }
@@ -103,6 +105,7 @@ export function ConnectDialog(props: {
                 field={field}
                 value={values[field.name] ?? ""}
                 invalid={missing.includes(field.name)}
+                disabled={test.isPending}
                 onChange={(value) => {
                   setValues((previous) => ({ ...previous, [field.name]: value }))
                   setMissing((previous) => previous.filter((name) => name !== field.name))
@@ -122,7 +125,7 @@ export function ConnectDialog(props: {
             <Button
               type="button"
               variant="outline"
-              disabled={test.isPending}
+              disabled={test.isPending || save.isPending}
               onClick={() => {
                 if (!filled()) return
                 test.mutate(input(), {
@@ -137,7 +140,7 @@ export function ConnectDialog(props: {
             <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" disabled={save.isPending || test.isPending}>
               {save.isPending ? <Spinner data-icon="inline-start" /> : null}
               Save
             </Button>

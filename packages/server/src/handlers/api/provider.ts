@@ -13,7 +13,7 @@ const mapFailure = <A>(effect: Effect.Effect<A, ProviderSettings.Failure>) =>
       "Primitive.NotFound": (error) => Effect.fail(new NotFoundError({ message: error.message })),
       "Primitive.Forbidden": (error) => Effect.fail(new ForbiddenError({ message: error.message })),
       "Primitive.Invalid": (error) => Effect.fail(new InvalidRequestError({ message: error.message })),
-      "ModelGateway.Unavailable": (error) =>
+      "InferencePlugin.Unavailable": (error) =>
         Effect.fail(new UnavailableError({ message: error.message, retryAfterMs })),
     }),
   )
@@ -37,11 +37,11 @@ export const ProviderHandler = HttpApiBuilder.group(Api, "provider", (handlers) 
       )
       .handle("provider.key.save", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) =>
-          mapFailure(providers.connect(actor, request.params.id, request.payload.fields)),
+          mapFailure(providers.saveKey(actor, request.params.id, request.payload.fields)),
         ),
       )
       .handle("provider.key.remove", (request) =>
-        Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(providers.disconnect(actor, request.params.id))),
+        Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(providers.removeKey(actor, request.params.id))),
       )
       .handle("provider.models.list", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(providers.models(actor, request.params.id))),

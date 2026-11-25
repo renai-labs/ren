@@ -9,7 +9,7 @@ import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Billing } from "./billing.js"
-import type { ModelGateway } from "./model-gateway.js"
+import type { InferencePlugin } from "./inference-plugin.js"
 import { ModelLists } from "./model-lists.js"
 import { Primitive } from "./primitive.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -72,7 +72,7 @@ export const layer = Layer.effect(
       return root.id
     })
 
-    // oxlint-disable-next-line ren/no-comments -- Providers P23: the seat that served the chat's last seat call. The gateway answers its windows only when it is a seat of the chat's provider.
+    // oxlint-disable-next-line ren/no-comments -- Providers P23: the seat that served the chat's last seat call. The inference service answers its windows only when it is a seat of the chat's provider.
     const lastSeat = (organizationId: Auth.OrganizationID, root: Session.ID) => {
       const seatOf = sql<string>`${events.data} ->> 'seat'`
       return database.db
@@ -87,7 +87,7 @@ export const layer = Layer.effect(
         )
     }
 
-    const nameOf = Effect.fnUntraced(function* (seat: Extract<ModelGateway.Limit, { _tag: "seat" }>) {
+    const nameOf = Effect.fnUntraced(function* (seat: Extract<InferencePlugin.Limit, { _tag: "seat" }>) {
       const connector = seat.connectedBy
         ? (yield* database.db
             .select({ name: Database.Schema.user.name })
@@ -98,7 +98,7 @@ export const layer = Layer.effect(
       return connector && seat.plan ? `${connector}’s ${seat.plan}` : seat.label
     })
 
-    const limitsOf = Effect.fnUntraced(function* (found: ReadonlyArray<ModelGateway.Limit>, providerName: string) {
+    const limitsOf = Effect.fnUntraced(function* (found: ReadonlyArray<InferencePlugin.Limit>, providerName: string) {
       return (yield* Effect.forEach(found, (limit) =>
         limit._tag === "free"
           ? Effect.succeed<ReadonlyArray<Limits.Limit>>([
@@ -150,7 +150,7 @@ export const layer = Layer.effect(
       )
 
     return Service.of({
-      // oxlint-disable-next-line ren/no-comments -- Providers §9.3: the limits of the chat's current model from its provider's gateway, and the credit when Ren pays for the model.
+      // oxlint-disable-next-line ren/no-comments -- Providers §9.3: the limits of the chat's current model from its provider's inference service, and the credit when Ren pays for the model.
       get: Effect.fn("Limits.get")(function* (actor, id) {
         const root = yield* rootOf(actor, id)
         const row = (yield* database.db
@@ -168,7 +168,7 @@ export const layer = Layer.effect(
         if (!model) return none
         const seat = yield* lastSeat(actor.organizationId, root)
         const found = yield* quiet(
-          owned.gateway.limits(owned.provider.id, actor.organizationId, {
+          owned.plugin.limits(owned.provider.id, actor.organizationId, {
             model: ModelLists.switchId(model),
             ...(seat && { seat }),
           }),
