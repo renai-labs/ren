@@ -43,9 +43,7 @@ export const layer = Layer.effect(
     return {
       completed: Effect.fn("OnboardingRewards.completed")(function* (completion: Onboarding.Completion) {
         const reward = payable(completion.step) ? rules[completion.step] : undefined
-        if (!reward) return
-        const occurrences = completion.recorded.filter((key) => key.startsWith(`${completion.step}:`)).length
-        if (completion.occurrence && occurrences > (reward.upTo ?? 1)) return
+        if (!reward || completion.count > (reward.upTo ?? Infinity)) return
         yield* pay({
           organizationId: completion.organizationId,
           key: ["onboarding", completion.step, completion.occurrence, completion.userId].filter(Boolean).join(":"),
