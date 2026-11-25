@@ -5,7 +5,7 @@ description: Chain the agents of a space so they hand tasks to each other, set h
 summary: Agents that hand work to each other
 ---
 
-A factory chains the [agents](/docs/agents/) of a [space](/docs/spaces/), so a [task](/docs/tasks/) moves from one agent to the next without you. For example, a triager reads a new bug and hands it to a fixer, the fixer opens a pull request and hands it to a reviewer, and the reviewer sends it back to the fixer or finishes the task.
+A factory chains the [agents](/docs/agents/) of a [space](/docs/spaces/), so a [task](/docs/tasks/) moves from one agent to the next without you.
 
 <Screenshot
   shot="factory/editor"
@@ -15,16 +15,21 @@ A factory chains the [agents](/docs/agents/) of a [space](/docs/spaces/), so a [
 
 ## Set up the factory
 
-Open the space, then **Factory**. **Flow** shows how tasks move between the agents. To change it, edit **spec.yaml** and select **Save**, or select **Edit with Ren** and describe the change.
+Open the space → **Factory**. **Flow** shows how tasks move between the agents.
+
+To change the factory, either:
+
+- Edit **spec.yaml** and select **Save**.
+- Select **Edit with Ren** and describe the change.
 
 For each agent, set:
 
-| Setting                | What it does                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| The agents it hands to | Who it can pass the task to. Without a list, any agent of the factory.                            |
-| A limit per handoff    | How many times it can hand to that agent, from 1 to 10, and who gets the task at the limit        |
-| A limit of runs        | How many times the agent can run on one task, from 1 to 20                                        |
-| **Finish**             | The agent can finish the task. The task then waits for a person or for its pull request to merge. |
+| Setting             | What it does                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| Next agent          | Who it can pass the task to. Without a list, any agent of the factory.                            |
+| A limit per handoff | How many times it can hand to that agent, from 1 to 10, and who gets the task at the limit        |
+| A limit of runs     | How many times the agent can run on one task, from 1 to 20                                        |
+| **Finish**          | The agent can finish the task. The task then waits for a person or for its pull request to merge. |
 
 The whole factory also has a limit of handoffs per task, from 1 to 100. The default is 20.
 
