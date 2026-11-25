@@ -5,6 +5,7 @@ import type { Actor } from "../src/actor.js"
 import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { AppRegistry } from "../src/app/registry.js"
+import { Onboarding } from "../src/onboarding.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { testEffect } from "./lib/effect.js"
@@ -51,6 +52,20 @@ it.live("read access follows reach, while edits and transfers keep owner checks"
     yield* members.create(admin, { spaceId: target, userId: owner.userId })
     yield* apps.transferOwnership(owner, app.id, { spaceId: target })
     expect((yield* apps.update(consumer, app.id, edit)).name).toBe("Changed")
+  }),
+)
+
+it.live("creating a custom app completes the organization's custom-app.created onboarding step", () =>
+  Effect.gen(function* () {
+    const onboarding = yield* Onboarding.Service
+    const organizationId = yield* Seed.organization()
+    const owner = yield* ProfilesFixture.user(organizationId, "Ana")
+    yield* ProfilesFixture.app(owner, yield* ProfilesFixture.space(owner, "Source"), "mine")
+    expect(
+      (yield* onboarding.get(owner)).organization.steps.find(
+        (state) => state.step === Onboarding.steps.organization.customAppCreated,
+      )?.completedAt,
+    ).not.toBeNull()
   }),
 )
 

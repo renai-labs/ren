@@ -26,12 +26,13 @@ import { OAuthFetch } from "../../src/oauth-fetch.js"
 import { Space } from "../../src/space.js"
 import { SpaceMember } from "../../src/space/member.js"
 import { SpaceProvisioning } from "../../src/space/provisioning.js"
+import { Onboarding } from "../../src/onboarding.js"
 import { Seed } from "./seed.js"
 
 export const invalidated: Array<EgressControl.Selector> = []
 
 export const layer = Layer.mergeAll(
-  App.layer,
+  App.layer.pipe(Layer.provideMerge(Onboarding.layer)),
   CredentialRequirements.layer.pipe(Layer.provideMerge(AppProfiles.layer)),
   AppResolve.layer,
   AppRegistry.layer,
