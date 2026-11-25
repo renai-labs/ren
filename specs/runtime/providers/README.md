@@ -330,6 +330,19 @@ Rules:
 2. A change reads and writes only the card it names. A change for one card never rewrites another card's row.
 3. An organization's hash names its cards and their revisions. `organization_model_list` keeps it; a row whose hash changed notifies that organization's brains (gate GR3).
 
+### 6.5 Other model types
+
+A card's models can be of any type LiteLLM serves (`model_info.mode`). Built first: chat and image. Later: transcription, speech, video, decision and others. The contract does not change with a new type.
+
+1. **A provider.** Any provider LiteLLM supports can be a card: one entry in the gateway's offered list, its Connect form from LiteLLM's `/public/providers/fields`, and its chat and image models written by the updater from models.dev. Ren core does not change. Examples: Google (Gemini image models), OpenAI (`gpt-image`), and later ElevenLabs for speech. The person brings the key; the card works as any own-key card.
+2. **A card with no chat model** (an image-only provider) shows on the Providers page and in the image tool's choice of model, not in the chat picker.
+3. **Ren's card.** Its models are LiteLLM's access group `ren`: chat models from the updater and the media models an operator keeps (`ren/gpt-image-2.5-sunburst`, …). The list never keeps chat models only.
+4. **Price.** A list of rates, as models.dev and LiteLLM state them: `{ direction: input | output | cacheRead | cacheWrite, unit: token | image | megapixel | second | character, usd }`; `usd` is per 1M for `token`, per one for the others. Examples: `dall-e-3` output 0.052 per image; Cloudflare's `flux-2-klein-4b` output 0.001095 per megapixel; `gpt-image-1` per image token. Today's per-1M-token price is the `token` unit.
+5. **The brain.** Each type has one use: chat → the harness's model and the picker; image → OpenCode's built-in image tool, shown when the list has an image model, with the agent's default `image_generation` model (`media-models.md` D3, D4). A new type adds its tool and its protocol (`cell/src/harness/opencode/model-providers.ts`).
+6. **Subscriptions** serve chat only.
+
+To add a type: its model type and protocol in `schema/src/models.ts`, a price unit if it has a new one, and its tool in the brain.
+
 ## 7. The brain
 
 ### 7.1 What the pull carries
