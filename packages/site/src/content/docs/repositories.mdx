@@ -1,8 +1,29 @@
 ---
 title: Repositories
 icon: Git
-description: This page is not written yet.
-summary: Give agents your GitHub repositories
+description: Add the git repositories a space works in, describe what each one holds so Ren picks the right one, and choose one for a chat.
+summary: The code a space works on
 ---
 
-This page is not written yet.
+The **Repositories** page of a [space](/docs/spaces/) lists the git repositories its chats can read and change. Ren reads each repository's description to decide which one a request needs.
+
+## Add a repository
+
+1. Open the space, then **Repositories**, and select **Add repositories**.
+2. Search your GitHub repositories, or paste an address such as `https://github.com/northwind/storefront`.
+3. Write a description of what it holds, such as "The storefront: checkout, cart and order emails." Ren uses only the description to pick a repository, so name what is in it.
+4. Optionally change the alias, the short name Ren uses for it, and the branch. Without a branch, Ren uses the repository's default branch.
+
+Ren reads private GitHub repositories through the [GitHub channel](/docs/channels/#connect-slack-or-github). To add one, give the Ren app access to it on GitHub first.
+
+## Choose a repository for a chat
+
+Ren picks the repository from your request and the descriptions. To pick it yourself, select the repositories button in the composer, or type `@` and pick it under **Repositories**.
+
+To say which repository every chat should use, write it in the space's [instructions](/docs/instructions/).
+
+## Change or remove a repository
+
+In the repository's `⋯`, select **Edit** to change its description, alias or branch, or **Remove**. Chats in the space stop reading a removed repository.
+
+To see what Ren changed in a repository during a chat, open the chat's [Changes](/docs/chats/#changes) tab.

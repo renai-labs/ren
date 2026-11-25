@@ -1,8 +1,26 @@
 ---
 title: Inbox
 icon: Inbox
-description: This page is not written yet.
-summary: Work in a space that needs you
+description: See every chat of a space with its agent, where it started and when it last changed, and open the ones that need you.
+summary: Every chat of a space, in one list
 ---
 
-This page is not written yet.
+The **Inbox** of a [space](/docs/spaces/) lists its chats, newest activity first: the ones you started, the ones agents started from [automations](/docs/automations/) and [channels](/docs/channels/), and the chats of its [tasks](/docs/tasks/).
+
+<Screenshot
+  shot="inbox/space"
+  alt="The Inbox of the Engineering space with five chats, their agent, who started them, where they came from and their last activity"
+  caption="The Inbox of a space."
+/>
+
+| Column        | Shows                                               |
+| ------------- | --------------------------------------------------- |
+| Chat          | Its title, and whether Ren is working or idle       |
+| Started by    | The person who started it                           |
+| Agent         | The [agent](/docs/agents/) that works in it, or Ren |
+| From          | Where it started, such as Slack or a schedule       |
+| Last activity | When Ren or a person last wrote in it               |
+
+Select **Mine** to see only the chats you started. Select a chat to open it, or **New chat** to start one in this space.
+
+Chats that wait for your answer or review also show under **Needs you** on the space's **Overview**.

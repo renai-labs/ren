@@ -1,8 +1,45 @@
 ---
 title: Agents
 icon: Agent
-description: This page is not written yet.
-summary: Give each agent a role and permissions
+description: Create agents for a space, each with its own instructions, model and permissions, and hand them chats, tasks, automations and subtasks.
+summary: Give each kind of work its own agent
 ---
 
-This page is not written yet.
+An agent is a role in a [space](/docs/spaces/), such as a ticket triager or a pull request reviewer. It has its own instructions, model and permissions. **Ren** is the built-in agent of every space.
+
+<Screenshot
+  shot="agents/list"
+  alt="The Agents page of the Engineering space with triager, fixer, reviewer and release-notes"
+  caption="The agents of a space."
+/>
+
+## Create an agent
+
+1. Open the space, then **Agents**, and select **New agent**.
+2. Type a name in lowercase letters and digits joined by dashes, such as `pr-reviewer`, and a description.
+3. Write its **Instructions**. They add to the organization's and the space's [instructions](/docs/instructions/).
+4. Pick a **Model**, or keep **Space default**.
+5. Set **Max steps**: how many model calls one run can make before it must answer.
+6. Save. Then set its **Permissions** on the agent's page. They add to the space's [permissions](/docs/permissions/), and the strictest rule wins.
+
+To change how Ren itself behaves in a space, use the space's **Instructions**.
+
+## Agents and subagents
+
+| Type         | Takes chats and tasks | Called by                     | Model by default         |
+| ------------ | --------------------- | ----------------------------- | ------------------------ |
+| Agent        | Yes                   | People, tasks and automations | **Space default**        |
+| **Subagent** | No                    | Other agents, as a helper     | **Parent agent's model** |
+
+A subagent needs a description: other agents read it to decide when to call it, such as "Reviews pull requests for security and style."
+
+## Give work to an agent
+
+- In a chat, type `@` and pick it under **Agents**.
+- Assign it a [task](/docs/tasks/#assign-a-task).
+- Pick it in an [automation](/docs/automations/).
+- Add it to the space's [factory](/docs/factory/), so agents hand tasks to each other.
+
+## Archive an agent
+
+Select **Archive** in the agent's `⋯`. Its schedules pause, webhook requests to it are skipped, its open chats go on with Ren, and it leaves the factory.
