@@ -338,6 +338,9 @@ export function NewTaskDialog(props: {
   const draft = form.draft
   const set = form.set
   const spaceId = draft.spaceId || defaultSpace
+  const height = expanded
+    ? { fallback: "min-h-80", editor: "[&_.tiptap]:min-h-80" }
+    : { fallback: "min-h-20", editor: "[&_.tiptap]:min-h-20" }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {props.trigger ? (
@@ -401,7 +404,7 @@ export function NewTaskDialog(props: {
         >
           <div className="flex flex-col gap-2 px-6 pt-2">
             <TitleField ref={titleRef} value={draft.title} missing={form.missing} onChange={form.setTitle} />
-            <Suspense fallback={<div className={expanded ? "min-h-80" : "min-h-20"} />}>
+            <Suspense fallback={<div className={height.fallback} />}>
               <MarkdownEditor
                 key={created}
                 value={draft.description}
@@ -409,7 +412,7 @@ export function NewTaskDialog(props: {
                 placeholder="Add description…"
                 media={form.held.hold}
                 onChange={(description) => set({ description })}
-                className={expanded ? "[&_.tiptap]:min-h-80" : "[&_.tiptap]:min-h-20"}
+                className={height.editor}
               />
             </Suspense>
           </div>

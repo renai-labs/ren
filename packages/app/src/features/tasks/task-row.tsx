@@ -1,5 +1,4 @@
 import type { Tasks } from "@ren/client/react"
-import { memo } from "react"
 import { IconAlertTriangle, IconHandStop, IconLink, IconSubtask } from "@tabler/icons-react"
 import { IconAgent } from "../../icons/heroicons.js"
 import { Badge } from "@ren/ui/badge"
@@ -202,8 +201,7 @@ function RowAssignees(props: {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- Memoized: a list renders hundreds of rows with menus each, and a search keystroke, a selection or a refetch should only re-render the rows that changed.
-export const TaskRow = memo(function TaskRow(props: {
+export function TaskRow(props: {
   task: Task
   parent?: { readonly identifier: string; readonly title: string } | null
   branch?: Tasks.Branch | undefined
@@ -237,7 +235,7 @@ export const TaskRow = memo(function TaskRow(props: {
       render={
         <div
           data-selected={props.selected || undefined}
-          className="group/row relative flex h-11 items-center gap-2 rounded-lg px-2 text-sm [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto] hover:bg-muted data-selected:bg-muted"
+          className="group/row relative flex h-11 items-center gap-2 rounded-lg px-2 text-sm [contain-intrinsic-size:auto_--spacing(11)] [content-visibility:auto] hover:bg-muted data-selected:bg-muted"
         />
       }
     >
@@ -306,4 +304,4 @@ export const TaskRow = memo(function TaskRow(props: {
       />
     </RowContextMenu>
   )
-})
+}

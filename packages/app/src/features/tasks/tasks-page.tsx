@@ -38,7 +38,7 @@ import type { Assignee } from "../../components/assignee.js"
 import { useMembers } from "../../lib/use-members.js"
 import { cn } from "cn"
 import { Keyboard } from "../../platform/keyboard.js"
-import { useCallback, useMemo, useState, type ComponentType } from "react"
+import { useState, type ComponentType } from "react"
 import type { TaskInfo } from "@ren/client"
 import { Debounce, Tasks } from "@ren/client/react"
 import { FilterMatch } from "@ren/util/filter-match"
@@ -267,11 +267,10 @@ export function TasksPage(props: {
     labels,
   }
   const [selected, setSelected] = useState<string[]>([])
-  const select = useCallback(
-    ({ taskId, checked }: { taskId: string; checked: boolean }) =>
-      setSelected((current) => (checked ? [...current, taskId] : current.filter((id) => id !== taskId))),
-    [],
-  )
+  const select = (selection: { taskId: string; checked: boolean }) =>
+    setSelected((current) =>
+      selection.checked ? [...current, selection.taskId] : current.filter((id) => id !== selection.taskId),
+    )
   Keyboard.useKeyDown((event) => {
     if (event.key !== "Escape" || event.defaultPrevented) return
     if (event.target instanceof Element && event.target.closest("[role=menu],[role=dialog],[role=listbox]")) return
@@ -312,7 +311,7 @@ export function TasksPage(props: {
     setQuery("")
     views.setFilters(views.viewFilters)
   }
-  const shown = useMemo(() => TaskDisplay.scoped(display, spaceId), [display, spaceId])
+  const shown = TaskDisplay.scoped(display, spaceId)
   const groupBy = shown.groupBy
   const properties = shown.properties
   const run = (done: string, call: (id: string) => Promise<unknown>) => {

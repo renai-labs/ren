@@ -38,10 +38,12 @@ const rootHas = /(^|[\s,>~+(])(html|body|:root)(\[[^\]]*\]|[.#:][\w-]+)*:has\(/u
 const nestedHas = (selector: string) => {
   if (rootHas.test(selector)) return true
   const open: string[] = []
-  for (const [index, char] of [...selector].entries()) {
-    if (char === ")") open.pop()
-    if (char !== "(") continue
-    const name = /:([a-z-]+)$/u.exec(selector.slice(0, index))?.[1] ?? ""
+  for (const paren of selector.matchAll(/[()]/gu)) {
+    if (paren[0] === ")") {
+      open.pop()
+      continue
+    }
+    const name = /:([a-z-]+)$/u.exec(selector.slice(0, paren.index))?.[1] ?? ""
     if (name === "has" && open.some((outer) => outer === "is" || outer === "not" || outer === "where")) return true
     open.push(name)
   }
@@ -119,7 +121,6 @@ export default defineConfig((env) => ({
   ],
   build: {
     sourcemap: "hidden",
-    // oxlint-disable-next-line ren/no-comments -- Vite's default targets Firefox 114, which has no :has(), so the CSS minifier wraps every selector list with a :has() in :is() and noSlowHas fails; Firefox 121 is the first with :has().
     cssTarget: ["chrome111", "edge111", "firefox121", "safari16.4", "ios16.4"],
   },
   define:

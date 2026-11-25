@@ -1,7 +1,7 @@
 export * as Drafts from "./drafts.js"
 
 import { Composer, ComposerHistory } from "@ren/chat"
-import { useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { useRef, useState, useSyncExternalStore } from "react"
 import { Platform } from "../platform/platform.js"
 import { useMe } from "./use-me.js"
 
@@ -75,7 +75,7 @@ const makeStore = (drafts: Pick<Platform.Drafts, "get" | "set" | "remove">, key:
 export function useStore(key: string) {
   const platform = Platform.usePlatform()
   const drafts = platform.drafts ?? platform.storage
-  return useMemo(() => makeStore(drafts, key), [drafts, key])
+  return makeStore(drafts, key)
 }
 
 export const useValue = <A>(store: Store, select: (draft: Composer.Draft) => A) =>

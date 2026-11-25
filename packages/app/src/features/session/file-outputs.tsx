@@ -131,12 +131,12 @@ const metaOf = (file: SessionMessage.DriveFile) => `${labelOf(file)} · ${format
 
 const textBytes = 64 * 1024
 
-function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile, near: boolean) {
+function useFileText(spaceId: string | undefined, file: SessionMessage.DriveFile, options: { readonly near: boolean }) {
   const drive = useDriveFile(spaceId, file)
   return useQuery({
     // ast-grep-ignore: no-query-key-literal -- reads the file's bytes through its signed drive link, not the API
     queryKey: ["file-output-text", spaceId, file.path, file.size],
-    enabled: near && Boolean(spaceId),
+    enabled: options.near && Boolean(spaceId),
     staleTime: Infinity,
     retry: false,
     queryFn: async (context) => new TextDecoder().decode(await drive.bytes(context.signal, textBytes)),
@@ -276,7 +276,7 @@ const previewRows = 6
 const previewLines = 14
 
 function TablePreview(props: { spaceId: string | undefined; file: SessionMessage.DriveFile; near: boolean }) {
-  const text = useFileText(props.spaceId, props.file, props.near)
+  const text = useFileText(props.spaceId, props.file, { near: props.near })
   if (!text.data) return <Skeleton className="h-40 rounded-none bg-muted/30" />
   const whole = props.file.size <= textBytes
   const rows = parseCsv(text.data)
@@ -324,7 +324,7 @@ function TextPreview(props: {
   kind: Kind
   near: boolean
 }) {
-  const text = useFileText(props.spaceId, props.file, props.near)
+  const text = useFileText(props.spaceId, props.file, { near: props.near })
   if (!text.data) return <Skeleton className="h-40 rounded-none bg-muted/30" />
   const lines = text.data.split("\n")
   const head = lines.slice(0, previewLines).join("\n")
@@ -409,7 +409,7 @@ function PreviewCard(props: {
     )
   return (
     <div
-      ref={seen.ref}
+      ref={(node) => seen.observe(node)}
       className={cn("group/output overflow-hidden rounded-xl border bg-card", props.fresh && arrive)}
       onAnimationEnd={props.onArrived}
     >
