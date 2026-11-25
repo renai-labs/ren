@@ -14,6 +14,7 @@ import { ReferenceCheck } from "../src/reference-check.js"
 import { RepositoryHosts } from "../src/repository-hosts.js"
 import { Space } from "../src/space.js"
 import { SpaceSettings } from "../src/space/settings.js"
+import { Onboarding } from "../src/onboarding.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
@@ -22,7 +23,10 @@ const github = GitHubServer.start()
 afterAll(() => github.stop())
 
 const it = testEffect(
-  Layer.mergeAll(SpaceSettings.layer, Space.layer.pipe(Layer.provide(BrainProviders.none))).pipe(
+  Layer.mergeAll(
+    SpaceSettings.layer,
+    Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
+  ).pipe(
     Layer.provideMerge(ReferenceCheck.layer),
     Layer.provideMerge(RepositoryHosts.layer),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, GitHubApp.layer)),

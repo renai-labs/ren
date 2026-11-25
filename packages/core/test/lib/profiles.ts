@@ -36,7 +36,7 @@ export const layer = Layer.mergeAll(
   CredentialRequirements.layer.pipe(Layer.provideMerge(AppProfiles.layer)),
   AppResolve.layer,
   AppRegistry.layer,
-  Space.layer.pipe(Layer.provide(BrainProviders.none)),
+  Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
   SpaceMember.layer,
   SpaceProvisioning.layer,
 ).pipe(

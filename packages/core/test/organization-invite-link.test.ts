@@ -19,7 +19,7 @@ import { Onboarding } from "../src/onboarding.js"
 
 const it = testEffect(
   Layer.mergeAll(
-    Space.layer.pipe(Layer.provide(BrainProviders.none)),
+    Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
     SpaceMember.layer,
     SpaceJoinRequest.layer,
     OrganizationInviteLink.layer.pipe(Layer.provideMerge(Onboarding.layer)),

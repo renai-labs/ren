@@ -19,12 +19,18 @@ import { RenSettings } from "../src/settings/ren.js"
 import { SettingsRows } from "../src/settings/rows.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
+import { Onboarding } from "../src/onboarding.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Layer.mergeAll(Settings.layer, Agent.layer, AgentMembership.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceMember.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
+        SpaceMember.layer,
+      ),
+    ),
     Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),

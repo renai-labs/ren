@@ -20,6 +20,7 @@ import { SessionSync } from "../../src/session-sync.js"
 import { Space } from "../../src/space.js"
 import { SpaceProvisioning } from "../../src/space/provisioning.js"
 import { TranscriptCodec } from "../../src/transcript-codec.js"
+import { Onboarding } from "../../src/onboarding.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
@@ -47,7 +48,11 @@ export const runnerLayer = Layer.mergeAll(SessionRunner.layer, SessionSync.layer
 export const sessionLayerWith = (
   github: Layer.Layer<GitHubApp.Service, never, Database.Service> = GitHubApp.layerNone,
 ) =>
-  Layer.mergeAll(Session.layer, Space.layer.pipe(Layer.provide(BrainProviders.none)), SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(
+    Session.layer,
+    Space.layer.pipe(Layer.provide(Onboarding.layer), Layer.provide(BrainProviders.none)),
+    SpaceProvisioning.layer,
+  ).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(PullRequest.layer.pipe(Layer.provide(github))),
     Layer.provideMerge(Billing.layerNone),
