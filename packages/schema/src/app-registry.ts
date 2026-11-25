@@ -90,5 +90,5 @@ export const definition = Primitive.define({
   id: App.ID,
   info: Info,
   list: { input: ListInput, page: Pagination.Page(Info).annotate({ identifier: "AppRegistry.Page" }) },
-  get: true,
+  get: "slug",
 })

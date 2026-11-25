@@ -23,6 +23,6 @@ export const definition = Primitive.define({
   plural: "space-settings",
   id: Space.ID,
   info: Info,
-  get: true,
+  get: "id",
   update: { input: UpdateInput, result: Info },
 })

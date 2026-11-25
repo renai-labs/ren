@@ -315,7 +315,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The space’s ID or slug."
             },
             "required": true
           }
@@ -2015,7 +2016,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The environment-template’s ID."
             },
             "required": true
           }
@@ -2070,7 +2072,7 @@
             }
           }
         },
-        "description": "Return one environment-template by ID or slug.",
+        "description": "Return one environment-template by ID.",
         "summary": "Get environment-template"
       }
     },
@@ -2531,7 +2533,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The space-settings’s ID."
             },
             "required": true
           }
@@ -2586,7 +2589,7 @@
             }
           }
         },
-        "description": "Return one space-settings by ID or slug.",
+        "description": "Return one space-settings by ID.",
         "summary": "Get space-settings"
       }
     },
@@ -2697,7 +2700,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The organization-settings’s ID."
             },
             "required": true
           }
@@ -2752,7 +2756,7 @@
             }
           }
         },
-        "description": "Return one organization-settings by ID or slug.",
+        "description": "Return one organization-settings by ID.",
         "summary": "Get organization-settings"
       }
     },
@@ -3988,7 +3992,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The agent’s ID or slug."
             },
             "required": true
           }
@@ -4495,7 +4500,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The app’s ID or slug."
             },
             "required": true
           }
@@ -5064,7 +5070,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The app-profile’s ID."
             },
             "required": true
           }
@@ -5119,7 +5126,7 @@
             }
           }
         },
-        "description": "Return one app-profile by ID or slug.",
+        "description": "Return one app-profile by ID.",
         "summary": "Get app-profile"
       }
     },
@@ -5865,7 +5872,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The app-registry’s ID or slug."
             },
             "required": true
           }
@@ -6592,7 +6600,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The session’s ID."
             },
             "required": true
           }
@@ -6647,7 +6656,7 @@
             }
           }
         },
-        "description": "Return one session by ID or slug.",
+        "description": "Return one session by ID.",
         "summary": "Get session"
       }
     },
@@ -7435,7 +7444,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The task’s ID or slug."
             },
             "required": true
           }
@@ -9552,7 +9562,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The schedule’s ID."
             },
             "required": true
           }
@@ -9607,7 +9618,7 @@
             }
           }
         },
-        "description": "Return one schedule by ID or slug.",
+        "description": "Return one schedule by ID.",
         "summary": "Get schedule"
       }
     },
@@ -10310,7 +10321,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The webhook’s ID."
             },
             "required": true
           }
@@ -10365,7 +10377,7 @@
             }
           }
         },
-        "description": "Return one webhook by ID or slug.",
+        "description": "Return one webhook by ID.",
         "summary": "Get webhook"
       }
     },
@@ -11245,7 +11257,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The artifact’s ID."
             },
             "required": true
           }
@@ -11300,7 +11313,7 @@
             }
           }
         },
-        "description": "Return one artifact by ID or slug.",
+        "description": "Return one artifact by ID.",
         "summary": "Get artifact"
       }
     },
@@ -11679,7 +11692,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The credential’s ID."
             },
             "required": true
           }
@@ -11734,7 +11748,7 @@
             }
           }
         },
-        "description": "Return one credential by ID or slug.",
+        "description": "Return one credential by ID.",
         "summary": "Get credential"
       }
     },
@@ -12303,7 +12317,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The oauth-session’s ID."
             },
             "required": true
           }
@@ -12358,7 +12373,7 @@
             }
           }
         },
-        "description": "Return one oauth-session by ID or slug.",
+        "description": "Return one oauth-session by ID.",
         "summary": "Get oauth-session"
       }
     },
@@ -12526,7 +12541,8 @@
             "name": "idOrSlug",
             "in": "path",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "description": "The oauth-app’s ID."
             },
             "required": true
           }
@@ -12581,7 +12597,7 @@
             }
           }
         },
-        "description": "Return one oauth-app by ID or slug.",
+        "description": "Return one oauth-app by ID.",
         "summary": "Get oauth-app"
       }
     },
