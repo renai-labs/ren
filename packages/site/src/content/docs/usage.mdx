@@ -1,8 +1,35 @@
 ---
 title: Usage
 icon: ChartBar
-description: This page is not written yet.
-summary: See what your agents spend
+description: See what your organization and each space spent on models, compute and tools, and break it down by space, member, agent and model.
+summary: What your agents cost, and where
 ---
 
-This page is not written yet.
+Usage shows what Ren spent for you: model calls, the time machines ran, and paid tool calls.
+
+## Organization usage
+
+Admins open **Settings → Usage**. The page shows, for the period you pick (**Last 7 days**, **Last 30 days** or **Last 90 days**):
+
+- **Cost**, split into **Models**, **Compute** and **Tool calls**, and the cost per day.
+- **Chats**, **Model calls** with the share that failed, and **Tokens**.
+- **Cost by** **Spaces**, **Members**, **Agents** and **Models**. Select a row to filter the whole page by it.
+- **Credits and subscriptions**: your Ren credits and the model [providers](/docs/model-providers/) you connected.
+
+To see one space, filter by it, or open the space and its **Usage** page.
+
+## What costs money
+
+| Cost       | Comes from                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| Models     | Each model call of each chat, including subagents and chat titles                           |
+| Compute    | The time a space's [machines](/docs/machines/) run                                          |
+| Tool calls | Paid tools, such as apps that run on **Managed by Ren**. Each app shows its price per call. |
+
+Model calls on your own provider subscription or key are paid to that provider, and show under its name in **Credits and subscriptions**.
+
+## In a chat
+
+The ring at the top of a chat shows how much of the model's context the chat uses. When it fills, send `/compact` to summarize the chat and free space, or start a new chat.
+
+For plans and invoices, see [Billing](/docs/billing/).

@@ -1,8 +1,38 @@
 ---
 title: Compute
 icon: Cpu
-description: This page is not written yet.
-summary: The machine a space runs on
+description: Choose the brain and hand machines of a space, see when a change is pending, and shut the space down to apply it.
+summary: The machines one space runs on
 ---
 
-This page is not written yet.
+The **Compute** page of a [space](/docs/spaces/) sets the [machines](/docs/machines/) its chats run on.
+
+<Screenshot
+  shot="compute/space"
+  alt="The Compute page of the Engineering space with Brain scope Per space, Ren's standard machine, the hand on the brain's machine, and Shut down space"
+  caption="The Compute page of a space."
+/>
+
+## Brain
+
+| Setting         | Choices                                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Brain scope** | **Per space**: all chats share one brain. **Per chat**: each chat gets its own. Applies to new chats only. |
+| **Provider**    | Where the brain runs                                                                                       |
+| **Machine**     | **Ren's standard machine**, or a machine your organization made                                            |
+
+## Hand
+
+| Choice                          | Use it when                                                     |
+| ------------------------------- | --------------------------------------------------------------- |
+| **The brain's machine**         | The default. Tools run next to the agent.                       |
+| A machine, **separate machine** | The tools need their own packages, size or network limits       |
+| **No tools**                    | The space only talks, searches and uses apps: no files or shell |
+
+## Apply a change
+
+A change shows **Change pending** until each brain or hand starts again. That happens on the next message after the space goes idle.
+
+To apply it now, select **Shut down space**. All work in the space stops, the files on its machines are deleted, and each brain and hand starts again with the new settings at the next message. Save what must last in [Drive](/docs/drive/) or a [repository](/docs/repositories/) first.
+
+**Last shutdown** shows when the space last shut down, and any problem it had.
