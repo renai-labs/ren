@@ -49,6 +49,7 @@ export function useWebhookList(spaceId: string | undefined) {
   return useInfiniteQuery({
     ...Pages.webhooks(client, spaceId ? { spaceId } : {}),
     placeholderData: keepPreviousData,
+    refetchInterval: Webhooks.refreshEvery,
   })
 }
 
@@ -428,27 +429,15 @@ const requestRunOf = (request: WebhookRequestInfo): Run => ({
   requestId: request.id,
 })
 
-const hour = 60 * 60_000
-
-// oxlint-disable-next-line ren/no-comments -- Runs appear only when the schedule fires and change only while one is pending: poll then, and otherwise wake once when the next run is due.
-const runsEvery = (pending: boolean, nextRunAt: string | null | undefined) => {
-  if (pending) return refreshEvery
-  if (!nextRunAt) return false
-  const left = Date.parse(nextRunAt) - Date.now()
-  return left < -2 * 60_000 ? false : Math.min(Math.max(refreshEvery, left), hour)
-}
-
 // oxlint-disable-next-line ren/no-comments -- The runs of one automation in the last 30 days: its schedule's runs and its webhook's requests, newest first.
 export function useAutomationRuns(automation: Automation | undefined) {
   const { api } = RouterContext.useRouterContext()
   const scheduleId = automation?.schedule?.id
   const webhookId = automation?.webhook?.id
-  const nextRunAt = automation?.schedule?.nextRunAt
   const scheduleRuns = useQuery({
     ...api["schedule-run"].list.queryOptions({ scheduleId: scheduleId ?? "", page: 1, pageSize: 50 }),
     enabled: scheduleId !== undefined,
-    refetchInterval: (query) =>
-      runsEvery(query.state.data?.items.some((run) => run.status === "pending") ?? false, nextRunAt),
+    refetchInterval: refreshEvery,
   })
   const requests = useQuery({
     ...api["webhook-request"].list.queryOptions({ webhookId: webhookId ?? "", page: 1, pageSize: 50 }),
