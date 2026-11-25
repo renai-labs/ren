@@ -1937,6 +1937,13 @@ export const TaskPullRequests = (input: Command.Command.Config.Infer<typeof Comm
     (client, request) => client["link"]["task"]["pullRequests"]({ ...request.params }),
   )
 
+export const AppSkillsGet = (input: Command.Command.Config.Infer<typeof Commands.AppSkillsGet>) =>
+  Operation.run(
+    ClientApi.groups["app-skills"].endpoints["app-skills.get"],
+    { params: { idOrSlug: input["idOrSlug"] }, labels: { idOrSlug: "<app>" } },
+    (client, request) => client["app-skills"]["get"]({ ...request.params }),
+  )
+
 export const AppToolsGet = (input: Command.Command.Config.Infer<typeof Commands.AppToolsGet>) =>
   Operation.run(
     ClientApi.groups["app-tools"].endpoints["app-tools.get"],

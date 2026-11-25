@@ -119,6 +119,8 @@ import type {
   AppArchiveOutput,
   AppTransferOwnershipInput,
   AppTransferOwnershipOutput,
+  AppSkillsGetInput,
+  AppSkillsGetOutput,
   AppProfileListInput,
   AppProfileListOutput,
   AppProfileGetInput,
@@ -1284,6 +1286,19 @@ export function make(options: ClientOptions) {
             body: { spaceId: input["spaceId"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-skills": {
+      get: (input: AppSkillsGetInput, requestOptions?: RequestOptions) =>
+        request<AppSkillsGetOutput>(
+          {
+            method: "GET",
+            path: `/apps/${encodeURIComponent(input.idOrSlug)}/skills`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

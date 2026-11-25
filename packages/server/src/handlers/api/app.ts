@@ -16,3 +16,10 @@ export const AppHandler = HttpApiBuilder.group(Api, "app", (handlers) =>
       .handle("app.transferOwnership", Primitive.action(apps.transferOwnership))
   }),
 )
+
+export const AppSkillsHandler = HttpApiBuilder.group(Api, "app-skills", (handlers) =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    return handlers.handle("app-skills.get", Primitive.get(apps.skills))
+  }),
+)

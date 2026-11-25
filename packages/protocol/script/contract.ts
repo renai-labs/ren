@@ -12,6 +12,10 @@ const exceptions = new Map([
     "Reads the tools of a registry app’s MCPs, a part of its listing that the catalog leaves out: no primitive operation addresses a part of a record.",
   ],
   [
+    "app-skills",
+    "Reads the instructions and files of an app’s skills, a part of the app that app.get leaves out: no primitive operation addresses a part of a record.",
+  ],
+  [
     "mcp-inspect",
     "Reads a remote MCP server live, before any app declares it: not a stored record, which no primitive operation addresses.",
   ],

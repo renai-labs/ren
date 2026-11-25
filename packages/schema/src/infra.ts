@@ -411,15 +411,8 @@ export const PullInput = Schema.Struct({
 
 export interface PulledApp extends Schema.Schema.Type<typeof PulledApp> {}
 export const PulledApp = Schema.Struct({
-  ...Struct.pick(App.Info.fields, [
-    "name",
-    "description",
-    "requiredCredentials",
-    "mcps",
-    "skills",
-    "webhooks",
-    "dependsOn",
-  ]),
+  ...Struct.pick(App.Info.fields, ["name", "description", "requiredCredentials", "mcps", "webhooks", "dependsOn"]),
+  skills: App.Skills,
   icon: Schema.optionalKey(Schema.String),
   environment: App.Definition.fields.environment,
 }).annotate({ identifier: "Infra.PulledApp", description: "An App.Declaration, as the live app has it." })

@@ -1,5 +1,5 @@
 import { useDeferredValue, useRef, useState, useTransition, type ReactNode } from "react"
-import type { AppInfo, AppProfileInfo } from "@ren/client"
+import type { AppInfo, AppProfileInfo, AppSkills } from "@ren/client"
 import type { App } from "@ren/schema/app"
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
@@ -404,10 +404,12 @@ function useUpdate(input: { revision: number; onFailure: (failure: Failure) => v
   }
 }
 
+type Editable = Omit<AppInfo, "skills"> & { readonly skills: AppSkills }
+
 const reloadOf = (
   failure: Failure | undefined,
-  reload: (() => Promise<AppInfo | undefined>) | undefined,
-  onLatest: (latest: AppInfo) => void,
+  reload: (() => Promise<Editable | undefined>) | undefined,
+  onLatest: (latest: Editable) => void,
 ) => {
   if (failure?.at !== "stale" || !reload) return
   return () =>
@@ -426,7 +428,7 @@ function Editor(props: {
   revision: number
   initial: AppDraft.Draft
   spaceId?: string | undefined
-  onReload?: (() => Promise<AppInfo | undefined>) | undefined
+  onReload?: (() => Promise<Editable | undefined>) | undefined
   onClose: () => void
 }) {
   const platform = Platform.usePlatform()
@@ -544,7 +546,12 @@ function Editor(props: {
 function EditApp(props: { appId: string; onClose: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const app = useQuery({ ...api.app.get.queryOptions({ idOrSlug: props.appId }), refetchOnWindowFocus: false })
-  const data = app.data
+  const skills = useQuery({
+    ...api["app-skills"].get.queryOptions({ idOrSlug: props.appId }),
+    refetchOnWindowFocus: false,
+    gcTime: 0,
+  })
+  const data = app.data && skills.data && { ...app.data, skills: skills.data }
   if (!data)
     return (
       <div className="flex flex-col gap-4 p-5">
@@ -557,7 +564,11 @@ function EditApp(props: { appId: string; onClose: () => void }) {
       app={data}
       revision={data.revision}
       initial={{ ...AppDraft.fromSource(data), slug: data.slug }}
-      onReload={() => app.refetch().then((result) => result.data)}
+      onReload={() =>
+        Promise.all([app.refetch(), skills.refetch()]).then(([latest, files]) =>
+          latest.data && files.data ? { ...latest.data, skills: files.data } : undefined,
+        )
+      }
       onClose={props.onClose}
     />
   )

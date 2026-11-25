@@ -377,6 +377,14 @@ const extra: ReadonlyArray<EmitCli.Command> = [
     ...resolved("task", "task.get"),
   },
   {
+    operation: "app-skills.get",
+    path: ["app", "skills"],
+    description: "Read an app’s skills with their instructions and files",
+    arguments: ["idOrSlug"],
+    names: { idOrSlug: "app" },
+    descriptions: { idOrSlug: "App slug or ID" },
+  },
+  {
     operation: "app-tools.get",
     path: ["app", "registry", "tools"],
     description: "List the tools of a registry app’s MCPs",

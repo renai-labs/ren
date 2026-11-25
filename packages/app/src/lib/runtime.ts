@@ -48,9 +48,6 @@ export function make(platform: Platform.Info) {
   queryClient.setQueryDefaults(Auth.authKeys.canAdminister(), { gcTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api["organization-settings"].get.queryKey(), { staleTime: Number.POSITIVE_INFINITY })
   queryClient.setQueryDefaults(api.chat.models.queryKey(), { staleTime: 10 * 60_000 })
-  // oxlint-disable-next-line ren/no-comments -- An app carries its skills' files (megabytes for some registry apps) and changes only through mutations, which invalidate it; refetching on every focus or mount after a minute downloaded them again and again.
-  queryClient.setQueryDefaults(api.app.get.queryKey(), { staleTime: 10 * 60_000 })
-  queryClient.setQueryDefaults(api.app.list.queryKey(), { staleTime: 10 * 60_000 })
   queryClient.setQueryDefaults(api.task.list.queryKey().slice(0, 1), { staleTime: 30_000 })
   queryClient.setQueryDefaults(api.session.list.queryKey().slice(0, 1), { staleTime: 30_000 })
   const analytics = platform.analytics

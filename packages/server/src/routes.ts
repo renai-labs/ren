@@ -60,7 +60,7 @@ import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
-import { AppHandler } from "./handlers/api/app.js"
+import { AppHandler, AppSkillsHandler } from "./handlers/api/app.js"
 import { AppRegistryHandler, AppToolsHandler } from "./handlers/api/app-registry.js"
 import { McpInspectHandler } from "./handlers/api/mcp-inspect.js"
 import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
@@ -209,6 +209,7 @@ export const layer = Layer.mergeAll(
         FilesHandler,
         AgentHandler,
         AppHandler,
+        AppSkillsHandler,
         AppProfileHandler,
         AppProfileReachHandler,
         AppRegistryHandler,
