@@ -38,4 +38,22 @@ describe("ModelLists (Providers §6.4, P26)", () => {
       }).pipe(Effect.provide(ModelListsTest.layer(test.plugin)))
     }),
   )
+
+  it.live("a model carries its price only when Ren charges for it", () =>
+    Effect.gen(function* () {
+      const priced = { ...TestInferencePlugin.model("vendor/model"), price: { input: 3, output: 15 } }
+      const test = yield* TestInferencePlugin.make({
+        providers: [TestInferencePlugin.provider("ren"), TestInferencePlugin.provider("owned", { payer: "customer" })],
+      })
+      yield* test.setModels("ren", { revision: "1", models: [priced] })
+      yield* test.setModels("owned", { revision: "1", models: [priced] })
+      const organizationId = yield* Seed.organization()
+      const lists = yield* ModelLists.Service.pipe(Effect.provide(ModelListsTest.layer(test.plugin)))
+      const prices = (yield* lists.list(organizationId)).map((entry) => [entry.id, entry.models[0]?.price])
+      expect(prices).toEqual([
+        ["ren", { input: 3, output: 15 }],
+        ["owned", undefined],
+      ])
+    }),
+  )
 })

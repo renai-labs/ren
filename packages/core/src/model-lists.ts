@@ -4,7 +4,7 @@ import { PgClient } from "@effect/sql-pg"
 import { Postgres } from "@ren/db/postgres"
 import { Auth } from "@ren/schema/auth"
 import type { Models } from "@ren/schema/models"
-import { Cache, Context, Duration, Effect, Exit, Layer } from "effect"
+import { Cache, Context, Duration, Effect, Exit, Layer, Struct } from "effect"
 import { InferencePlugin } from "./inference-plugin.js"
 
 // oxlint-disable-next-line ren/no-comments -- One provider of an organization's list: its inference plugin, how it is called and its models. The inference service's address is added when a brain reads the list.
@@ -105,7 +105,7 @@ export const layer = Layer.effect(
       settings,
       models,
       refresh: notify,
-      // oxlint-disable-next-line ren/no-comments -- Providers §6.4: each provider that is on and connected, with its method when it has two (P24), minus the models switched off.
+      // oxlint-disable-next-line ren/no-comments -- Providers §6.4: each provider that is on and connected, with its method when it has two (P24), minus the models switched off. A model keeps its price only when Ren charges for it: a vendor's list price belongs on the provider's page, not in the picker.
       list: Effect.fn("ModelLists.list")(function* (organizationId) {
         const owned = yield* Cache.get(providers, "providers")
         const found = yield* settings(organizationId)
@@ -121,7 +121,9 @@ export const layer = Layer.effect(
                 name: each.provider.name,
                 protocol: each.provider.protocol,
                 ...(state.method && methodsOf(each.provider).length > 1 && { method: state.method }),
-                models: listed.filter((model) => !state.off.includes(switchId(model))),
+                models: listed
+                  .filter((model) => !state.off.includes(switchId(model)))
+                  .map((model) => (each.provider.payer === "ren" ? model : Struct.omit(model, ["price"]))),
               },
             ])
           },
