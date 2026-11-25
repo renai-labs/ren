@@ -436,6 +436,8 @@ export type GitHostKind = "github"
 
 export type AuthSignInProvider = "google" | "github" | "slack"
 
+export type InfraProfileDeclaration = { name: string; allSpaces?: boolean }
+
 export type ChannelTarget = { kind: "slack"; channelId: string } | { kind: "github"; repository: string }
 
 export type MemoryFiles = { [x: string]: string }
@@ -1922,7 +1924,11 @@ export type SessionMessageAssistant = {
 }
 
 export type InfraPulled = {
-  bindings: { organization: string; spaces: { [x: PrimitiveSlug]: InfraPulledBindings } }
+  bindings: {
+    organization: string
+    profiles: { [x: PrimitiveSlug]: { [x: AppProfileSlug]: InfraProfileDeclaration } }
+    spaces: { [x: PrimitiveSlug]: InfraPulledBindings }
+  }
   spec: {
     org: OrganizationSettingsUpdateInput2
     memory?: MemoryFiles
@@ -10372,6 +10378,9 @@ export type InfraPullInput = {
     } | null
     readonly bindings?: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -10782,6 +10791,9 @@ export type InfraPullInput = {
     } | null
     readonly bindings?: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -11192,6 +11204,9 @@ export type InfraPullInput = {
     } | null
     readonly bindings?: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -11607,6 +11622,9 @@ export type InfraPlanInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -12017,6 +12035,9 @@ export type InfraPlanInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -12427,6 +12448,9 @@ export type InfraPlanInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -12842,6 +12866,9 @@ export type InfraApplyInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -13254,6 +13281,9 @@ export type InfraApplyInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -13666,6 +13696,9 @@ export type InfraApplyInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -14078,6 +14111,9 @@ export type InfraApplyInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {
@@ -14490,6 +14526,9 @@ export type InfraApplyInput = {
     }
     readonly bindings: {
       readonly organization: string
+      readonly profiles?: {
+        readonly [x: string]: { readonly [x: string]: { readonly name: string; readonly allSpaces?: boolean } }
+      }
       readonly spaces?: {
         readonly [x: string]: {
           readonly channels?: {

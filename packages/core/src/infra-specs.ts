@@ -338,7 +338,11 @@ export const layer = Layer.effect(
             const schedules = yield* InfraSchedules.load(transaction, actor.organizationId)
             const webhooks = yield* InfraWebhooks.load(transaction, actor.organizationId)
             const channels = yield* InfraChannels.load(transaction, actor.organizationId)
-            const profiles = yield* InfraProfiles.load(transaction, actor.organizationId)
+            const profiles = yield* InfraProfiles.load(
+              transaction,
+              actor.organizationId,
+              Object.keys(input?.bindings.profiles ?? {}),
+            )
             const memory = yield* InfraMemory.load(transaction, actor.organizationId)
             const environments = yield* InfraEnvironments.load(
               transaction,
@@ -421,6 +425,7 @@ export const layer = Layer.effect(
       return {
         bindings: {
           organization: live.organization.slug,
+          profiles: kinds.profiles.pullCatalogue(live.profiles),
           spaces: Object.fromEntries(
             inScope.shared.flatMap((space) => {
               const channels = kinds.channels.pullBindings(live.channels, space.id, aliases)
@@ -481,6 +486,7 @@ export const layer = Layer.effect(
         memory: pulled.spec.memory,
         environments: pulled.spec.environments,
         spaces: pulled.spec.spaces,
+        profiles: pulled.bindings.profiles,
         bindings: pulled.bindings.spaces,
       })
     }
@@ -497,6 +503,7 @@ export const layer = Layer.effect(
               { ...Struct.omit(space, ["brainScope", "brain", "hand"]), ...runtimeOf(declaredRuntime(space)) },
             ]),
           ),
+          profiles: bindings.profiles,
           bindings: bindings.spaces,
         },
         live,
@@ -976,7 +983,7 @@ export const layer = Layer.effect(
         schedules: kinds.schedules.diff(context, live.schedules),
         webhooks: kinds.webhooks.diff(context, live.webhooks),
         channels: kinds.channels.diff(context, live.channels),
-        profiles: kinds.profiles.diff(context, live.profiles),
+        profiles: kinds.profiles.diff(context, live.profiles, input.bindings.profiles),
         memory: kinds.memory.diff(context, live.memory, spec.memory),
       }
       problems.push(
@@ -1171,7 +1178,7 @@ export const layer = Layer.effect(
           return yield* new Primitive.Invalid({
             message: `ren.lock is for “${input.lock.organization}”, but you are signed in to “${organization}”.`,
           })
-        const bindings = input.bindings ?? { organization, spaces: {} }
+        const bindings = input.bindings ?? { organization, profiles: {}, spaces: {} }
         const aliases = input.spec ? diff(actor, live, { spec: input.spec, bindings }).aliases : new Map()
         const ren = liveResources(live, aliases)
         const pulled = InfraVersions.planPull(

@@ -15357,7 +15357,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+            "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20297,6 +20297,27 @@
             "minLength": 1,
             "description": "The slug of the organization."
           },
+          "profiles": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "maxLength": 32,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "description": "Fixed at create. It names the profile’s servers (`<mcp>__<slug>`) and labels (`<KEY>__<SLUG>`)."
+              },
+              "additionalProperties": {
+                "$ref": "#/components/schemas/Infra.ProfileDeclaration"
+              }
+            },
+            "description": "For each app, its shared profiles by slug. Apply creates and changes them; it leaves a live profile that is not here as it is."
+          },
           "spaces": {
             "type": "object",
             "propertyNames": {
@@ -20330,7 +20351,7 @@
           },
           "path": {
             "type": "string",
-            "description": "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
+            "description": "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>."
           },
           "from": {
             "type": "string",
@@ -20579,6 +20600,24 @@
         "required": ["path", "message"],
         "additionalProperties": false
       },
+      "Infra.ProfileDeclaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "allSpaces": {
+            "type": "boolean",
+            "description": "Share it with every space. Without it, the spaces that list it."
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false,
+        "description": "A shared profile of an app."
+      },
       "Infra.PullInput": {
         "type": "object",
         "properties": {
@@ -20626,6 +20665,27 @@
                 "minLength": 1,
                 "description": "The slug of the organization."
               },
+              "profiles": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "description": "Fixed at create. It names the profile’s servers (`<mcp>__<slug>`) and labels (`<KEY>__<SLUG>`)."
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/Infra.ProfileDeclaration"
+                  }
+                },
+                "description": "For each app, its shared profiles by slug. Apply creates and changes them; it leaves a live profile that is not here as it is."
+              },
               "spaces": {
                 "type": "object",
                 "propertyNames": {
@@ -20638,7 +20698,7 @@
                 }
               }
             },
-            "required": ["organization", "spaces"],
+            "required": ["organization", "profiles", "spaces"],
             "additionalProperties": false
           },
           "spec": {
@@ -20706,7 +20766,7 @@
         },
         "required": ["bindings", "spec", "lock", "write", "remove", "conflicts"],
         "additionalProperties": false,
-        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space."
+        "description": "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space."
       },
       "Infra.PulledApp": {
         "type": "object",

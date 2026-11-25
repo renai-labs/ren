@@ -290,9 +290,23 @@ export const SpaceBindings = Schema.Struct({
     .annotate({ description: "For each app, the slugs of its shared profiles that list this space." }),
 }).annotate({ identifier: "Infra.SpaceBindings" })
 
+export interface ProfileDeclaration extends Schema.Schema.Type<typeof ProfileDeclaration> {}
+export const ProfileDeclaration = Schema.Struct({
+  name: Primitive.Name,
+  allSpaces: Schema.optionalKey(
+    Schema.Boolean.annotate({ description: "Share it with every space. Without it, the spaces that list it." }),
+  ),
+}).annotate({ identifier: "Infra.ProfileDeclaration", description: "A shared profile of an app." })
+
+const Profiles = Schema.Record(Primitive.Slug, Schema.Record(AppProfile.Slug, ProfileDeclaration)).annotate({
+  description:
+    "For each app, its shared profiles by slug. Apply creates and changes them; it leaves a live profile that is not here as it is.",
+})
+
 export interface Bindings extends Schema.Schema.Type<typeof Bindings> {}
 export const Bindings = Schema.Struct({
   organization: Schema.NonEmptyString.annotate({ description: "The slug of the organization." }),
+  profiles: Profiles.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   spaces: Schema.Record(Primitive.Slug, SpaceBindings).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
 }).annotate({ identifier: "Infra.Bindings" })
 
@@ -336,7 +350,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
+      "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -442,6 +456,7 @@ export interface Pulled extends Schema.Schema.Type<typeof Pulled> {}
 export const Pulled = Schema.Struct({
   bindings: Schema.Struct({
     organization: Bindings.fields.organization,
+    profiles: Profiles,
     spaces: Schema.Record(Primitive.Slug, PulledBindings),
   }),
   spec: Schema.Struct({
@@ -461,5 +476,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, and the channel and profile bindings of each space.",
+    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
 })

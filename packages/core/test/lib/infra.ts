@@ -125,8 +125,11 @@ export const spec = (
   environments: Record<string, unknown> = {},
 ) => Schema.decodeUnknownSync(Infra.Spec)({ org: { settings: org }, memory, environments, spaces })
 
-export const bindings = (organization: string, spaces: Record<string, unknown> = {}) =>
-  Schema.decodeUnknownSync(Infra.Bindings)({ organization, spaces })
+export const bindings = (
+  organization: string,
+  spaces: Record<string, unknown> = {},
+  profiles: Record<string, unknown> = {},
+) => Schema.decodeUnknownSync(Infra.Bindings)({ organization, profiles, spaces })
 
 export const org = Effect.gen(function* () {
   const spaces = yield* Space.Service
