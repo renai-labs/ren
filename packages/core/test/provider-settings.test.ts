@@ -88,8 +88,8 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
       const changes: ReadonlyArray<Effect.Effect<unknown, ProviderSettings.Failure>> = [
         found.providers.update(found.member, "ren", { enabled: false }),
         found.providers.test(found.member, "groq", fields(secret)),
-        found.providers.connect(found.member, "groq", fields(secret)),
-        found.providers.disconnect(found.member, "groq"),
+        found.providers.saveKey(found.member, "groq", fields(secret)),
+        found.providers.removeKey(found.member, "groq"),
         found.providers.updateModels(found.member, "ren", { models: [{ id: "ren/vendor/two", enabled: false }] }),
       ]
       for (const change of changes) expect((yield* Effect.flip(change))._tag).toBe("Primitive.Forbidden")
@@ -107,14 +107,14 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
           ok: false,
           message: "Invalid API Key",
         })
-        const refused = yield* Effect.flip(found.providers.connect(found.admin, "groq", fields("bad-key")))
+        const refused = yield* Effect.flip(found.providers.saveKey(found.admin, "groq", fields("bad-key")))
         expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "Invalid API Key" })
         expect((yield* found.providers.page(found.admin)).providers.map((each) => [each.id, each.added])).toEqual([
           ["ren", true],
           ["groq", false],
         ])
 
-        yield* found.providers.connect(found.admin, "groq", fields(secret))
+        yield* found.providers.saveKey(found.admin, "groq", fields(secret))
         const page = yield* found.providers.page(found.admin)
         expect(page.providers.find((each) => each.id === "groq")).toMatchObject({
           enabled: true,
@@ -144,7 +144,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         const found = yield* setup
         const listener = yield* listening
         yield* listener.collect
-        yield* found.providers.connect(found.admin, "groq", fields(secret))
+        yield* found.providers.saveKey(found.admin, "groq", fields(secret))
         expect(providersOf(yield* found.lists.list(found.organizationId))).toEqual([
           ["ren", ["vendor/one", "vendor/two"]],
           ["groq", ["llama-5"]],

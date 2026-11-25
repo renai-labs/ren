@@ -76,8 +76,8 @@ Done when:
 | P25 | A session stores OpenCode's provider and model ids. A method change shows a "model switched" row at the next turn                                                                                                                                                                                                                                                                                                                                |
 | P26 | A change of one organization's settings or seats reaches its brains through the push. A change for every organization (models.dev, Ren's list) reaches brains at their next 30 s pull: a push to every organization with the provider on is a storm for a change no one waits for                                                                                                                                                                |
 | P27 | Ren core is provider-agnostic. It builds lists, pushes and renders. Everything about a provider comes from its inference plugin (§6.1), the organization's settings included. The deployment chooses the inference plugins                                                                                                                                                                                                                       |
-| P29 | The inference service holds every organization's provider settings: provider on/off, method, key status, models switched off. Ren core reads and writes them through the inference service and keeps no settings table. In hosted Ren the inference service's LiteLLM is the source of truth: an organization is a LiteLLM team, and the Providers page is that team's part of LiteLLM's admin console. A self-hosted Ren brings its own LiteLLM |
 | P28 | A self-hosted Ren can run without the inference service and without the egress: its inference plugin gives the brain a real address and key. Egress on or off for self-hosting is separate work                                                                                                                                                                                                                                                  |
+| P29 | The inference service holds every organization's provider settings: provider on/off, method, key status, models switched off. Ren core reads and writes them through the inference service and keeps no settings table. In hosted Ren the inference service's LiteLLM is the source of truth: an organization is a LiteLLM team, and the Providers page is that team's part of LiteLLM's admin console. A self-hosted Ren brings its own LiteLLM |
 
 ## 4. Parts and responsibilities
 
@@ -105,13 +105,13 @@ Done when:
                                        Ren usage_event ──> billing (markup, credit)
 ```
 
-| Part              | Responsible for                                                                                                                                                                                                                | Holds secrets     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
-| Ren core          | organization settings (providers, methods, model switches, default model); the registry of inference plugins; builds each organization's model list from them; push and pull; Providers page and chat UI; warnings; usage rows | no                |
-| Brain             | runs chats on OpenCode; sends every call to the inference service; runs `claude` for Claude models on the Claude Code runtime                                                                                                  | no (placeholders) |
-| Egress            | swaps `ren:MODELS` for the brain's inference key; blocks `api.anthropic.com` from the brain                                                                                                                                    | the brain key     |
-| Inference service | the inference service: its providers and their models (models.dev, Ren's list, seats); sign-in pages; keys and logins; seat choice; credit check and free cap; calls vendors; usage rows                                       | yes               |
-| Billing           | markup and credit                                                                                                                                                                                                              | —                 |
+| Part              | Responsible for                                                                                                                                                                              | Holds secrets     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Ren core          | the default model of a new organization; the registry of inference plugins; builds each organization's model list from them; push and pull; Providers page and chat UI; warnings; usage rows | no                |
+| Brain             | runs chats on OpenCode; sends every call to the inference service; runs `claude` for Claude models on the Claude Code runtime                                                                | no (placeholders) |
+| Egress            | swaps `ren:MODELS` for the brain's inference key, only for the inference service's host                                                                                                      | the brain key     |
+| Inference service | the inference service: its providers and their models (models.dev, Ren's list, seats); sign-in pages; keys and logins; seat choice; credit check and free cap; calls vendors; usage rows     | yes               |
+| Billing           | markup and credit                                                                                                                                                                            | —                 |
 
 A self-hosted Ren chooses other inference plugins (§6.3), or none: then it has no models.
 
@@ -175,7 +175,7 @@ Ren's page is the provider page of §5.1: its models by type (chat, image, trans
 2. The inference service creates the organization's account on the first brain key, as today.
 3. The picker shows Ren's free models (on) and Ren's credit models with prices. A credit model refuses with `insufficient_credits` while the organization has no credit.
 4. The default model is the deployment setting `REN_DEFAULT_MODEL` (P15).
-5. The free cap is 100 per day. Free models can also be unavailable for everyone for a while; the error says "Free models are limited and not guaranteed. Add credit or connect a provider."
+5. The free cap is 100 per day. When the upstream of a free model fails, the call fails as any upstream failure does; no separate code says so.
 
 ## 6. Inference plugins and model lists
 
@@ -193,8 +193,8 @@ An inference plugin is an Effect plug-in in `core`. It is built like a machine p
 | `grant`       | a brain's key, a `Grant` (below)                                                                                                                                                              | `Models.Gateway.key`                                   |
 | `settings`    | an organization's settings of every provider: on/off, method, key status (last 4 characters, who saved it, test result), models switched off. The inference service is their only store (P29) | Ren's settings tables                                  |
 | `configure`   | writes a provider's settings for an organization: on/off, method, models switched off                                                                                                         | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
-| `connect`     | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test                                                                         | the `RenInference` key and connect routes              |
-| `disconnect`  | removes a key or a seat                                                                                                                                                                       | the same                                               |
+| `saveKey`     | test, then save a key's fields. Answers the vendor's message on a failed test. A seat signs in on the inference service's page, not through the plugin                                        | the `RenInference` key and connect routes              |
+| `removeKey`   | removes a key                                                                                                                                                                                 | the same                                               |
 | `connections` | a provider's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                                                                                                 | the same                                               |
 | `limits`      | the limits of a chat's model: the free cap, the limits of the seat that served it. Not the credit, which is billing's (§9.2)                                                                  | the inference service calls in `limits.ts`             |
 
@@ -293,14 +293,14 @@ Gateway names:
 
 Not built in this work. It shows that the contract fits a self-hosted Ren; build it with the self-hosting work. `core/src/inference-plugin/litellm.ts`, namespace `LiteLLMInferencePlugin`. Settings: `LITELLM_URL`, `LITELLM_MASTER_KEY` (stays in Ren core's environment).
 
-| Member                                 | Value                                                                                                                                                                                               |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `providers`                            | one provider, `litellm`, named by the setting `LITELLM_NAME` (default `LiteLLM`), auth `operator`, payer `customer`, `shared`                                                                       |
-| `models`                               | `GET <LITELLM_URL>/model/info`: each model's name, context and output limits, input types, tool calling and price, where the LiteLLM owner set them. Absent values take default limits and no price |
-| `baseUrl`                              | `LITELLM_URL`                                                                                                                                                                                       |
-| `grant`                                | `Minted`: a LiteLLM virtual key per brain (`POST /key/generate`, 6 h, alias `brain-<id>`, metadata: organization, brain, space), found again by alias until it nears expiry                         |
-| `connect`, `disconnect`, `connections` | none: the owner configures LiteLLM                                                                                                                                                                  |
-| `limits`                               | none                                                                                                                                                                                                |
+| Member                                | Value                                                                                                                                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `providers`                           | one provider, `litellm`, named by the setting `LITELLM_NAME` (default `LiteLLM`), auth `operator`, payer `customer`, `shared`                                                                       |
+| `models`                              | `GET <LITELLM_URL>/model/info`: each model's name, context and output limits, input types, tool calling and price, where the LiteLLM owner set them. Absent values take default limits and no price |
+| `baseUrl`                             | `LITELLM_URL`                                                                                                                                                                                       |
+| `grant`                               | `Minted`: a LiteLLM virtual key per brain (`POST /key/generate`, 6 h, alias `brain-<id>`, metadata: organization, brain, space), found again by alias until it nears expiry                         |
+| `saveKey`, `removeKey`, `connections` | none: the owner configures LiteLLM                                                                                                                                                                  |
+| `limits`                              | none                                                                                                                                                                                                |
 
 ### 6.4 An organization's list
 
@@ -339,7 +339,7 @@ To add a type: its model type and protocol in `schema/src/models.ts`, a price un
 
 Ren core keeps one thing in memory: a brain's key, the inference plugin's `grant`, per workload and inference plugin, until it expires (`Minted`) or a call answers 401. It keeps no list. A change in models changes lists and mints no key.
 
-`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per provider the id, name, and its model gateway's `baseUrl` and `headers`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
+`RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per provider the id, name, and its inference plugin's `baseUrl` and `headers`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
 
 ### 7.2 HTTP runtime
 
@@ -386,11 +386,11 @@ Model lists rode only the 30 s pull until now: the brain fetched each provider's
 
 New rules (P26):
 
-| Change                                                      | Written to                                                                                              | Notify                   |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Provider on/off, method, key saved or removed, model switch | the inference service (`update`, `switchModels`, `connect`, `disconnect`); each sends only what changed | `org:<id>`               |
-| A seat signed in or removed (one organization)              | nothing in Ren                                                                                          | `org:<id>`               |
-| models.dev or Ren's list changed (every organization)       | nothing in Ren                                                                                          | none: the next 30 s pull |
+| Change                                                      | Written to                                                                                             | Notify                   |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------ |
+| Provider on/off, method, key saved or removed, model switch | the inference service (`update`, `switchModels`, `saveKey`, `removeKey`); each sends only what changed | `org:<id>`               |
+| A seat signed in or removed (one organization)              | nothing in Ren                                                                                         | `org:<id>`               |
+| models.dev or Ren's list changed (every organization)       | nothing in Ren                                                                                         | none: the next 30 s pull |
 
 A Ren-wide `'all'` notify wakes every running brain (`specs/runtime/hot-reload/README.md` §2.5), so a provider change never sends `'all'`. The 30 s pull stays as the backup. The core and brain polls go.
 
@@ -433,22 +433,22 @@ Built: `core/src/limits.ts` (`Limits.get`), `GET /sessions/:id/limits` (`limits.
 2. Ren core adds the credit only for a model whose provider has `payer: ren` and that is not free. Ren core names no provider.
 3. A source that does not answer (inference service, billing) gives nothing; `limits.get` still answers. With no credit granted there is no credit.
 4. Seat banners name the provider and the seat: "Anthropic seat (Asha’s Max)". "Asha’s Max" is the name of the Ren user who connected the seat and its plan; without them, the seat's label.
-5. A step shows until the person dismisses it, and does not come back in the same chat, limit and reset period while the app runs. A step passed before it showed is skipped. When several reach a step, the fullest shows. The app refetches when a turn ends by keying the banner on the chat's last finished turn.
+5. A step shows until the person dismisses it, and does not come back in the same chat, limit and reset period while the app runs. A step passed before it showed is skipped. When several reach a step, the fullest shows.
 
 ### 9.4 Errors
 
-The inference service sends each refusal with `x-should-retry: false`, so the brain shows it at once. The chat finds the code in the error's body or text (`chat/src/turn-problems.ts`).
+The inference service sends each final refusal with `x-should-retry: false`, so the brain shows it at once; `inference_unavailable` and `seat_unavailable` may be retried. The chat finds the code in the error's body or text (`chat/src/turn-problems.ts`).
 
-| Code                                       | When                                  | Text                                                                                       | Actions                                       |
-| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| `insufficient_credits` (402)               | Ren call, no credit                   | today's out-of-credits text                                                                | Add credits (admins), Change model, Providers |
-| `free_limit_reached` (429)                 | free cap reached                      | "Free models: today's 100 requests are used. They reset at 00:00 UTC."                     | Change model                                  |
-| `free_unavailable`                         | free models unavailable for everyone  | "Free models are limited and not guaranteed. Try later, add credit or connect a provider." | Change model                                  |
-| `provider_not_connected`                   | own-key model without a key           | "<Provider> is not connected."                                                             | Providers (admins), Change model              |
-| `model_off` (403)                          | a model the organization switched off | "<model> is switched off for this organization."                                           | Providers (admins), Change model              |
-| `subscription_limit_reached` (429)         | every seat of the vendor is full      | "All <vendor> subscriptions are at their limit. The next resets at <time>."                | Change model                                  |
-| ChatGPT refusal codes (`chatgpt.ts:58-67`) | a ChatGPT seat refuses                | "ChatGPT usage limit reached."                                                             | Change model                                  |
-| `inference_unavailable` (503)              | the inference service cannot decide   | "Model access is not available now. Try again."                                            | Try again                                     |
+| Code                                     | When                                     | Text                                                                                 | Actions                                       |
+| ---------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------- |
+| `insufficient_credits` (402)             | Ren call, no credit                      | today's out-of-credits text                                                          | Add credits (admins), Change model, Providers |
+| `free_limit_reached` (429)               | free cap reached                         | "Free models: today's 100 requests are used. They reset at 00:00 UTC."               | Change model                                  |
+| `provider_not_connected`                 | own-key model without a key              | "<Provider> is not connected."                                                       | Providers (admins), Change model              |
+| `model_off` (403)                        | a model the organization switched off    | "<model> is switched off for this organization."                                     | Providers (admins), Change model              |
+| `subscription_limit_reached` (429)       | every seat of the vendor is full         | "All <vendor> subscriptions are at their limit. The next resets at <time>."          | Change model                                  |
+| `seat_unavailable` (429)                 | a seat refused; another may serve        | "No <vendor> subscription can serve this now. Try again, or pick another model."     | Try again, Change model                       |
+| `subscription_request_unsupported` (400) | no seat of the vendor serves the request | "<vendor> subscriptions can't serve this request. Pick another model to keep going." | Change model                                  |
+| `inference_unavailable` (503)            | the inference service cannot decide      | "Model access is not available now. Try again."                                      | Try again                                     |
 
 ## 10. Contract: Ren core → inference service
 
@@ -480,7 +480,7 @@ Inference service → Ren core: `POST /internal/inference/changed {provider, org
 | Brain waking             | The start pull brings the newest list. The Claude runtime starts `claude` with the new env                                                                                                           |
 | Mid-turn                 | §8 table. A seat that fills mid-turn: the inference service tries another seat                                                                                                                       |
 | Brain down or restarting | The boot pull applies the list. No secret is lost: the brain holds none                                                                                                                              |
-| Gateway down             | Calls fail (`gateway_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error. `models` fails: Ren core keeps each organization's last list |
+| Inference service down   | Calls fail (`inference_unavailable` or a transport error). The brain's same-model retry runs (about 84 s); then the turn shows the error. A pull gets no `providers`: each brain keeps its last list |
 | Ren core down            | Calls keep working. Settings and lists do not change until it is back                                                                                                                                |
 | models.dev down          | The inference service keeps its last good copy                                                                                                                                                       |
 | A login's refresh fails  | The seat shows "Sign in again"                                                                                                                                                                       |
@@ -489,12 +489,12 @@ Inference service → Ren core: `POST /internal/inference/changed {provider, org
 
 | Package              | Work                                                                                                                                                                                                                                                                                                                                                                     |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schema`             | `InferencePlugin.Provider` and its fields; provider settings shapes (provider, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, provider, method, price, free. Usage `kind` and `seat`                                                                                                                                      |
+| `schema`             | `InferencePlugin.Provider` and its fields; provider settings shapes (provider, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, provider, method, price, free. Usage `access` and `seat`                                                                                                                                    |
 | `db`                 | No tables for providers or lists. Ren core sends `pg_notify('ren_brains', 'org:<id>')` itself                                                                                                                                                                                                                                                                            |
 | `core`               | `InferencePlugin` (contract, registry, layer); the plug-in `inference-plugin/ren.ts`; the contract suite `test/lib/inference-plugin.ts`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
 | `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                                                |
 | `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                                                     |
-| image, egress        | SDK binary path in `e2b.Dockerfile`; block `api.anthropic.com` from the brain                                                                                                                                                                                                                                                                                            |
+| image, egress        | SDK binary path in `e2b.Dockerfile`; no egress change (§7.3.5)                                                                                                                                                                                                                                                                                                           |
 | `chat`               | Error codes (§9.4); banner rules; provider labels from data                                                                                                                                                                                                                                                                                                              |
 | `app`                | Providers page, Add provider grid and dialog, Ren models page, picker rows, model chip, banner                                                                                                                                                                                                                                                                           |
 

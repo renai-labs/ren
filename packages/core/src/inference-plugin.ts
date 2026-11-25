@@ -73,25 +73,28 @@ export interface Plugin {
     provider: string,
     organizationId: Auth.OrganizationID,
     change: ProviderInput.UpdateInput,
-  ) => Effect.Effect<void, Unavailable>
+  ) => Effect.Effect<void, Unavailable | Rejected>
   readonly switchModels: (
     provider: string,
     organizationId: Auth.OrganizationID,
     models: ProviderInput.ModelListInput["models"],
-  ) => Effect.Effect<void, Unavailable>
+  ) => Effect.Effect<void, Unavailable | Rejected>
   // oxlint-disable-next-line ren/no-comments -- A key provider: test the fields without saving; save them after a passing test; remove them. Ren never stores the fields.
   readonly test: (
     provider: string,
     organizationId: Auth.OrganizationID,
     fields: Fields,
   ) => Effect.Effect<{ readonly ok: boolean; readonly message?: string }, Unavailable | Rejected>
-  readonly connect: (
+  readonly saveKey: (
     provider: string,
     organizationId: Auth.OrganizationID,
     fields: Fields,
     savedBy: typeof Auth.MemberID.Type,
   ) => Effect.Effect<Saved, Unavailable | Rejected>
-  readonly disconnect: (provider: string, organizationId: Auth.OrganizationID) => Effect.Effect<void, Unavailable>
+  readonly removeKey: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<void, Unavailable | Rejected>
   // oxlint-disable-next-line ren/no-comments -- Providers §9.3: the limits of a model: the free cap of a free model, and the windows of `seat` when it is one of the provider's seats in the organization. Not the credit, which is billing's.
   readonly limits: (
     provider: string,
@@ -130,7 +133,7 @@ export const registry = <E, R>(plugins: ReadonlyArray<Effect.Effect<Plugin, E, R
         )).flat()
         const providerIds = owned.map((each) => each.provider.id)
         if (new Set(providerIds).size !== providerIds.length)
-          return yield* Effect.die(new Error(`Two providers share an id: ${providerIds.join(", ")}`))
+          return yield* new Unavailable({ message: `Two providers share an id: ${providerIds.join(", ")}` })
         return owned
       }),
       plugin: (id) => Option.fromNullishOr(all.find((plugin) => plugin.id === id)),

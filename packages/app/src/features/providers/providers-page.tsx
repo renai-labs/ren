@@ -13,6 +13,7 @@ import { ProviderMark } from "../../components/provider-mark.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ConnectDialog } from "./connect-dialog.js"
 import { ModelTypes } from "./model-types.js"
+import { errorMessage } from "../../lib/errors.js"
 
 const sample: ProviderPage = {
   providers: Array.from({ length: 6 }, (_, index) => ({
@@ -136,7 +137,7 @@ export function ProvidersPage() {
         />
       </InputGroup>
       <Loading id={shapeId} loading={list.isPending} label="Loading providers">
-        {list.isError ? <EmptyState>Providers aren’t available on this server yet.</EmptyState> : null}
+        {list.isError ? <EmptyState>{errorMessage(list.error)}</EmptyState> : null}
         {!list.isError && shown.length === 0 && !list.isPending ? (
           <EmptyState
             action={

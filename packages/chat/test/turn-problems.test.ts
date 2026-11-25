@@ -54,11 +54,6 @@ describe("TurnProblems.of", () => {
       fix: "They reset at 00:00 UTC.",
       actions: ["model"],
     })
-    expect(shown({ kind: "provider.unknown", code: "free_unavailable", admin: true, providerID: "ren" })).toEqual({
-      title: "Free models are limited and not guaranteed.",
-      fix: "Try later, add credit or connect a provider.",
-      actions: ["model"],
-    })
     expect(
       shown({ kind: "provider.auth", code: "provider_not_connected", admin: true, providerID: "groq", model: "llama" }),
     ).toEqual({

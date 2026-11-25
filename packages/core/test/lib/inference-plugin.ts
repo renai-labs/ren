@@ -114,7 +114,7 @@ export const make = Effect.fnUntraced(function* (options: {
           ? { ok: true }
           : { ok: false, message: "Invalid API Key" },
       ),
-    connect: (providerId, organizationId, fields, savedBy) =>
+    saveKey: (providerId, organizationId, fields, savedBy) =>
       Effect.gen(function* () {
         const key = Object.values(fields)
           .map(Redacted.value)
@@ -125,7 +125,7 @@ export const make = Effect.fnUntraced(function* (options: {
         yield* change(providerId, organizationId, (current) => ({ ...current, key: { ...saved, savedBy } }))
         return saved
       }),
-    disconnect: (providerId, organizationId) =>
+    removeKey: (providerId, organizationId) =>
       Effect.gen(function* () {
         yield* Ref.update(keys, (all) => {
           const next = new Map(all)
@@ -206,6 +206,7 @@ export const contract = <E, R>(
         const plugin = yield* options.make
         const first = yield* plugin.grant(brain(options.organizationId))
         const second = yield* plugin.grant(brain(options.organizationId))
+        expect([first._tag, second._tag]).toEqual(["Minted", "Minted"])
         if (first._tag !== "Minted" || second._tag !== "Minted") return
         expect(keyOf(first)).not.toBe(keyOf(second))
         expect(DateTime.isGreaterThan(first.expiresAt, yield* DateTime.now)).toBe(true)

@@ -90,11 +90,6 @@ const byCode: Readonly<Record<string, (input: Context) => Problem>> = {
     fix: "They reset at 00:00 UTC.",
     actions: ["model"],
   }),
-  free_unavailable: () => ({
-    title: "Free models are limited and not guaranteed.",
-    fix: "Try later, add credit or connect a provider.",
-    actions: ["model"],
-  }),
   provider_not_connected: (input) =>
     askAdmin(input, `${input.provider} is not connected.`, {
       admin: "Connect it in Providers, or pick another model.",

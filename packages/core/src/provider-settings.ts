@@ -23,8 +23,8 @@ export interface Interface {
   readonly page: (actor: Actor.Info) => Effect.Effect<Provider.Page, Failure>
   readonly update: (actor: Actor.Info, providerId: string, input: Provider.UpdateInput) => Effect.Effect<void, Failure>
   readonly test: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<Provider.TestResult, Failure>
-  readonly connect: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<void, Failure>
-  readonly disconnect: (actor: Actor.Info, providerId: string) => Effect.Effect<void, Failure>
+  readonly saveKey: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<void, Failure>
+  readonly removeKey: (actor: Actor.Info, providerId: string) => Effect.Effect<void, Failure>
   readonly models: (actor: Actor.Info, providerId: string) => Effect.Effect<Provider.ModelList, Failure>
   readonly updateModels: (
     actor: Actor.Info,
@@ -211,7 +211,7 @@ export const layer = Layer.effect(
         const owned = yield* ownedOf(providerId)
         if (input.method && !ModelLists.methodsOf(owned.provider).includes(input.method))
           return yield* new Primitive.Invalid({ message: `${owned.provider.name} has no ${input.method} method.` })
-        yield* owned.plugin.update(providerId, actor.organizationId, input)
+        yield* rejected(owned.plugin.update(providerId, actor.organizationId, input))
         yield* lists.refresh(actor.organizationId)
       }),
       test: Effect.fn("ProviderSettings.test")(function* (actor, providerId, fields) {
@@ -220,19 +220,19 @@ export const layer = Layer.effect(
         yield* checked(owned.provider, fields)
         return yield* rejected(owned.plugin.test(providerId, actor.organizationId, fields))
       }),
-      connect: Effect.fn("ProviderSettings.connect")(function* (actor, providerId, fields) {
+      saveKey: Effect.fn("ProviderSettings.saveKey")(function* (actor, providerId, fields) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         yield* checked(owned.provider, fields)
         yield* rejected(
-          owned.plugin.connect(providerId, actor.organizationId, fields, yield* Actor.memberOf(database.db, actor)),
+          owned.plugin.saveKey(providerId, actor.organizationId, fields, yield* Actor.memberOf(database.db, actor)),
         )
         yield* lists.refresh(actor.organizationId)
       }),
-      disconnect: Effect.fn("ProviderSettings.disconnect")(function* (actor, providerId) {
+      removeKey: Effect.fn("ProviderSettings.removeKey")(function* (actor, providerId) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
-        yield* owned.plugin.disconnect(providerId, actor.organizationId)
+        yield* rejected(owned.plugin.removeKey(providerId, actor.organizationId))
         yield* lists.refresh(actor.organizationId)
       }),
       models,
@@ -245,7 +245,7 @@ export const layer = Layer.effect(
           return yield* new Primitive.Invalid({
             message: `Unknown models: ${unknown.map((model) => model.id).join(", ")}.`,
           })
-        yield* owned.plugin.switchModels(providerId, actor.organizationId, input.models)
+        yield* rejected(owned.plugin.switchModels(providerId, actor.organizationId, input.models))
         yield* lists.refresh(actor.organizationId)
       }),
       // oxlint-disable-next-line ren/no-comments -- Providers P15: a new organization starts on the deployment's default model, `<provider>/<model>`. Without the setting it takes Ren's settings.

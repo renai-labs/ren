@@ -12,9 +12,14 @@ const trimmed = (url: string) => url.replace(/\/+$/u, "")
 
 const unavailable = (cause: RenInference.Failure) => new InferencePlugin.Unavailable({ message: cause.message, cause })
 
-// oxlint-disable-next-line ren/no-comments -- A 400 from the inference service is the vendor's message or a field it does not take: the person can fix it.
+// oxlint-disable-next-line ren/no-comments -- A 4xx from the inference service (the vendor's message, a field it does not take, a provider it does not offer) is final for this request: the person sees it, and no retry changes it.
 const rejectedOr = (cause: RenInference.Failure) =>
-  cause._tag === "Primitive.Invalid" ? new InferencePlugin.Rejected({ message: cause.message }) : unavailable(cause)
+  cause._tag === "Primitive.Invalid" ||
+  cause._tag === "Primitive.NotFound" ||
+  cause._tag === "Primitive.Forbidden" ||
+  cause._tag === "Primitive.Conflict"
+    ? new InferencePlugin.Rejected({ message: cause.message })
+    : unavailable(cause)
 
 // oxlint-disable-next-line ren/no-comments -- Providers §6.2: the inference service's providers and models through the Ren Inference Service; brains call its LiteLLM (`REN_INFERENCE_BRAIN_URL`) with a key it mints per brain.
 export const plugin = Effect.gen(function* () {
@@ -41,15 +46,15 @@ export const plugin = Effect.gen(function* () {
       ),
     settings: (organizationId) => inference.providerSettings(organizationId).pipe(Effect.mapError(unavailable)),
     update: (provider, organizationId, change) =>
-      inference.updateProvider(organizationId, provider, change).pipe(Effect.mapError(unavailable)),
+      inference.updateProvider(organizationId, provider, change).pipe(Effect.mapError(rejectedOr)),
     switchModels: (provider, organizationId, models) =>
-      inference.switchModels(organizationId, provider, models).pipe(Effect.mapError(unavailable)),
+      inference.switchModels(organizationId, provider, models).pipe(Effect.mapError(rejectedOr)),
     test: (provider, organizationId, fields) =>
       inference.testKey(organizationId, provider, fields).pipe(Effect.mapError(rejectedOr)),
-    connect: (provider, organizationId, fields, savedBy) =>
+    saveKey: (provider, organizationId, fields, savedBy) =>
       inference.saveKey(organizationId, provider, fields, savedBy).pipe(Effect.mapError(rejectedOr)),
-    disconnect: (provider, organizationId) =>
-      inference.removeKey(organizationId, provider).pipe(Effect.mapError(unavailable)),
+    removeKey: (provider, organizationId) =>
+      inference.removeKey(organizationId, provider).pipe(Effect.mapError(rejectedOr)),
     limits: (provider, organizationId, query) =>
       inference.limits(organizationId, provider, query).pipe(Effect.mapError(unavailable)),
   } satisfies InferencePlugin.Plugin
