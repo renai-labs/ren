@@ -1,536 +1,62 @@
 ---
 title: Channels
 icon: AtSign
-description: Send work to Ren from Slack, GitHub, Linear, Telegram, WhatsApp, and email, and get replies in the same conversation.
+description: Mention Ren in Slack or on GitHub, choose which space each Slack channel or repository works in, and decide who Ren runs as for people without a Ren account.
 summary: Talk to Ren from Slack and GitHub
 ---
 
-A channel connects a Ren project to Slack, GitHub, Linear, Telegram, WhatsApp, or email. You send requests there, and Ren replies in the same conversation. Use a channel when your whole team must use Ren. Also use it to give work to Ren and read the reply later.
+A channel lets your team ask Ren for work where they already talk: in Slack, or on GitHub issues and pull requests. Ren works in a [space](/docs/spaces/), and replies in the same thread.
 
-```text
-When you finish this issue, post a two-line summary in our Slack channel.
-```
+| Channel | How you reach Ren                                                              | One chat is                |
+| ------- | ------------------------------------------------------------------------------ | -------------------------- |
+| Slack   | Mention `@Ren` in a channel, or send Ren a direct message                      | A Slack thread             |
+| GitHub  | Mention the Ren app in an issue, a pull request, a comment or a review comment | An issue or a pull request |
 
-## How channels work
+Each chat also shows in the app, so you can continue it there. Its header links back to the thread.
 
-A channel is another way to reach the same [project](/docs/concepts/projects/). Channel chats use the same project instructions, skills, apps, and storage as web app chats.
+## Connect Slack or GitHub
 
-- **Project mapping:** You map each channel to a project. People in that conversation can send requests, subject to sender matching and fallback rules. Slack DMs and WhatsApp use your personal space without a mapping. An open [task](/docs/tasks/) assigned to a project can route its linked conversation to the chat of that task.
-- **Conversation history:** The first message starts a Ren [chat](/docs/chats/). Later messages in the same conversation continue it with the existing context. The [channel table](#each-channel) lists the conversation boundary of each channel.
-- **Files:** Replies can include files.
-- **Web app:** Every channel chat also shows in the web app, so you can continue it there. What Ren sent to the channel shows as its reply, under a **Sent on** caption that names the channel. Chats from Slack, GitHub, and Linear have an **Open in** link in the chat header. The link takes you back to the original conversation.
+1. Open **Settings → Channels** and select Slack or GitHub.
+2. Select **Connect Slack** or **Connect GitHub**, and approve Ren in the Slack workspace or on the GitHub organization. On GitHub, choose the repositories Ren can see.
 
-## Set up a channel
+To add a repository later, give the Ren app access to it on GitHub.
 
-| Channel               | Install                                               | Mapping                                                                      |
-| --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Slack, GitHub, Linear | Once for the organization, in **Settings → Mentions** | An organization admin maps them to projects                                  |
-| Telegram, email       | No install                                            | Per project, on the **@Ren** tab of the project                              |
-| WhatsApp              | No install                                            | No mapping. Each person connects their own number in **Settings → Mentions** |
+## Link a channel or repository to a space
 
-Only an organization admin can install Slack, GitHub, and Linear, or map them to projects. In a shared space, the **@Ren** tab of the project is for organization admins. In your [personal space](/docs/spaces/), you can turn on email and add Telegram chats yourself.
+Link a Slack channel or a repository to the space whose apps, repositories and instructions the work needs.
 
-<SurfaceTabs>
-<Fragment slot="app">
+1. Open the space, then **Channels**, and select **Add channel**.
+2. Pick the Slack channels or repositories, then link them.
 
-Open **Settings → Mentions** to see each channel and its connection status.
+You can also link them from Slack or GitHub in **Settings → Channels**. Each Slack channel or repository works in one space. Members of a space can link places to it.
 
-<Screenshot
-  shot="channels/overview/settings-mentions"
-  alt="Settings Mentions listing each channel with its connection status"
-  caption="Settings → Mentions lists each channel and shows if it is connected."
-/>
+## Where Ren works
 
-</Fragment>
-</SurfaceTabs>
+| Message from                              | Space                                                           |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| A thread linked to a [task](/docs/tasks/) | The space of the task                                           |
+| A linked Slack channel or repository      | The linked space                                                |
+| Any other Slack channel or repository     | The oldest space of the organization, such as **General Space** |
+| A Slack direct message                    | The sender's personal space                                     |
 
-## Each channel
+## Who Ren runs as
 
-| Channel                              | A project maps to               | How you reach Ren                       | One chat is                                       |
-| ------------------------------------ | ------------------------------- | --------------------------------------- | ------------------------------------------------- |
-| [Slack](/docs/channels/#slack)       | A Slack channel                 | @mention Ren in a thread, or DM Ren     | A Slack thread                                    |
-| [Linear](/docs/channels/linear/)     | A Linear project                | Assign an issue to Ren, or @mention Ren | A Linear agent session                            |
-| [GitHub](/docs/channels/#github)     | A GitHub repository             | Mention `@renagent` on a pull request   | A pull request                                    |
-| [Email](/docs/channels/email/)       | The project's own email address | Send an email to the address            | An email thread                                   |
-| [Telegram](/docs/channels/telegram/) | A Telegram group or DM          | @mention the bot, reply to it, or DM it | A reply chain                                     |
-| [WhatsApp](/docs/channels/whatsapp/) | Nothing: your personal space    | Text Ren's WhatsApp number              | A conversation, until 12 hours of quiet or `/new` |
+Ren runs each message as the person who sent it, so it uses their access. It matches the sender to a Ren member by the account they signed in to Ren with, or by the email on their Slack or GitHub profile.
 
-**Slack:** Ren replies to mentions in mapped channels in threads. DMs use your personal space and need no mapping.
+When the sender has no Ren account, or is not a member of the space, Ren runs as the person in **Run unknown senders as**. Select `✎` on a linked place to change it, or pick **Nobody** to answer only Ren members.
 
-**Linear:** Ren works as a [Linear agent](https://linear.app/docs/agents-in-linear) and posts progress and responses on the issue. One issue can contain several agent sessions, and each agent session has a separate Ren chat.
+In a place that is not linked, Ren runs unknown senders as the person who connected Slack or GitHub, except in a public repository, where it answers only Ren members.
 
-**GitHub:** Mention `@renagent` in a pull request comment or in a comment on a diff line. Ren reads the pull request, replies, and can push commits.
+## Triggers
 
-**Email:** Each project has its own address, such as `acme.support@agents.renai.build`. Put the address in **To**, **CC**, or **BCC**. Ren replies in the email thread.
+A trigger starts Ren without a mention. On a linked repository, turn on **Review pull requests when ready** to have Ren review each pull request when it is opened or marked ready for review.
 
-**Telegram:** A project link adds the bot to a group or a DM. In a group, mention the bot or reply to it. In a DM, send a message. Reply to a Ren message to continue its chat.
+## Unlink or disconnect
 
-**WhatsApp:** Connect your number once, then text Ren's number. Messages run in your personal space. Ren can reply only within 24 hours of your last message, so it cannot post to WhatsApp on its own.
-
-## Work across channels
-
-A project can use every channel that you map to it, not only the channel that a message came from. For example, a project has a Slack channel and a Linear project mapped. A chat that starts from a Linear issue can post a summary to the Slack channel of the project.
-
-Ren can post only to the channels mapped to the project of the chat. It can always reply in the source conversation of the chat, also after a [task](/docs/tasks/) moves the work to another project.
-
-## Project routing
-
-Ren sends each incoming message to its mapped project. A conversation can link to an open [task](/docs/tasks/) that has a project. Then Ren sends the message to the chat of that task first.
-
-When nothing matches:
-
-| Channel  | What happens                                                                                               |
-| -------- | ---------------------------------------------------------------------------------------------------------- |
-| Slack    | Ren posts "This channel isn't connected to a Ren project yet." with a **Connect to Ren** button.           |
-| Linear   | Ren posts "No Ren project is mapped to this issue" on the issue.                                           |
-| GitHub   | Ren ignores the mention.                                                                                   |
-| Email    | Ren drops the email and does not reply.                                                                    |
-| Telegram | In a DM, the bot replies that the chat is not connected to a Ren project yet. In a group, it stays silent. |
-| WhatsApp | Ren replies that the number is not connected to Ren yet.                                                   |
-
-## Senders
-
-Ren runs each message as the person who sent it, so the chat belongs to that person. Ren matches the sender to a Ren user in the space of the project:
-
-| Channel  | How Ren matches the sender                                               |
-| -------- | ------------------------------------------------------------------------ |
-| Slack    | Signing in to Ren with Slack, or the email on the sender's Slack profile |
-| Linear   | The email on the sender's Linear account                                 |
-| GitHub   | The sender's public GitHub email                                         |
-| Email    | The sender's email address                                               |
-| Telegram | A Telegram account linked to Ren in **Settings → Mentions → Telegram**   |
-| WhatsApp | The number connected in **Settings → Mentions → WhatsApp**               |
-
-### Fallback sender
-
-Sometimes the sender has no matching Ren account, or does not belong to the [space](/docs/spaces/) of the project. Then Ren uses the **fallback sender** of the mapping. You choose a space member when you map the channel. GitHub calls this the **default sender**, and Linear calls it the **session sender**.
-
-A fallback sender lets teammates without a Ren account send work to Ren. Ren examines the sender again on every message, so several people can work in the same conversation.
-
-If neither account belongs to the space, Ren does not run the request. Slack, GitHub, and Telegram explain the rejection. Linear and email send no reply. WhatsApp has no fallback sender: only connected numbers reach Ren.
-
-## Attachments
-
-| Channel  | What Ren receives                 | Limits                                      |
-| -------- | --------------------------------- | ------------------------------------------- |
-| Slack    | Files and snippets in the message | Ren skips files over 32 MB and adds a note. |
-| Telegram | Documents and photos              | Ren skips files over 32 MB and adds a note. |
-| WhatsApp | Files, photos, and voice notes    | Ren skips files over 32 MB and adds a note. |
-| Email    | Attachments on the email          | None set by Ren.                            |
-| GitHub   | The comment text only             | Ren reads the pull request itself.          |
-| Linear   | The issue and comment text only   | None.                                       |
-
-Ren reads images, text files, and PDFs directly. Ren saves other file types, such as ZIP archives, to the machine of the space. Ren can open them there with its tools.
-
-## Troubleshooting
-
-### Ren does not ask for permission in a channel
-
-Channel chats deny actions that need approval and continue without them. They also cannot ask clarification questions. Set the necessary actions to **Allow** in the [permissions](/docs/concepts/projects/) of the project.
-
-### Ren does not reply to a message
-
-No project matches the conversation, or the sender and the fallback sender do not belong to the space. See [Project routing](#project-routing) and [Fallback sender](#fallback-sender) for what each channel does.
+- To stop Ren answering in one place, open `⋯` on its row and select **Unlink**.
+- To disconnect Slack or GitHub, open it in **Settings → Channels** and select **Disconnect**. This unlinks every place, and Ren stops answering there.
 
 ## Good to know
 
-- Channels bring Ren to everyone in the tools they already use, also to people who never open the web app. Use the [web app](/docs/#use-from-anywhere) for longer work, or when you must answer Ren's questions or approve its actions.
-- A project can have several GitHub repositories, Linear projects, and Telegram chats. The **@Ren** tab maps one Slack channel for each project. Each project has one email address.
-- Each Slack channel, repository, Linear project, Telegram chat, and email address maps to one project at a time.
-- Ren uses the [credentials](/docs/credentials/) of the space of the project, not those of the sender. In a shared space, Ren uses the credentials of the space, then those of the organization.
-- In the API and CLI, the channel resources are `slack`, `github`, `linear`, `telegram`, `whatsapp`, and `email`.
-
-## Slack
-
-Ren is an app in your Slack workspace. Map a Slack channel to a Ren [project](/docs/concepts/projects/), and people can mention Ren there. Ren replies in a thread, and each thread is one Ren [chat](/docs/chats/).
-
-```text
-@Ren summarize the open bugs from this week and draft a fix for the top one
-```
-
-### When to use Slack
-
-Use Slack for requests that come up in team conversations, such as summaries, lookups, or drafts. Ren reads the thread context and shares progress and results with the channel. Use the [web app](/docs/#use-from-anywhere) for longer chats or for actions that need approval.
-
-### Install Ren in Slack
-
-You connect Slack one time for your organization. You need:
-
-- **A Ren organization admin:** Only admins can connect Slack and map channels.
-- **Permission to install apps in your Slack workspace:** If your Slack workspace needs app approval, a Slack workspace admin must approve Ren.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-1. Go to **Settings → Mentions**.
-2. In the **Communication** section, select **Install Ren on Slack**.
-3. In Slack, approve the permissions that Ren asks for.
-
-<Screenshot
-  shot="channels/slack/install"
-  alt="Settings Mentions with the Slack row and the Install Ren on Slack button"
-  caption="The Communication section of Settings → Mentions shows the Install Ren on Slack button."
-/>
-
-</Fragment>
-<Fragment slot="cli">
-
-```sh
-ren slack install
-```
-
-Open the Slack authorization URL that the command prints, and approve the permissions.
-
-</Fragment>
-</SurfaceTabs>
-
-After the install, Ren joins your public channels and the **Connect your Slack channels** dialog opens. Map channels to projects, or select **Skip for now**. Ren also sends a DM to the person who installed it, with suggestions of work it can do.
-
-### Channel mappings
-
-Ren responds only in channels that you map to a project. Each channel maps to one project.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-1. Open the project and go to the **@Ren** tab.
-2. On the **Slack** card, pick a channel and an optional fallback sender.
-
-Ren saves the changes automatically. You can also map channels for every project from **Settings → Mentions → Slack**. Select a project, then select the channel to route to it.
-
-<Screenshot
-  shot="channels/slack/map-channel"
-  alt="A project's @Ren tab with a Slack channel selected on the Slack card"
-  caption="The Slack card on the @Ren tab of a project, with a channel selected."
-/>
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Map the #support Slack channel to the Support project." />
-
-Mapping needs an organization admin, so ask from an admin account.
-
-</Fragment>
-<Fragment slot="cli">
-
-```sh
-ren slack channels list
-ren slack channels set <channel-id> --project-id <project-id> --fallback-sender-user-id <user-id>
-```
-
-</Fragment>
-</SurfaceTabs>
-
-When you map a channel for the first time, Ren posts "This channel is now connected to the Ren project …" in it.
-
-| Channel type | What to do                                                                        |
-| ------------ | --------------------------------------------------------------------------------- |
-| Public       | Nothing. Ren joins the channel by itself when you map it.                         |
-| Private      | Run `/invite @Ren` in the channel first, so that the channel appears in the list. |
-
-### Talk to Ren
-
-In a mapped channel, @mention Ren. You must @mention Ren for each request, follow-ups included.
-
-- **Reply:** Ren replies in a thread under your mention.
-- **Thread context:** When you mention Ren in an existing thread, it reads the messages and files since its last mention. The first time, it reads the whole thread.
-- **Status:** Ren adds 👀 when it starts and ✅ when it replies. Longer requests show a task list.
-- **Follow-up buttons:** A reply can have up to three follow-up buttons. When you select a button, Ren sends that suggestion as your next message.
-
-To continue a chat in more depth, open it in the [web app](/docs/#use-from-anywhere). To go back to the thread, select **Open in Slack** in the chat header.
-
-{/* Media placeholder (clip `channels/slack/mention`): Mention Ren in a channel, watch 👀 and the task list update, get the reply with follow-up buttons, then open the same chat in the web app. Answers: what does working with Ren in Slack look like end to end? */}
-
-### What Ren can do in Slack
-
-In a chat, Ren uses the Slack tools as its own bot, not as you. It can:
-
-- **Messages:** Answer in the thread, and when you ask, send, schedule, edit, and delete messages in other channels and threads, add reactions, and post files.
-- **Reading:** Read channels, threads, reactions, and files, and look up people, channels, and members.
-- **Search:** Search messages and files in public channels, as the person whose message started the chat. Search works only in chats that start from a Slack mention or DM, for a short time after that message.
-- **Canvases:** Create, read, and update canvases. Ren shares each new canvas with the channel of the thread, or with the channel you name. Canvases need a paid Slack plan.
-
-In a shared space, Ren does not read or post in DMs or group DMs. DMs and group DMs work only in your personal space.
-
-Workspaces that installed Ren before these tools must install it again: search, canvases, emoji, and group DMs need new Slack permissions.
-
-### Task cards
-
-A [task](/docs/tasks/) URL in Slack shows a task card. The card shows the task ID, title, status, priority, agent, latest pull request and latest chat. Select the card to see the description, links, chats and latest activity.
-
-- **Threads:** A task created from a thread links it. Ren posts one card in each linked thread. When the task changes, Ren edits the card.
-- **Notices:** When a task needs a person or is done, Ren posts a notice with the card in each linked thread. The notice tags the task's owner, else its creator.
-- **Who sees the title:** Everyone in the channel can see a card. The title, description, links and chats show only in a channel mapped to the task's space. Elsewhere the card shows the task ID.
-- **Other links:** Chat links do not get a card. Ren's own messages do not unfurl links.
-- **Buttons:** The card's buttons follow the task's state. A click acts as you, so you must have a Ren account and be a member of the task's space. Otherwise, only you see a reply that tells you why.
-
-| Task state                | Buttons      | More actions              |
-| ------------------------- | ------------ | ------------------------- |
-| No agent and no owner     | Assign to me | Open in Ren, Dismiss      |
-| No agent, with an owner   | Open in Ren  | Dismiss                   |
-| Has an agent, not started | Start        | Open in Ren, Dismiss      |
-| In progress               | Open session | Request review, Mark done |
-| Needs review, with a PR   | Approve      | Open session, Open PR     |
-| Needs review, with no PR  | Start build  | Open plan                 |
-| Done or dismissed         | Open in Ren  | Open PR                   |
-
-**Start build** approves the review, as **Approve** does. To request changes or assign an agent, open the task in Ren.
-
-Workspaces that installed Ren before task cards must install it again: the cards need new Slack permissions.
-
-### Who Ren acts as
-
-Ren matches you to a Ren user if you signed in to Ren with Slack, or by the email on your Slack profile. You must also be a member of the [space](/docs/spaces/) of the project.
-
-A chat runs as the **fallback sender** when the writer of the message has no matching Ren account. It also runs as the fallback sender when the writer is not in the space. For more about space membership, see [Channels](/docs/channels/).
-
-Several people can use one chat through the same Slack thread. Each mention or follow-up selection runs as its sender. If account matching fails, it runs as the fallback sender.
-
-The mapped project supplies the instructions, apps, skills, and storage. The space of the project sets the membership and the [credentials](/docs/credentials/) that Ren can use. Ren uses the credentials of that space, not the credentials of the sender.
-
-### DMs
-
-Open Ren from the **Messages** tab of the Ren app in Slack, and send a message.
-
-- **Project:** DMs run in the **Default** project in your **personal space**, so they do not need a mapping. They can also use your personal credentials.
-- **Chats:** Each new message at the top level starts a new chat. Reply in its thread to continue it.
-- **Mentions:** You do not need to @mention Ren in DMs.
-- **Account:** Your Slack account must match a Ren account in the organization. Ren matches you when you sign in with Slack, or by the email on your Slack profile. DMs have no fallback sender.
-
-### Automatic summaries, profiles, and suggestions
-
-When you install Slack, Ren starts the member schedules. When you map a channel, Ren starts the channel schedules and tells you that they are active. These schedules run without individual requests.
-
-| Schedule            | When                                       | What Ren does                                                                                                              |
-| ------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Channel summaries   | Each morning                               | Reads new messages in mapped channels and updates their summaries. It does not post a reply.                               |
-| Channel suggestions | Once a week, midweek, during working hours | Can post one suggestion with up to three follow-up buttons. It posts only the suggestions that it is confident are useful. |
-| Member profiles     | Twice a week                               | Builds a private profile of each member from their Slack messages.                                                         |
-| Member suggestions  | Once a week                                | Can send one suggestion in a DM.                                                                                           |
-
-{/* Media placeholder (screenshot `channels/slack/suggestion`): A suggestion Ren posted in a channel, with its follow-up buttons. Answers: what does a default suggestion look like? */}
-
-- **Members:** The member schedules start for existing members at the install, and for new members when they join.
-- **Unanswered suggestions:** Ren waits for a reply before it posts another suggestion. It dismisses unanswered suggestions after 14 days. These suggestions can come back after 30 days. Declined suggestions never come back.
-- **Reduced frequency:** After three consecutive weekly runs without a useful suggestion, Ren checks monthly.
-- **Tasks:** Each suggestion is a [task](/docs/tasks/). Channel suggestions are tasks in the mapped project, and the space of the project can see them. DM suggestions are tasks in your personal space.
-
-These run as [schedules](/docs/automations/) in the mapped project and in the personal space of each member. They use the time zone of the organization. Ren keeps channel summaries and profiles as files in [file stores](/docs/drive/) in those projects.
-
-To turn them off, ask Ren, or pause or delete the schedules on the **Scheduled** page:
-
-```text
-Stop posting suggestions in #support.
-```
-
-### Disconnect
-
-- **Unmap a channel:** Clear the channel on the **@Ren** tab of the project, or remove it in **Settings → Mentions → Slack**. Ren stops responding to new mentions there.
-- **Disconnect Slack:** In **Settings → Mentions → Slack**, select **Reset mappings**. This clears every channel mapping and uninstalls Ren from Slack. You can connect again later.
-
-When you unmap a channel, disconnect Slack, or connect it again, the default schedules do not stop. They run until you turn them off.
-
-### Troubleshooting
-
-#### Ren does not respond at all
-
-- **You replied without a mention:** In channels, each message to Ren needs an @mention, follow-ups in a thread included.
-- **The channel is not mapped, and Ren is not in it:** Map the channel. For a private channel, run `/invite @Ren` first.
-- **Slack is disconnected:** Make sure that Slack shows as **Connected** in **Settings → Mentions**.
-- **Ren started but never replied:** If only the 👀 shows, open the chat in the web app to see what happened.
-
-#### "This channel isn't connected to a Ren project yet."
-
-The channel has no mapping. An admin can select **Connect to Ren** under the message, or map the channel in **Settings → Mentions → Slack**.
-
-#### A private channel does not appear in the list
-
-Ren can see only the private channels that you invite it to. Run `/invite @Ren` in the channel, then open the list again.
-
-#### "Couldn't map your Slack account to a Ren user."
-
-Ren could not match the sender to a Ren user, and the channel has no fallback sender. Sign up for Ren with the same email as your Slack profile. Or ask an admin to set a fallback sender on the channel mapping.
-
-In a DM, there is no fallback sender. Make sure that the email on your Slack profile matches your Ren account.
-
-#### "Neither your Slack account nor the channel's fallback user is a member of this project's space."
-
-The project is in a [space](/docs/spaces/), and neither you nor the fallback sender is a member of it. Add yourself to the space, or pick a fallback sender who is a member.
-
-#### "The project connected to this channel no longer exists."
-
-Someone deleted the mapped project. Map the channel to another project.
-
-#### "Your private Ren project isn't set up yet."
-
-Your account has no personal space in the organization that installed Ren in Slack. Sign in to Ren in that organization, then send Ren a DM again.
-
-#### "Ren hit a snag and couldn't finish"
-
-The chat failed before the end, and Ren marks your message with ❌. Open the chat in the web app to see the error, then mention Ren again to try again. If the message says that your organization has no more credits, add credits in **Settings → Billing & plans**.
-
-#### "This Slack workspace is already connected to another Ren organization."
-
-A Slack workspace can connect to only one Ren organization. Disconnect it from the other organization first.
-
-### Good to know
-
-- **Who can send requests:** Anyone in a mapped channel. People without a Ren account use the fallback sender of the channel. DMs need a matching Ren account in the organization.
-- **What Ren posts:** Text, tables, files that it creates, and follow-up buttons. Ren can also post in other channels that are mapped to the same project.
-- **Files:** Ren gets the files and snippets attached to the message that mentions it, and to earlier messages in the thread. Ren skips files over 32 MB and sees a note about each one.
-- **Other bots:** Ren ignores DMs from other bots. In a channel, Ren handles a mention from another app like any mention. It runs as the fallback sender of the channel, because an app has no Ren account.
-- **Approvals:** Slack chats deny actions that need approval and continue without them. Set the [project permissions](/docs/concepts/projects/) before you send requests.
-- **Tasks that link a thread:** While a task is open and has a project, mentions in its linked Slack thread go to the chat of the task. They do not go to the project of the channel. This works also in a channel that is not mapped.
-- **Connect an app:** Ren does not ask you to connect an app from Slack. The **Connect** card for an app shows only in the web app. Open the chat in the web app to connect the app, or connect it from the project first.
-
-## GitHub
-
-With the Ren GitHub app, you give Ren work from a pull request. Install the app in your GitHub organization and map a repository to a [Ren project](/docs/concepts/projects/). Then mention `@renagent` on a pull request. Ren reads the work, replies, and can push commits.
-
-```text
-@renagent the null check in parseConfig is missing. Fix it and add a test.
-```
-
-### Install the Ren GitHub app
-
-You install the Ren GitHub app one time for each GitHub organization, and you choose the repositories it can access. The app has its own identity, separate from your personal GitHub account.
-
-| Where     | Who can install                                                                                      |
-| --------- | ---------------------------------------------------------------------------------------------------- |
-| In Ren    | An organization admin starts the install.                                                            |
-| On GitHub | A person with permission to install apps on the organization. That is usually an organization owner. |
-
-If you cannot install the app yourself, GitHub sends the request to an owner for approval.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-1. Go to **Settings → Mentions**.
-2. In the **Git providers** section, select **Install Ren on GitHub**.
-3. On GitHub, pick the organization.
-4. Choose **All repositories** or **Only select repositories**.
-5. Approve the install. You go back to Ren.
-
-{/* Media placeholder (screenshot `channels/github/install`): GitHub's install screen with repository access set to selected repositories. Answers: which repositories does Ren get access to? */}
-
-</Fragment>
-<Fragment slot="cli">
-
-```sh
-ren github install
-```
-
-Open the GitHub URL that the command prints, and finish the install there.
-
-</Fragment>
-</SurfaceTabs>
-
-### Map repositories to a project
-
-A repository reaches Ren only after you map it to a project. Each repository maps to one project, and a project can have several repositories.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-1. Add the repository to the project. See [Projects](/docs/concepts/projects/).
-2. Open the **@Ren** tab of the project.
-3. On the **GitHub** card, pick the repository.
-
-To map several repositories to one project, use **Settings → Mentions → GitHub**. Select a project, then select each repository to route to it.
-
-<Screenshot
-  shot="channels/github/map-repo"
-  frame="detail"
-  alt="The GitHub integration dialog with the project's repository selected"
-  caption="The GitHub integration dialog shows the repository that you select for the project."
-/>
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Map the acme/storefront GitHub repository to this project." />
-
-Mapping needs an organization admin, so ask from an admin account.
-
-</Fragment>
-<Fragment slot="cli">
-
-```sh
-ren github repos
-ren github mappings set <repo-id> --installation-id <id> --repo-full-name acme/storefront --project-id <project-id>
-```
-
-To set a fallback sender, add `--fallback-sender-user-id <user-id>`.
-
-</Fragment>
-</SurfaceTabs>
-
-### Mention @renagent
-
-Mention `@renagent` in a comment on a pull request, or in a review comment on a line of the diff.
-
-When Ren starts, it adds 👀 and underlines `@renagent`. Ren can reply, review the pull request, or push commits. When Ren finishes, it usually replaces 👀 with 🚀.
-
-{/* Media placeholder (clip `channels/github/mention`): Mention @renagent on a pull request, see the 👀 reaction, then Ren's reply and the commit it pushed. Answers: what happens after I mention Ren? */}
-
-Ren replies to mentions on pull requests in mapped repositories. It ignores:
-
-- Ordinary issues
-- Unmapped repositories
-- Comments from other bots
-
-### Chats and branches
-
-Every mention on the same pull request continues one chat. This includes replies to the comments of Ren. A mention on a different pull request starts another chat.
-
-On a pull request, Ren works on the branch of that pull request. In any chat, you can tell Ren which branch to check out.
-
-Ren works on the machine of the project's space. Each chat gets its own working directory there, so several chats can work on the same repository at the same time.
-
-### Link tasks
-
-Name a [task](/docs/tasks/) in a pull request or an issue, and Ren links them. Ren reads the branch name, the title and the description. It reads them when you open, edit or reopen the pull request or issue.
-
-| You write                | Example                                |
-| ------------------------ | -------------------------------------- |
-| The task ID, in any case | `ACME-42`, or the branch `acme-42-fix` |
-| The task URL             | `https://useren.ai/tasks/ACME-42`      |
-
-Ren reads only the task IDs of the organization that installed the app. Words such as `Fixes` or `Closes` change nothing. When the pull request merges, Ren sets each task that links it to done.
-
-Ren posts one comment on each linked pull request and issue. The comment shows the task ID, title, status and agent, and a link to each chat of the task. When the task changes, Ren edits the same comment.
-
-#### Make task IDs links on GitHub
-
-A GitHub autolink turns each task ID in GitHub into a link to the task. A repository admin adds it one time for each repository:
-
-1. On GitHub, open the repository's **Settings → Autolink references**.
-2. Select **Add autolink reference**.
-3. In **Reference prefix**, enter your organization's task prefix and a hyphen, such as `ACME-`.
-4. In **Target URL**, enter `https://useren.ai/tasks/ACME-<num>`.
-5. Choose **Numeric**, so that only numbers after the prefix match. Then select **Add autolink reference**.
-
-### Who Ren commits as
-
-The author of the commits and comments of Ren depends on the [space](/docs/spaces/) of the project.
-
-| Space          | Author of commits and comments                |
-| -------------- | --------------------------------------------- |
-| Shared space   | The Ren app, not the person who mentioned Ren |
-| Personal space | Your GitHub account                           |
-
-To connect your GitHub account for a personal space:
-
-1. Open **Settings → Mentions**.
-2. Find the GitHub row marked **Needs attention**.
-3. Select **Connect your GitHub account**.
-
-Ren matches the commenter by their public GitHub email. If no Ren account matches, Ren uses the fallback sender of the repository. If neither belongs to the space of the project, Ren explains the rejection in a comment and does not act. See [Channels](/docs/channels/).
-
-### Good to know
-
-- To give Ren more repositories later, change the repository access of the app in your GitHub organization settings.
-- GitHub chats deny actions that need approval, and continue without them. Configure [project permissions](/docs/concepts/projects/) before you send requests.
-- Ren ignores mentions on ordinary issues, in unmapped repositories, and from other bots.
-- Mapping a repository needs an organization admin.
+- A chat from a channel cannot ask you to approve an action. Allow what it needs in [permissions](/docs/permissions/).
+- In each Slack thread and GitHub issue or pull request linked to a task, Ren posts a card with the task's title and status, and keeps it up to date.

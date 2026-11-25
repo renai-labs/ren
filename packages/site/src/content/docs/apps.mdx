@@ -1,383 +1,233 @@
 ---
 title: Apps
 icon: Cable
-description: Find an app such as Gmail, Linear, or Shopify, or create your own from MCP servers and skills. Add it to a space, connect an account, and use it in chats.
-summary: Connect your agents to 350+ apps
+description: Give Ren tools for services such as Gmail, Linear or Shopify. Connect an account of an app, choose the spaces that use it, and make your own apps from MCP servers and skills.
+summary: Connect Ren to 350+ apps
 ---
 
-An app connects Ren to a service like Gmail, Linear, HubSpot, or Shopify. For example, Gmail lets Ren read, summarize, and draft email.
+An app gives Ren tools for a service, such as Gmail, Linear or Shopify. To use an app, you connect an account of it, such as your Gmail sign-in, and choose the [spaces](/docs/spaces/) that use that account. Every chat in those spaces can then use the app.
 
-```text
-@Gmail summarize my unread email from today.
-```
+<Screenshot
+  shot="apps/home"
+  alt="The Apps page with the All, Managed, Organization and Installed tabs, and the Popular and Engineering categories"
+  caption="Apps, with the apps of Ren's registry by category."
+/>
 
-## How apps work
+## Apps and accounts
 
-An app gives Ren tools through one or more MCP servers. It can also include [skills](/docs/apps/#skills) that explain how to use those tools. You connect the account or key that the app needs.
+An app is the same for everyone in Ren. What you add to a space is an app account: the sign-in or key that Ren uses for that app. The account decides whose Gmail Ren reads, and which spaces can use it.
 
-Add an app to a [space](/docs/spaces/) to make it available in every chat of that space. An **account** holds the sign-ins and keys of an app. Several spaces can use the same account.
+| Example                                   | App       | Account          | Spaces that use the account   |
+| ----------------------------------------- | --------- | ---------------- | ----------------------------- |
+| You connect your own mailbox              | Gmail     | Maya's Gmail     | Personal                      |
+| Your team shares one Linear workspace     | Linear    | Northwind Linear | Customer Success, Engineering |
+| Ren pays for the service with its credits | Firecrawl | Managed by Ren   | Growth                        |
 
-| Part                       | What it does                           | Linear example                  |
-| -------------------------- | -------------------------------------- | ------------------------------- |
-| App                        | Gives Ren tools                        | Reads and updates issues        |
-| [Channel](/docs/channels/) | Receives requests and delivers replies | Receives issues assigned to Ren |
+- One account can serve many spaces. Connect it one time, then add it to each space that needs it.
+- One space can use more than one account of the same app, such as two Gmail mailboxes.
 
-There are two kinds of app:
+<Screenshot
+  shot="apps/accounts"
+  frame="detail"
+  alt="The Accounts list of Linear: Maya's Linear with the Personal pill, and Northwind Linear with the Customer Success and Engineering pills"
+  caption="Each account shows the spaces that use it."
+/>
 
-| Kind            | Who makes it                             | Who can edit it                  |
-| --------------- | ---------------------------------------- | -------------------------------- |
-| Ren's registry  | Ren                                      | Nobody. Ren keeps it up to date. |
-| Your org's apps | Someone in your organization, in a space | The members of that space        |
+On an app's page, **Accounts** lists the accounts you can see. The pills next to each account show who can use it:
 
-If no app exists for a service, [create one](#create-an-app) from its MCP server, your skills, or both.
+| Pill            | Who can use the account                                   |
+| --------------- | --------------------------------------------------------- |
+| **Personal**    | Only you, in your personal space                          |
+| A space name    | Everyone in that space                                    |
+| **Every space** | Everyone in the organization. Only an admin can set this. |
+
+A green dot means the account is connected. Other states are **Needs sign-in**, **Sign-in expired** and **Not connected**.
 
 ## Find an app
 
-<SurfaceTabs>
-<Fragment slot="app">
+Open **Apps** in the sidebar. Search by name, or open a category, such as **Engineering** or **Sales and CRM**.
 
-Open **Apps** in the sidebar to browse, or search by name. The **Organization** tab lists the apps that your organization made. Select an app to see its MCP servers, tools, skills, and accounts.
+| Tab              | Shows                                                    |
+| ---------------- | -------------------------------------------------------- |
+| **All**          | The 350+ apps in Ren's registry, by category             |
+| **Managed**      | Apps that can run with no sign-in, paid with Ren credits |
+| **Organization** | Apps that your organization made                         |
+| **Installed**    | Apps that one of your spaces uses                        |
 
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Is there an app for HubSpot?" />
-
-</Fragment>
-</SurfaceTabs>
+Select an app to see example prompts, its accounts, its tools with their price, and its skills. Select a skill to read its instructions. Select an example prompt to start a chat with it.
 
 ## Add an app to a space
 
-<SurfaceTabs>
-<Fragment slot="app">
+Adding an app to a space means choosing the account that the space uses.
 
-<Steps>
+1. On the app's page, select **Add to space**. When one of your spaces already uses the app, the button is **Open in chat**.
+2. Under **Add to**, pick the space.
+3. Pick the account that the space uses, then select **Add to** and the space name:
+   - **Managed by Ren**, when the app offers it. There is nothing to connect.
+   - An account that you already have. Everyone in the space can then use it.
+   - **Connect a new account**: sign in in the window that opens.
 
-1. Open the space, then **Apps**, and select **Add app**.
-2. Pick the app.
-3. If the app needs an account, sign in or enter its key.
-
-</Steps>
-
-You can also open the app from **Apps** and select **Add to space**.
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Add the Linear app to this space." />
-
-If the app needs an account, Ren shows a connect card.
-
-</Fragment>
-</SurfaceTabs>
-
-## Create an app
-
-Create an app when the service you need is not in the list. An app you create can hold MCP servers, skills, or both.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-<Steps>
-
-1. Open **Apps** and select **Create app**. In a space's **Add app** dialog, select **Create app** under the list.
-2. Paste the address of an MCP server, such as `https://mcp.acme.dev/mcp`. Ren reads the server and fills in its sign-in, name, description, and icon. You can change each of them.
-3. To add skills, drop their folders on the dialog, select **Choose folder**, or select **From GitHub** and paste the link to a skill folder.
-4. Under **Add to**, pick the space that owns the app.
-5. Select **Create app**. If the server uses a sign-in, the button is **Create and sign in**: Ren creates the app and opens the sign-in window.
-
-</Steps>
-
-Ren adds the app to its space with a first account, and opens the app's page. A key or token that you typed in the dialog goes into that account, never into the app itself. For the details of MCP servers and their sign-ins, see [Custom MCPs](/docs/apps/#custom-mcps). For skill folders, see [Skills](/docs/apps/#skills).
-
-{/* Media placeholder (detail `apps/create`): The Create app dialog with an MCP server URL checked, OAuth 2.0 picked, a dropped skill, and **Create and sign in**. Answers: how do I make an app for a service that Ren does not list? */}
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Make an app for https://mcp.acme.dev/mcp and add it to this space." />
-
-</Fragment>
-</SurfaceTabs>
-
-### Spec mode
-
-Select **Spec** at the top of the dialog to see the app as YAML. You can paste YAML or JSON there too. Ren checks it as you type, and shows each problem with the field it belongs to, such as `mcps.acme.auth`. **Form** and **Spec** edit the same app, so you can switch back and forth.
-
-Webhooks are edited in Spec mode only.
-
-### Advanced
-
-**Advanced**, under the name, holds settings that most apps do not need:
-
-| Setting        | What it does                                                         |
-| -------------- | -------------------------------------------------------------------- |
-| Packages       | apt, npm, pip, and Go packages that Ren installs for the app         |
-| Build commands | Commands that run after the packages, one per line                   |
-| Depends on     | Other apps of your organization that this app needs                  |
-| Secrets        | Env names, such as `ACME_API_KEY`, that each account fills in        |
-| MCP timeouts   | How long Ren waits for each MCP server to start, list tools, and run |
-
-## Edit, move, or archive an app
-
-Members of the space that owns an app can change it. Open the app from **Apps**:
-
-- Select **Edit** to open the same dialog. Change what you need, then select **Save**. If someone else saved the app since you opened it, Ren shows **The app changed. Reload before saving.** Select **Reload** to start again from the saved app.
-- Select **⋯ → Move to another space** to make another space its owner.
-- Select **⋯ → Archive app** to remove it from every space that uses it.
-
-## Connect an account
-
-When Ren needs an app that is not connected, it shows a connect card in the chat. If the app is not in the space yet, a connection from the card also adds it.
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-<Steps>
-
-1. Select **Connect** on the card in the chat.
-2. Sign in to the account that you want Ren to use, or enter the key that the app asks for.
-3. Go back to Ren. The card shows **Connected**, and Ren continues.
-
-</Steps>
-
-<Video
-  clip="apps/connect-an-app"
-  title="Ask Ren to use Gmail, connect it from the card, and see Ren continue"
-  caption="Ren shows a card when an app is not connected. After you connect it, Ren continues the task."
+<Screenshot
+  shot="apps/open-in-chat"
+  frame="detail"
+  alt="The Linear page with the Open in chat menu open: Chat in Maya Shen's Personal Space, Engineering and Customer Success; Add to General Space and Growth"
+  caption="Chat in lists the spaces that already use the app. Add to lists the others."
 />
 
-</Fragment>
-<Fragment slot="ask-ren">
+<Screenshot
+  shot="apps/connection"
+  frame="detail"
+  alt="The Add Firecrawl to Growth dialog with three choices: Managed by Ren, Maya's Firecrawl in Personal, and Connect a new account"
+  caption="Pick the account that the space uses."
+/>
 
-<AskRen prompt="Connect my Gmail account." />
+### From a space
 
-Select **Connect** on the card that Ren shows, and finish the sign-in.
+Open the space, then **Apps**. **Installed** lists the apps of the space, and **Custom** the apps that the space made. Select **Add app** to add one.
 
-</Fragment>
-</SurfaceTabs>
+Select an app to see the accounts that this space uses. **Add account** connects a new account, or adds one that you already have.
 
-To add a second account, open the app and select **New account**. For where Ren keeps each sign-in, see [Credentials](/docs/credentials/).
+<Screenshot
+  shot="apps/space-account"
+  frame="detail"
+  alt="Linear opened from the Customer Success space: Northwind Linear with the Customer Success and Engineering pills, and its menu with Remove from Customer Success and Delete"
+  caption="The accounts that a space uses, and the menu of each account."
+/>
+
+### Managed by Ren
+
+Some apps can run on Ren's own account. The space then shows **Connected · Managed by Ren**, nothing needs a sign-in, and each tool call uses [Ren credits](/docs/usage/). The app's page shows the price of each tool.
+
+To use your own plan instead, pick your account for that space. Ren asks first, and names the space that stops using Ren credits. To go back, pick **Managed by Ren**: your accounts leave that space and stay in their other spaces.
+
+### When you cannot add an account
+
+Your personal account works only in your personal space. When you add it to a shared space, Ren asks first: **It stops being only yours.**
+
+An account that someone else made can be added only by that person or an admin. Ren shows who can, and **Copy request** gives you a link to send them. The link opens the app with the request ready.
+
+If the app's sign-in is not set up for your organization, Ren says so. Select **Copy message** and send it to an admin.
 
 ## Use an app in a chat
 
-Type `@` in the composer and pick the app. The mention tells Ren which app to use for that request:
+Type `@` in the [chat](/docs/chats/) composer and pick the app, such as "@Gmail summarize my unread email from today". Mention an app when more than one app can do the request.
 
-```text
-@Gmail summarize my unread email from today.
-```
+When Ren needs an app that the space does not use, or an account that is not connected, it shows a connect card in the chat. Select **Connect**, pick or connect an account, and Ren continues. The connect card works in the web app and the mobile app.
 
-Mentions are optional. Mention an app when more than one service can do the request. If the space does not have the app, Ren shows a connect card to add it.
+<Screenshot
+  shot="apps/connect-card"
+  frame="detail"
+  alt="A chat in Growth: Maya asks Gmail for the last invoice from Stripe, and Ren shows a Gmail card with Not connected and Connect"
+  caption="Ren asks for an app it needs, then continues after you connect it."
+/>
 
-## Remove an app from a space
+## Remove an app or an account
 
-Open the space, then **Apps**. Open the row menu of the app and select **Remove from** the space. Accounts that have a sign-in stay in **Settings → Credentials**.
+| To                               | Do this                                                                           | Result                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Stop one space using an app      | Open the space, then **Apps**. In the app's `⋯`, select **Remove from** the space | The space loses the app. Its accounts stay connected for their other spaces. |
+| Stop one space using one account | In the account's `⋯`, select **Remove from** the space                            | The account stays in its other spaces                                        |
+| Sign an account out everywhere   | In the account's `⋯`, select **Delete**                                           | Every space that used it shows **Not connected**. You cannot undo this.      |
 
-## Troubleshooting
+An account that no space uses stays in **Settings → Credentials** while it has a sign-in. Ren deletes it if it has none.
 
-### The sign-in page does not load
+If another app in the space needs the app you remove, that app shows **Needs** and the name of the removed app.
 
-Some apps, such as Figma, Meta Ads, and Shopify, end the sign-in on a page that does not load. This is expected.
+## Create an app
 
-1. Copy the full address of that page from the browser.
-2. Paste it into **Paste the address from the sign-in tab** on the card.
-3. Select **Finish**.
+Create an app when Ren's registry has no app for your service. An app that you create holds MCP servers, skills or both. MCP is the protocol that gives Ren the tools of a server. A skill is a set of instructions that Ren loads when a request needs it.
 
-### The connect card does not work in a channel
+<Screenshot
+  shot="apps/create"
+  frame="detail"
+  alt="The Create app dialog with the DeepWiki MCP server checked: No Auth found, 3 tools, and the name and description filled in"
+  caption="Ren reads the server as you paste its address."
+/>
 
-Connect cards work only in the web app, not in channels. Connect the account from a chat in the web app.
+1. Open **Apps**, then the **Organization** tab, and select **Create app**. You can also select **Create app** in a space's **Apps** page.
+2. Paste the address of an MCP server, or the command that starts it. Ren reads an address and fills in the sign-in, name, description and logo. You can change each of them.
+3. To add skills, drop their folders on the dialog, select **Choose folder**, or select **From GitHub** and paste the link to a skill folder.
+4. Under **Add to**, pick the space that owns the app.
+5. Select **Create app**. When the server needs a sign-in, the button is **Create and sign in**.
 
-### “Couldn’t reach the server” when you create an app
+Ren adds the app to its space with a first account, and opens the app's page. A secret that you type in the dialog goes into that account. People who read or edit the app do not see it.
 
-Ren could not read the MCP server at that address. Check the address. You can still create the app, and connect it later.
+### MCP servers
 
-## Skills
+| Kind   | What you paste                                                | Tools show                                       |
+| ------ | ------------------------------------------------------------- | ------------------------------------------------ |
+| Remote | The address of a server, such as `https://mcp.acme.dev/mcp`   | When you paste the address, or after you sign in |
+| Local  | A command that runs on the space's [machine](/docs/machines/) | After the first chat                             |
 
-A skill is a reusable set of instructions for a type of task. Its folder contains `SKILL.md` and optional supporting files, such as templates or scripts. Ren reads the description in every chat, but loads the full instructions only when the request needs them.
+A remote server signs in with one of these:
 
-This example `SKILL.md` is for release notes:
+| Sign-in      | What you give                                                      |
+| ------------ | ------------------------------------------------------------------ |
+| No Auth      | Nothing. For public servers.                                       |
+| OAuth 2.0    | A sign-in on the service's page                                    |
+| Bearer Token | A token                                                            |
+| API Key      | A key that Ren sends in a header or the query string that you name |
 
-```md
----
-name: release-notes
-description: Write release notes from merged pull requests. Use when asked for release notes or a changelog.
----
+A local server's **Env** values are part of the app: everyone who can see the app can read them. Put a secret under **Secrets** instead. Each account asks for its value.
 
-Group changes under Features, Fixes, and Internal.
-Link each item to its pull request.
-Skip dependency bumps unless they fix a security issue.
-```
+### Skills
 
-### Skill or instructions
+A skill is a folder with a `SKILL.md` file and optional files, such as templates or scripts. Ren reads each skill's description in every chat, and loads the full instructions only when a request needs them.
 
-| Use                                              | For                                                                                     | When Ren reads it       |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- |
-| Project [instructions](/docs/concepts/projects/) | Rules for every chat in a project, such as tone or which repository to work in          | On every turn           |
-| A skill                                          | A procedure that only some requests need, or a procedure that you want in many projects | When a request needs it |
-| The chat prompt                                  | A one-off request                                                                       | In that chat            |
+| Use                                 | For                                                    | Ren reads it            |
+| ----------------------------------- | ------------------------------------------------------ | ----------------------- |
+| [Instructions](/docs/instructions/) | Rules for every chat, such as tone or which repository | On every turn           |
+| A skill                             | A procedure that only some requests need               | When a request needs it |
+| The chat prompt                     | A one-off request                                      | In that chat            |
 
 If you paste the same steps again and again, make them a skill.
 
-### Write a skill
+Ren checks each folder before it adds it. The name in `SKILL.md` must equal the folder name and use lowercase letters, digits and single hyphens, up to 64 characters. The description says when to use the skill, up to 1,024 characters. Every file must be text. For the full format, see [The `.ren` folder](/docs/developers/ren-folder/).
 
-`SKILL.md` starts with frontmatter between two `---` lines. Ren checks it with the [Agent Skills](https://agentskills.io) rules:
+<Screenshot
+  shot="apps/skill-refused"
+  frame="detail"
+  alt="The Skills drop zone with Couldn't add release and four reasons, such as Skill name Release_Notes must be lowercase"
+  caption="Ren lists every reason a folder was refused."
+/>
 
-| Field                                  | Rule                                                                                                         |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `name`                                 | Required. Up to 64 characters: lowercase letters, digits, and single hyphens. It must equal the folder name. |
-| `description`                          | Required. Up to 1,024 characters that say when to use the skill                                              |
-| `compatibility`                        | Optional. Up to 500 characters                                                                               |
-| `license`, `allowed-tools`, `metadata` | Optional                                                                                                     |
+A skill from a folder is a copy: drop the folder again to change it. A skill from GitHub follows the branch, tag or commit in its link. A branch link picks up new commits with no edit of the app. Link to a commit to fix its content.
 
-No other fields are allowed. Every other file in the folder must be text in UTF-8, such as Markdown, scripts, or templates.
+### Apps that need other apps
 
-If the skill needs a key, list its env name under `metadata.requiredCredentials`. Each account of the app then asks for its value:
+An app can include other apps of your organization, such as one sales app that includes your CRM app and a pricing skill. Adding it adds the apps it includes, and one account connects all of them. An included app can include others, up to 3 levels deep. Set this in **Spec**.
 
-```md
----
-name: release-notes
-description: Write release notes from merged pull requests.
-metadata:
-  requiredCredentials:
-    - kind: env
-      name: GITHUB_TOKEN
----
-```
+### Advanced and Spec
 
-### Add skills to an app
+**Advanced** holds settings that most apps do not need: packages and build commands that Ren installs on the machine, env names for **Secrets**, and how long Ren waits for each MCP server.
 
-A skill reaches a space through an [app](/docs/apps/). An app can hold only skills, or skills with the MCP servers whose tools they explain.
+**Spec** shows the whole app as YAML, and takes YAML or JSON. **Form** and **Spec** edit the same app. Webhooks are edited in **Spec** only. For the format, see [Ren as code](/docs/developers/ren-as-code/).
 
-<SurfaceTabs>
-<Fragment slot="app">
+## Edit, change the owner or archive an app
 
-<Steps>
+The space that owns an app is its owner. You can see an app that your organization made, with its skills and their files, when you are a member of its owner space, a member of a space that uses it, or you have a personal account of it. Members of the owner space can change the app. On the app's page, open `⋯`:
 
-1. Open **Apps** and select **Create app**. To add skills to an app you made, open it and select **Edit**.
-2. Under **Skills**, drop one or more skill folders on the dialog, or select **Choose folder**. A folder that holds several skill folders adds each of them.
-3. To use a skill that lives on GitHub, select **From GitHub** and paste the link to its folder, such as `https://github.com/acme/skills/tree/main/release-notes`.
-4. With no MCP server, the app takes the name and description of the first skill. Change them if you like.
-5. Pick the space under **Add to**, and select **Create app**.
+- **Edit**: change the app and select **Save**.
+- **Change owner**: make another of your spaces the owner.
+- **Archive app**: every space that uses it loses its tools and skills, and its accounts stop working.
 
-</Steps>
+Changes reach each space in its next chat.
 
-{/* Media placeholder (detail `skills/drop`): The Skills drop zone of the Create app dialog with a refused folder and its reasons. Answers: why was my skill folder not added? */}
+## When it fails
 
-</Fragment>
-<Fragment slot="ask-ren">
+| What you see                                                    | Why                                                                 | Fix                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Couldn't reach the server. Check the URL, or create anyway.** | Ren could not read the address                                      | Check the address. You can create the app and fix it later with **Edit**. |
+| **Tools show after you sign in.**                               | The server lists its tools only to a signed-in account              | Connect an account                                                        |
+| **Couldn't add** and a folder name                              | The skill folder breaks a rule                                      | Fix each reason that Ren lists, and drop the folder again                 |
+| **Sign-in expired**                                             | The service ended the sign-in                                       | Select **Reconnect**                                                      |
+| Two apps have skills with the same name                         | Ren loads the skill of the app that came to your organization first | Rename one skill                                                          |
+| Two skills have different names but similar instructions        | Ren picks one by its description                                    | Make each description say when to use that skill                          |
 
-<AskRen prompt="Create a skill called release-notes from the rules I just gave you, and add it to this space." />
+## Examples
 
-Ren writes the `SKILL.md` for you.
-
-</Fragment>
-</SurfaceTabs>
-
-If a folder breaks a rule, Ren adds nothing from that drop and lists every reason, for example:
-
-```text
-✕ Couldn’t add “release”
-  • Skill name 'Release_Notes' must be lowercase
-  • Directory name 'release' must match skill name 'Release_Notes'
-  • assets/logo.png is not a text file
-```
-
-Fix the folder and drop it again. A dropped skill with the name of a skill already in the app replaces it.
-
-### Sources
-
-| Source   | How it works                                                                                                          | Use it for                 |
-| -------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| A folder | You drop or choose a folder. Ren stores a copy of its files in the app.                                               | Skills you write yourself  |
-| GitHub   | You paste the link to a folder. Ren fetches the files from the repository, at the branch, tag, or commit in the link. | Skills you maintain in git |
-
-A skill from a branch follows that branch: new commits change the skill without an edit of the app. Link to a commit to fix its content.
-
-### Edit or remove a skill
-
-Open the app that holds the skill and select **Edit**. To change a skill, drop its folder again. To remove it, select its trash icon. Then select **Save**. Spaces that use the app get the change in their next chat.
-
-To take a skill out of every space, remove it from its app, or archive the app.
-
-### Troubleshooting
-
-#### Two skills have the same name or similar instructions
-
-If two apps in a space have skills with the same `name`, Ren loads only the skill of the app that your organization added first. Skills with different names but similar instructions both load. Ren then picks one by its description. Fix: make each description say when to use that skill.
-
-### Good to know
-
-- Only members of the space that owns an app can change its skills.
-- To see the skills of an app as YAML, with their files, select **Spec** in the dialog.
-
-## Custom MCPs
-
-A custom MCP connects Ren to a server that no [app](/docs/apps/) covers yet. MCP is a protocol that gives agents access to tools. For example, an internal documentation server can give search tools to every chat of a space.
-
-You add a custom MCP by creating an app for it. The app can hold more than one MCP server, and [skills](/docs/apps/#skills) that explain how to use their tools.
-
-### Remote and local servers
-
-| Kind       | What you paste                                     | Example                                      |
-| ---------- | -------------------------------------------------- | -------------------------------------------- |
-| **Remote** | The address of a server that Ren reaches over HTTP | `https://mcp.acme.dev/mcp`                   |
-| **Local**  | A command that runs on the machine of the space    | `npx -y @modelcontextprotocol/server-github` |
-
-Ren reads a remote server as soon as you paste its address. It finds how the server signs in, its name, description, and icon, and the tools that it lists without a sign-in. A local server starts only in a chat, so Ren does not read it first.
-
-### Add an MCP server
-
-<SurfaceTabs>
-<Fragment slot="app">
-
-<Steps>
-
-1. Open **Apps** and select **Create app**.
-2. Paste the server's address or command. For an address, wait for **Checking…** to end. Ren shows the server's name and the number of tools that it found.
-3. Check **Auth**. Ren picks it from the server; you can change it.
-4. For a local server, add its **Env** values and the names of its **Secrets**.
-5. To add a second server, select **Add MCP server**.
-6. Pick the space under **Add to**, then select **Create app** or **Create and sign in**.
-
-</Steps>
-
-Select **More** on a server to change its scopes, client ID, name, or description.
-
-</Fragment>
-<Fragment slot="ask-ren">
-
-<AskRen prompt="Make an app for our docs MCP server at https://mcp.acme.dev/mcp and add it to this space." />
-
-</Fragment>
-</SurfaceTabs>
-
-If Ren cannot reach the server, it shows **Couldn’t reach the server. Check the URL, or create anyway.** You can create the app and fix the address later with **Edit**.
-
-### Authentication
-
-For a remote server, choose how Ren signs in:
-
-| Auth         | What you give                                                         |
-| ------------ | --------------------------------------------------------------------- |
-| No Auth      | Nothing. Use this for public servers.                                 |
-| OAuth 2.0    | A sign-in on the provider's page. **Create and sign in** opens it.    |
-| Bearer Token | A token that Ren sends as `Authorization: Bearer …` (coming soon)     |
-| API Key      | A key that Ren sends in the header that you name, such as `X-API-Key` |
-| Basic Auth   | A user name and password (not supported for now)                      |
-
-A key or token that you type in the dialog goes into the app's first account in its space. It never becomes part of the app, so anyone who reads or edits the app does not see it.
-
-A local server's **Env** values are part of the app, and everyone who can see the app can read them. Put a key in **Secrets** instead: each account asks for its value when you connect it.
-
-### Tools
-
-The app's page lists the tools of each remote server. Some servers list their tools only after a sign-in; the page then shows **Tools show after you sign in.** A local server shows **Tools show after the first chat.**
-
-### Connect its credentials
-
-If the server needs a credential that you did not type when you created the app, connect it from the app's page or from the card that Ren shows in a chat. See [Apps](/docs/apps/#connect-an-account) and [Credentials](/docs/credentials/).
-
-### Good to know
-
-- Only members of the space that owns the app can edit, move, or archive it.
-- To see or paste the whole app as YAML or JSON, select **Spec** in the dialog. See [Spec mode](/docs/apps/#spec-mode).
+| App       | Account            | Prompt                                                                        |
+| --------- | ------------------ | ----------------------------------------------------------------------------- |
+| Gmail     | Maya's Gmail       | "@Gmail summarize my unread email from today and draft replies to clients"    |
+| Linear    | Northwind Linear   | "@Linear make an issue for each bug in this thread and assign them to me"     |
+| Firecrawl | **Managed by Ren** | "@Firecrawl read the pricing pages of our three competitors and compare them" |
