@@ -12,6 +12,7 @@ import { Loading } from "@ren/ui/loading"
 import { formatUsdRate } from "@ren/ui/format"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
+import { Spinner } from "@ren/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppIcon, appTile } from "./app-icon.js"
 import { AccountMenu } from "./account-menu.js"
@@ -411,7 +412,22 @@ const usageOf = (mcps: NonNullable<App["mcps"]>, mcp: Mcp) => {
 
 type Skill = NonNullable<App["skills"]>[string]
 
-function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClose: () => void }) {
+function SkillInstructions(props: { appId: string; slug: string }) {
+  const { api } = RouterContext.useRouterContext()
+  const skills = useQuery({ ...api["app-skills"].get.queryOptions({ idOrSlug: props.appId }), gcTime: 0 })
+  const skill = skills.data?.[props.slug]
+  if (skills.isPending) return <Spinner className="mx-auto mb-6" />
+  if (skill?.type !== "content" || !skill.instructions.trim()) return null
+  return (
+    <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
+      <Suspense fallback={null}>
+        <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0">{skill.instructions}</Markdown>
+      </Suspense>
+    </div>
+  )
+}
+
+function SkillDialog(props: { appId: string; slug: string; skill: Skill; icon: ReactNode; onClose: () => void }) {
   const skill = props.skill
   return (
     <Dialog
@@ -429,13 +445,7 @@ function SkillDialog(props: { slug: string; skill: Skill; icon: ReactNode; onClo
             </DialogTitle>
             <DialogDescription className="text-pretty">{skill.description}</DialogDescription>
           </DialogHeader>
-          {skill.instructions.trim() ? (
-            <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
-              <Suspense fallback={null}>
-                <Markdown className="text-sm/6 [&>div>:first-child>:first-child]:mt-0">{skill.instructions}</Markdown>
-              </Suspense>
-            </div>
-          ) : null}
+          <SkillInstructions appId={props.appId} slug={props.slug} />
         </DialogContent>
       ) : (
         <DialogContent className="justify-items-center gap-4 p-6 sm:max-w-sm">
@@ -504,6 +514,7 @@ function SkillCards(props: { app: App; skills: Readonly<Record<string, Skill>> }
       </div>
       {opened && openedSkill ? (
         <SkillDialog
+          appId={props.app.id}
           slug={opened}
           skill={openedSkill}
           icon={icon(opened, openedSkill)}

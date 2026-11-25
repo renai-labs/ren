@@ -1,6 +1,6 @@
 import { HttpApi, OpenApi } from "effect/http-api"
 import { AgentGroup } from "./groups/agent.js"
-import { AppGroup } from "./groups/app.js"
+import { AppGroup, AppSkillsGroup } from "./groups/app.js"
 import { AppRegistryGroup, AppToolsGroup } from "./groups/app-registry.js"
 import { ArtifactGroup } from "./groups/artifact.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
@@ -67,6 +67,7 @@ export const Api = HttpApi.make("server")
   .add(FilesGroup)
   .add(AgentGroup)
   .add(AppGroup)
+  .add(AppSkillsGroup)
   .add(AppProfileGroup)
   .add(AppProfileReachGroup)
   .add(AppRegistryGroup)

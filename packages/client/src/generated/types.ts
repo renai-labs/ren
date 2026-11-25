@@ -1606,6 +1606,14 @@ export type SettingsInfo = {
   references?: ReferenceList
 }
 
+export type SkillSummary =
+  | { type: "content"; description: string; requiredCredentials?: Array<CredentialSkillRequirement> }
+  | {
+      type: "upstream"
+      requiredCredentials?: Array<CredentialSkillRequirement>
+      upstream: { url: string; ref?: string; path: string }
+    }
+
 export type SkillContent = {
   type: "content"
   description: string
@@ -1853,6 +1861,8 @@ export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: numbe
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
+export type AppSkills = { [x: PrimitiveSlug]: SkillInfo }
+
 export type AppInfo = {
   id: AppID
   slug: PrimitiveSlug
@@ -1863,7 +1873,7 @@ export type AppInfo = {
   icon: string | null
   requiredCredentials?: Array<CredentialRequirement>
   environment?: PackagesSetup
-  skills: { [x: PrimitiveSlug]: SkillInfo }
+  skills: { [x: PrimitiveSlug]: SkillSummary }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
   webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
@@ -1873,23 +1883,38 @@ export type AppInfo = {
   archivedAt: string | null
 }
 
-export type InfraPulledApp = {
-  name: string
-  description: string
-  requiredCredentials?: Array<CredentialRequirement>
-  skills: { [x: PrimitiveSlug]: SkillInfo }
-  mcps: { [x: PrimitiveSlug]: McpInfo }
-  dependsOn?: Array<PrimitiveSlug>
-  webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
-  icon?: string
-  environment?: PackagesSetup
-}
-
 export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
 
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
 
+export type InfraPulledApp = {
+  name: string
+  description: string
+  requiredCredentials?: Array<CredentialRequirement>
+  mcps: { [x: PrimitiveSlug]: McpInfo }
+  dependsOn?: Array<PrimitiveSlug>
+  webhooks?: { [x: PrimitiveSlug]: WebhookPreset }
+  skills: AppSkills
+  icon?: string
+  environment?: PackagesSetup
+}
+
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
+
+export type SessionMessageAssistant = {
+  id: SessionMessageID
+  time: { created: number; streamed?: number; completed?: number }
+  type: "assistant"
+  agent: string
+  model: SessionModelRef
+  content: Array<SessionMessageContent>
+  snapshot?: { start?: string; end?: string; files?: Array<string> }
+  finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+  error?: SessionErrorInfo
+  retry?: SessionMessageRetry
+}
 
 export type InfraPulledSpace = {
   name: string
@@ -1908,20 +1933,17 @@ export type InfraPulledSpace = {
   uses: InfraUses
 }
 
-export type SessionMessageAssistant = {
-  id: SessionMessageID
-  time: { created: number; streamed?: number; completed?: number }
-  type: "assistant"
-  agent: string
-  model: SessionModelRef
-  content: Array<SessionMessageContent>
-  snapshot?: { start?: string; end?: string; files?: Array<string> }
-  finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
-  cost?: number
-  tokens?: SessionMessageTokenUsage
-  error?: SessionErrorInfo
-  retry?: SessionMessageRetry
-}
+export type SessionMessageInfo =
+  | SessionMessageAgentSwitched
+  | SessionMessageModelSwitched
+  | SessionMessageUser
+  | SessionMessageSynthetic
+  | SessionMessageSystem
+  | SessionMessageSkill
+  | SessionMessageShell
+  | SessionMessageAssistant
+  | SessionMessageCompaction
+  | SessionMessageIdle
 
 export type InfraPulled = {
   bindings: {
@@ -1940,18 +1962,6 @@ export type InfraPulled = {
   remove: Array<string>
   conflicts: Array<InfraChange>
 }
-
-export type SessionMessageInfo =
-  | SessionMessageAgentSwitched
-  | SessionMessageModelSwitched
-  | SessionMessageUser
-  | SessionMessageSynthetic
-  | SessionMessageSystem
-  | SessionMessageSkill
-  | SessionMessageShell
-  | SessionMessageAssistant
-  | SessionMessageCompaction
-  | SessionMessageIdle
 
 export type SessionMessagePage = { items: Array<SessionMessageInfo>; cursor: { previous?: string; next?: string } }
 
@@ -7093,6 +7103,10 @@ export type AppTransferOwnershipInput = {
 }
 
 export type AppTransferOwnershipOutput = AppInfo
+
+export type AppSkillsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AppSkillsGetOutput = AppSkills
 
 export type AppProfileListInput = {
   readonly appId?: {

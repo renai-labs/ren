@@ -766,6 +766,13 @@ const adaptGroupApp = (raw: RawClient["app"]) => ({
   transferOwnership: EndpointAppTransferOwnership(raw),
 })
 
+type AppSkillsGetRequest = Parameters<RawClient["app-skills"]["app-skills.get"]>[0]
+type AppSkillsGetInput = { readonly idOrSlug: AppSkillsGetRequest["params"]["idOrSlug"] }
+const EndpointAppSkillsGet = (raw: RawClient["app-skills"]) => (input: AppSkillsGetInput) =>
+  raw["app-skills.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAppSkills = (raw: RawClient["app-skills"]) => ({ get: EndpointAppSkillsGet(raw) })
+
 type AppProfileListRequest = Parameters<RawClient["app-profile"]["app-profile.list"]>[0]
 type AppProfileListInput = {
   readonly appId?: AppProfileListRequest["query"]["appId"]
@@ -2327,6 +2334,7 @@ const adaptClient = (raw: RawClient) => ({
   files: adaptGroupFiles(raw["files"]),
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
+  "app-skills": adaptGroupAppSkills(raw["app-skills"]),
   "app-profile": adaptGroupAppProfile(raw["app-profile"]),
   "app-profile-reach": adaptGroupAppProfileReach(raw["app-profile-reach"]),
   "app-registry": adaptGroupAppRegistry(raw["app-registry"]),

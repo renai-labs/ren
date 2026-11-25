@@ -4816,6 +4816,74 @@
         }
       }
     },
+    "/apps/{idOrSlug}/skills": {
+      "get": {
+        "tags": ["app-skills"],
+        "operationId": "app-skills.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An app’s skills with their instructions and files, by slug.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Skills"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return each skill of the app with its instructions and files. app.get and app.list leave these out, since they can be large.",
+        "summary": "Read an app’s skills"
+      }
+    },
     "/app-profiles": {
       "get": {
         "tags": ["app-profile"],
@@ -16404,8 +16472,9 @@
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "additionalProperties": {
-              "$ref": "#/components/schemas/Skill.Info"
-            }
+              "$ref": "#/components/schemas/Skill.Summary"
+            },
+            "description": "The app’s skills without their instructions and files. app-skills.get returns them."
           },
           "mcps": {
             "type": "object",
@@ -16503,6 +16572,18 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
+      },
+      "App.Skills": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "additionalProperties": {
+          "$ref": "#/components/schemas/Skill.Info"
+        },
+        "description": "An app’s skills with their instructions and files, by slug."
       },
       "App.TransferOwnershipInput": {
         "type": "object",
@@ -20787,17 +20868,6 @@
               "$ref": "#/components/schemas/Credential.Requirement"
             }
           },
-          "skills": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string",
-              "maxLength": 64,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Skill.Info"
-            }
-          },
           "mcps": {
             "type": "object",
             "propertyNames": {
@@ -20827,6 +20897,9 @@
             },
             "description": "Webhooks that a space can turn on. Each one reads its name, message and parser from here."
           },
+          "skills": {
+            "$ref": "#/components/schemas/App.Skills"
+          },
           "icon": {
             "type": "string"
           },
@@ -20834,7 +20907,7 @@
             "$ref": "#/components/schemas/Packages.Setup"
           }
         },
-        "required": ["name", "description", "skills", "mcps"],
+        "required": ["name", "description", "mcps", "skills"],
         "additionalProperties": false,
         "description": "An App.Declaration, as the live app has it."
       },
@@ -27338,6 +27411,67 @@
       "Skill.SourceDirectory": {
         "type": "string"
       },
+      "Skill.Summary": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["content"]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "requiredCredentials": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Credential.SkillRequirement"
+                }
+              }
+            },
+            "required": ["type", "description"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["upstream"]
+              },
+              "requiredCredentials": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Credential.SkillRequirement"
+                }
+              },
+              "upstream": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A Git branch, tag or commit. Omission follows the default branch. A branch or the default branch is read again by the brain: its new commits change the skill without a new release or catalog fingerprint. Name a commit to fix the content."
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["url", "path"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["type", "upstream"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "A skill without its content: a content skill has no instructions or files."
+      },
       "Skill.Upstream": {
         "type": "object",
         "properties": {
@@ -31297,6 +31431,9 @@
     },
     {
       "name": "app"
+    },
+    {
+      "name": "app-skills"
     },
     {
       "name": "app-profile"

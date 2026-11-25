@@ -15,7 +15,12 @@ import { AppQueries } from "./app/queries.js"
 import { AppValidation } from "./app/validation.js"
 import { Primitive } from "./primitive.js"
 
-export type Interface = Primitive.Interface<typeof App.definition>
+export interface Interface extends Primitive.Interface<typeof App.definition> {
+  readonly skills: (
+    actor: Actor.Info,
+    idOrSlug: string,
+  ) => Effect.Effect<(typeof App.Skills)["Type"], Primitive.NotFound>
+}
 export class Service extends Context.Service<Service, Interface>()("@ren/core/App") {}
 
 const stale = new Primitive.Conflict({ message: "The app changed. Reload before saving." })
@@ -62,6 +67,11 @@ export const layer = Layer.effect(
           Effect.flatMap(AppQueries.find(transaction, access, actor, id), (row) =>
             AppQueries.info(transaction, row.app),
           ),
+        )
+      }),
+      skills: Effect.fn("App.skills")(function* (actor, idOrSlug) {
+        return yield* database.transaction((transaction) =>
+          Effect.map(AppQueries.find(transaction, access, actor, idOrSlug), (row) => row.app.skills),
         )
       }),
       create: Effect.fn("App.create")(function* (actor, input) {

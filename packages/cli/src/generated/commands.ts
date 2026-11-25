@@ -904,6 +904,8 @@ export const SessionPullRequests = {
 
 export const TaskPullRequests = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
 
+export const AppSkillsGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+
 export const AppToolsGet = {
   idOrSlug: Argument.String("app").pipe(Argument.withDescription("Registry app slug or ID")),
 }
@@ -1447,6 +1449,12 @@ export const commands = [
             ),
           ),
         ]),
+      ),
+      Command.make("skills", AppSkillsGet).pipe(
+        Command.withDescription("Read an app’s skills with their instructions and files"),
+        Command.withHandler((input) =>
+          Effect.flatMap(Effect.promise(operations), (module) => module.AppSkillsGet(input)),
+        ),
       ),
     ]),
   ),

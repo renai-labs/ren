@@ -58,6 +58,7 @@ import type {
   AppUpdateInput,
   AppArchiveInput,
   AppTransferOwnershipInput,
+  AppSkillsGetInput,
   AppProfileListInput,
   AppProfileGetInput,
   AppProfileCreateInput,
@@ -758,6 +759,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["app", "transferOwnership"] as const,
             mutationFn: (input: AppTransferOwnershipInput) => client["app"]["transferOwnership"](input),
+          }),
+      },
+    },
+    "app-skills": {
+      get: {
+        queryKey: (input?: AppSkillsGetInput) =>
+          input === undefined ? (["app-skills", "get"] as const) : (["app-skills", "get", input] as const),
+        queryOptions: (input: AppSkillsGetInput) =>
+          queryOptions({
+            queryKey: ["app-skills", "get", input] as const,
+            queryFn: (context) => client["app-skills"]["get"](input, { signal: context.signal }),
           }),
       },
     },

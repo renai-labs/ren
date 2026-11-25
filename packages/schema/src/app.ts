@@ -63,12 +63,19 @@ export const Info = Schema.Struct({
   icon: Schema.NullOr(Schema.String),
   ...Definition.fields,
   mcps: Schema.Record(Primitive.Slug, Mcp.Info),
-  skills: Schema.Record(Primitive.Slug, Skill.Info),
+  skills: Schema.Record(Primitive.Slug, Skill.Summary).annotate({
+    description: "The app’s skills without their instructions and files. app-skills.get returns them.",
+  }),
   revision: Schema.Int.annotate({ description: "Counts the edits of the definition." }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
 }).annotate({ identifier: "App.Info" })
+
+export const Skills = Schema.Record(Primitive.Slug, Skill.Info).annotate({
+  identifier: "App.Skills",
+  description: "An app’s skills with their instructions and files, by slug.",
+})
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
 export const Declaration = Schema.Struct({

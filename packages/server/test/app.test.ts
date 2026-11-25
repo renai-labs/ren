@@ -84,3 +84,43 @@ test("the chat and the space list profiles with gaps (P1, P2, P15)", async () =>
   const removed = await call(app, cookie, "DELETE", `/app-profiles/${(await mine.json()).id}`)
   expect(removed.status).toBe(200)
 })
+
+test("app.get and app.list leave out skill content; app-skills.get returns it to those who can see the app", async () => {
+  const cookie = sessionCookie(await signUp(app, "app-skills@gmail.com", "Ada"))
+  const spaces = await (await call(app, cookie, "GET", "/spaces")).json()
+  const created = await (
+    await call(app, cookie, "POST", "/apps", {
+      slug: "guides",
+      ownerSpaceId: spaces.items[0].id,
+      name: "Guides",
+      description: "Write guides",
+      skills: {
+        guide: {
+          type: "content",
+          description: "Write a guide",
+          instructions: "Follow the outline.",
+          files: { "scripts/outline.mjs": "export const outline = []" },
+        },
+      },
+    })
+  ).json()
+  const summary = { type: "content", description: "Write a guide", requiredCredentials: [] }
+  expect(created.skills).toEqual({ guide: summary })
+  expect((await (await call(app, cookie, "GET", `/apps/${created.id}`)).json()).skills).toEqual({ guide: summary })
+  const listed = await (await call(app, cookie, "GET", "/apps")).json()
+  expect(listed.items.find((each: { readonly id: string }) => each.id === created.id).skills).toEqual({
+    guide: summary,
+  })
+  const skills = await call(app, cookie, "GET", `/apps/${created.id}/skills`)
+  expect(skills.status).toBe(200)
+  expect(await skills.json()).toEqual({
+    guide: {
+      ...summary,
+      instructions: "Follow the outline.",
+      files: { "scripts/outline.mjs": "export const outline = []" },
+    },
+  })
+  expect((await call(app, cookie, "GET", "/apps/guides/skills")).status).toBe(200)
+  const foreign = sessionCookie(await signUp(app, "app-skills-foreign@gmail.com", "Grace"))
+  expect((await call(app, foreign, "GET", `/apps/${created.id}/skills`)).status).toBe(404)
+})
