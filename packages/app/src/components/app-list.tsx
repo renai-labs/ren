@@ -124,7 +124,7 @@ export function AppRow(props: {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
       role="listitem"
       className={cn(
-        "relative flex-nowrap gap-3 has-[[data-slot=app-open]:hover]:bg-muted",
+        "relative flex-nowrap gap-3 has-[[data-slot=app-open]:hover,[data-slot=account-open]:hover]:bg-muted",
         props.compact ? "px-2 py-2.5" : "p-2",
       )}
     >
@@ -725,7 +725,7 @@ export function AccountList(props: {
             return (
               <div
                 key={profile.id}
-                className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=account-open]:hover]:bg-muted"
+                className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=app-open]:hover,[data-slot=account-open]:hover]:bg-muted"
               >
                 <StatusDot status={status} />
                 <div className="flex min-w-0 flex-1 flex-col">

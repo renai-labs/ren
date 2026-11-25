@@ -48,11 +48,14 @@ const nestedHas = (selector: string) => {
   return false
 }
 
+// oxlint-disable-next-line ren/no-comments -- pdf.js's viewer CSS (pdfjs-dist/web/pdf_viewer.css), which loads only with a PDF preview and is not ours to rewrite.
+const thirdParty = /\.annotationLayer |#viewsManager /u
+
 const slowHas = (css: string) =>
   css
     .split("{")
     .map((part) => part.slice(Math.max(part.lastIndexOf("}"), part.lastIndexOf(";")) + 1).trim())
-    .filter((selector) => !selector.startsWith("@") && nestedHas(selector))
+    .filter((selector) => !selector.startsWith("@") && !thirdParty.test(selector) && nestedHas(selector))
 
 const slowHasError = (found: ReadonlyArray<string>) =>
   `CSS puts :has() inside :is()/:not()/:where() or on html/body, which makes Chrome restyle the whole page on every DOM change:\n${found.join("\n")}`
