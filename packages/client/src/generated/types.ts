@@ -1164,7 +1164,12 @@ export type InfraPulledSchedule = {
   enabled?: boolean
 }
 
-export type WebhookPresetDeclaration = { app: PrimitiveSlug; preset: PrimitiveSlug; agent?: AgentName }
+export type WebhookPresetDeclaration = {
+  app: PrimitiveSlug
+  preset: PrimitiveSlug
+  agent?: AgentName
+  mode?: WebhookMode
+}
 
 export type ChannelDeclaration =
   | {
@@ -1331,6 +1336,7 @@ export type WebhookCustomDeclaration = {
   eventId?: WebhookExpression
   threadKey?: WebhookExpression
   title?: WebhookExpression
+  mode?: WebhookMode
 }
 
 export type CredentialOwner =
@@ -10299,7 +10305,12 @@ export type InfraPullInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -10321,6 +10332,7 @@ export type InfraPullInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -10705,7 +10717,12 @@ export type InfraPullInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -10727,6 +10744,7 @@ export type InfraPullInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -11111,7 +11129,12 @@ export type InfraPullInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -11133,6 +11156,7 @@ export type InfraPullInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -11522,7 +11546,12 @@ export type InfraPlanInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -11544,6 +11573,7 @@ export type InfraPlanInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -11928,7 +11958,12 @@ export type InfraPlanInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -11950,6 +11985,7 @@ export type InfraPlanInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -12334,7 +12370,12 @@ export type InfraPlanInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -12356,6 +12397,7 @@ export type InfraPlanInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -12745,7 +12787,12 @@ export type InfraApplyInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -12767,6 +12814,7 @@ export type InfraApplyInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -13153,7 +13201,12 @@ export type InfraApplyInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -13175,6 +13228,7 @@ export type InfraApplyInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -13561,7 +13615,12 @@ export type InfraApplyInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -13583,6 +13642,7 @@ export type InfraApplyInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -13969,7 +14029,12 @@ export type InfraApplyInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -13991,6 +14056,7 @@ export type InfraApplyInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
@@ -14377,7 +14443,12 @@ export type InfraApplyInput = {
           }
           readonly webhooks?: {
             readonly [x: string]:
-              | { readonly app: string; readonly preset: string; readonly agent?: string }
+              | {
+                  readonly app: string
+                  readonly preset: string
+                  readonly agent?: string
+                  readonly mode?: "listening" | "live"
+                }
               | {
                   readonly name?: string
                   readonly agent?: string
@@ -14399,6 +14470,7 @@ export type InfraApplyInput = {
                   readonly eventId?: string
                   readonly threadKey?: string
                   readonly title?: string
+                  readonly mode?: "listening" | "live"
                 }
           }
           readonly channels?: {
