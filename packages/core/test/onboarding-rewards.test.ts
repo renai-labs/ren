@@ -54,7 +54,7 @@ const it = testEffect(
     [Onboarding.steps.organization.slackConnected]: { microUsd: 3_000_000 },
     [Onboarding.steps.organization.githubConnected]: { microUsd: 3_000_000 },
     [Onboarding.steps.organization.memberJoined]: { microUsd: 1_000_000, upTo: 2 },
-    [Onboarding.steps.personal.appsConnected]: { microUsd: 3_000_000 },
+    [Onboarding.steps.personal.appsConnected]: { microUsd: 3_000_000, upTo: 2 },
   }),
 )
 
@@ -75,22 +75,31 @@ describe("OnboardingRewards", () => {
     }),
   )
 
-  it.live("pays a personal step once for each member who completes it", () =>
+  it.live("pays a personal step once for each member who completes it, up to the reward's limit", () =>
     Effect.gen(function* () {
       const onboarding = yield* Onboarding.Service
       const organizationId = yield* Seed.organization()
-      const ada = yield* Seed.actor(organizationId, "owner")
-      const grace = yield* Seed.actor(organizationId, "member")
-      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.appsConnected)
-      yield* onboarding.recordPersonal(ada, Onboarding.steps.personal.appsConnected)
-      expect(yield* Queue.take(grants)).toEqual(
-        grant(organizationId, 3_000_000, `onboarding:apps.connected:${ada.userId}`),
+      const members = yield* Effect.all([
+        Seed.actor(organizationId, "owner"),
+        Seed.actor(organizationId, "member"),
+        Seed.actor(organizationId, "member"),
+      ])
+      yield* Effect.forEach(
+        [...members, ...members],
+        (person) => onboarding.recordPersonal(person, Onboarding.steps.personal.appsConnected),
+        { discard: true },
       )
-      yield* onboarding.recordPersonal(grace, Onboarding.steps.personal.appsConnected)
-      expect(yield* Queue.take(grants)).toEqual(
-        grant(organizationId, 3_000_000, `onboarding:apps.connected:${grace.userId}`),
+      expect(yield* Queue.takeN(grants, 2)).toEqual(
+        expect.arrayContaining(
+          members
+            .slice(0, 2)
+            .map((person) => grant(organizationId, 3_000_000, `onboarding:apps.connected:${person.userId}`)),
+        ),
       )
       expect(yield* Queue.size(grants)).toBe(0)
+      const other = yield* Seed.organization()
+      yield* onboarding.recordPersonal(yield* Seed.actor(other, "owner"), Onboarding.steps.personal.appsConnected)
+      expect((yield* Queue.take(grants)).org).toBe(other)
     }),
   )
 

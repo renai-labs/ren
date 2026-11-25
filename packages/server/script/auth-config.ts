@@ -13,6 +13,7 @@ export const auth = BetterAuth.make({
   mcpResource: "http://localhost/mcp",
   fetchClientMetadataResource: () => Promise.reject(new Error("generate-auth-schema does not fetch")),
   requireEmailVerification: true,
+  organizationLimit: 1,
   sendEmail: () => {},
   logFailure: () => Promise.resolve(),
   signupGuard: {

@@ -18,6 +18,7 @@ import type { BetterAuthPlugin, GenericEndpointContext } from "better-auth"
 import { APIError, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { genericOAuth } from "better-auth/plugins/generic-oauth"
+import { and, eq } from "drizzle-orm"
 import { Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
@@ -43,6 +44,7 @@ export interface Input {
   }
   readonly appURL: string
   readonly requireEmailVerification: boolean
+  readonly organizationLimit: number
   readonly mcpResource: string
   readonly fetchClientMetadataResource: ClientMetadataResourceFetch
   readonly sendEmail: (email: Mailer.Email) => void
@@ -322,6 +324,16 @@ export const make = (input: Input) => {
     roles: OrganizationAccess.roles,
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
+    organizationLimit: async (user) => {
+      const [found, owned] = await Promise.all([
+        input.database.query.user.findFirst({ columns: { organizationLimit: true }, where: { id: user.id } }),
+        input.database.$count(
+          Database.Schema.member,
+          and(eq(Database.Schema.member.userId, user.id), eq(Database.Schema.member.role, "owner")),
+        ),
+      ])
+      return owned >= (found?.organizationLimit ?? input.organizationLimit)
+    },
     organizationHooks: {
       afterCreateOrganization: (data) =>
         input.provisioning.enrollInBilling(data.organization.id, {
@@ -379,6 +391,11 @@ export const make = (input: Input) => {
         const url = new URL("reset-password", appURL)
         url.searchParams.set("token", data.token)
         input.sendEmail(AuthEmail.resetPassword(data.user.email, url))
+      },
+    },
+    user: {
+      additionalFields: {
+        organizationLimit: { type: "number", required: false, input: false, returned: false },
       },
     },
     session: { expiresIn: 60 * 60 * 24 * 90 },

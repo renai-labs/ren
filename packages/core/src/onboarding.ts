@@ -42,7 +42,7 @@ export interface Completion {
   readonly userId: Auth.UserID | null
   readonly step: Onboarding.Step
   readonly occurrence: string | null
-  readonly recorded: ReadonlyArray<string>
+  readonly count: number
 }
 
 export interface ListenerInterface {
@@ -145,7 +145,19 @@ export const layer = Layer.effect(
       Effect.flatMap(record(organizationId, userId, step, occurrence), (recorded) =>
         recorded
           ? Effect.andThen(
-              notify({ organizationId, userId, step, occurrence, recorded }),
+              Effect.flatMap(
+                userId ? record(organizationId, null, step, userId) : Effect.succeed(recorded),
+                (counted) =>
+                  counted
+                    ? notify({
+                        organizationId,
+                        userId,
+                        step,
+                        occurrence,
+                        count: userId || occurrence ? counted.filter((key) => key.startsWith(`${step}:`)).length : 1,
+                      })
+                    : Effect.void,
+              ),
               userId &&
                 appSteps.includes(step) &&
                 recorded.filter((key) => appSteps.includes(key)).length >= Onboarding.appsNeeded

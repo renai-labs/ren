@@ -93,6 +93,7 @@ export const layer = Layer.effect(
       googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
       appURL: Config.String("APP_URL"),
       skipEmailVerification: Config.Boolean("SKIP_EMAIL_VERIFICATION").pipe(Config.withDefault(false)),
+      organizationLimit: Config.Int("ORGANIZATION_LIMIT").pipe(Config.withDefault(1)),
       local: Hand.local,
     })
     if (config.skipEmailVerification && !config.local) {
@@ -131,6 +132,7 @@ export const layer = Layer.effect(
       mcpResource,
       fetchClientMetadataResource: clientMetadataFetch,
       requireEmailVerification: !config.skipEmailVerification,
+      organizationLimit: config.organizationLimit,
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
       },
