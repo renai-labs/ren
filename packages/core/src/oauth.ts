@@ -104,7 +104,7 @@ const metadataKept = Duration.hours(1)
 const sessions = Database.Schema.oauth_session
 const credentials = Database.Schema.credential
 
-const gmailAppSlug = "gmail"
+const appSteps = new Map<string, Onboarding.PersonalStep>(Object.entries(Onboarding.appSteps))
 
 type OAuthDeclaration = Extract<Mcp.Auth, { readonly type: "oauth" }>
 type OrgApp = typeof Database.Schema.oauth_app.$inferSelect
@@ -654,15 +654,12 @@ export const layer = Layer.effect(
         readonly app: { readonly slug: string }
         readonly profile: { readonly kind: AppProfile.Kind; readonly user_id: Auth.UserID | null }
       },
-    ) =>
-      found.app.slug === gmailAppSlug &&
-      found.profile.kind === "private" &&
-      found.profile.user_id === taken.initiator_user_id
-        ? onboarding.recordPersonal(
-            { organizationId: taken.organization_id, userId: taken.initiator_user_id },
-            Onboarding.steps.personal.gmailConnected,
-          )
+    ) => {
+      const step = appSteps.get(found.app.slug)
+      return step && found.profile.kind === "private" && found.profile.user_id === taken.initiator_user_id
+        ? onboarding.recordPersonal({ organizationId: taken.organization_id, userId: taken.initiator_user_id }, step)
         : Effect.void
+    }
 
     const complete = (taken: Session, sameAccountAs: Option.Option<string>) =>
       database.db

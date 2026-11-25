@@ -39,7 +39,7 @@ describe("Composio connect (§10, test 20 and 21)", () => {
     }),
   )
 
-  it.live("connecting Gmail on one's own private profile completes the personal gmail.connected step", () =>
+  it.live("connecting an onboarding app such as Gmail on one's own private profile completes its personal step", () =>
     Effect.gen(function* () {
       const onboarding = yield* Onboarding.Service
       const profiles = yield* AppProfiles.Service
