@@ -28,7 +28,7 @@ const connection = () => ({
   status: { label: "Active", tone: "ok" },
   canReconnect: true,
   connectedBy,
-  meters: [],
+  limits: [],
 })
 let removed = Promise.withResolvers<void>()
 

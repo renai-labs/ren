@@ -12444,7 +12444,7 @@
             }
           }
         },
-        "description": "List the organization’s provider connections, with display data and usage meters.",
+        "description": "List the organization’s provider connections, with display data and each seat’s usage limits.",
         "summary": "List provider connections"
       }
     },
@@ -24417,14 +24417,14 @@
             "type": "boolean",
             "description": "True when the viewer connected it, or is an admin or owner: they can rename, reconnect and remove it."
           },
-          "meters": {
+          "limits": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RenInference.Meter"
+              "$ref": "#/components/schemas/RenInference.Window"
             }
           }
         },
-        "required": ["id", "label", "providerName", "iconUrl", "status", "canReconnect", "canManage", "meters"],
+        "required": ["id", "label", "providerName", "iconUrl", "status", "canReconnect", "canManage", "limits"],
         "additionalProperties": false,
         "description": "A model provider the organization connected, with display data from the Ren Inference Service."
       },
@@ -25146,43 +25146,6 @@
         "additionalProperties": false,
         "description": "The usage of one key in a period."
       },
-      "RenInference.Meter": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "percent": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "enum": ["Infinity", "-Infinity", "NaN"]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "resetsAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": ["key", "title", "percent"],
-        "additionalProperties": false
-      },
       "RenInference.ModelUsage": {
         "type": "object",
         "properties": {
@@ -25271,6 +25234,44 @@
       "RenInference.Tone": {
         "type": "string",
         "enum": ["ok", "warn", "error"]
+      },
+      "RenInference.Window": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["key", "title", "percent"],
+        "additionalProperties": false,
+        "description": "One usage window of a seat, such as its 5-hour or 7-day limit."
       },
       "Schedule.CreateInput": {
         "type": "object",

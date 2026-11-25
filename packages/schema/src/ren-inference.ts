@@ -4,13 +4,16 @@ import { Schema } from "effect"
 import { Auth } from "./auth.js"
 import { Usage } from "./usage.js"
 
-export interface Meter extends Schema.Schema.Type<typeof Meter> {}
-export const Meter = Schema.Struct({
+export interface Window extends Schema.Schema.Type<typeof Window> {}
+export const Window = Schema.Struct({
   key: Schema.String,
   title: Schema.String,
   percent: Schema.NullOr(Schema.Number),
   resetsAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
-}).annotate({ identifier: "RenInference.Meter" })
+}).annotate({
+  identifier: "RenInference.Window",
+  description: "One usage window of a seat, such as its 5-hour or 7-day limit.",
+})
 
 export const Tone = Schema.Literals(["ok", "warn", "error"]).annotate({ identifier: "RenInference.Tone" })
 export type Tone = typeof Tone.Type
@@ -31,7 +34,7 @@ export const Connection = Schema.Struct({
     description:
       "True when the viewer connected it, or is an admin or owner: they can rename, reconnect and remove it.",
   }),
-  meters: Schema.Array(Meter),
+  limits: Schema.Array(Window),
 }).annotate({
   identifier: "RenInference.Connection",
   description: "A model provider the organization connected, with display data from the Ren Inference Service.",

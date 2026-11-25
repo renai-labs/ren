@@ -363,7 +363,7 @@ export type RenInferenceConnectResult = { url: string }
 
 export type RenInferenceTone = "ok" | "warn" | "error"
 
-export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
+export type RenInferenceWindow = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
 export type RenInferenceKeyStatus = "active" | "revoke_pending" | "revoked" | "expired"
 
@@ -1026,7 +1026,7 @@ export type RenInferenceConnection = {
   plan?: string
   canReconnect: boolean
   canManage: boolean
-  meters: Array<RenInferenceMeter>
+  limits: Array<RenInferenceWindow>
 }
 
 export type RenInferenceKeyOwner = { memberId: AuthMemberID; name: string | null }

@@ -31,7 +31,7 @@ export const RenInferenceGroup = HttpApiGroup.make("ren-inference")
       OpenApi.annotations({
         identifier: "ren-inference.connection.list",
         summary: "List provider connections",
-        description: "List the organization’s provider connections, with display data and usage meters.",
+        description: "List the organization’s provider connections, with display data and each seat’s usage limits.",
       }),
     ),
   )

@@ -16,7 +16,7 @@ import { EmptyState } from "../../components/empty-state.js"
 import { Page, useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
-import { SubscriptionMeters } from "../../components/subscription-meters.js"
+import { SubscriptionLimits } from "../../components/subscription-limits.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useCanAdminister } from "../../lib/use-organization.js"
@@ -344,12 +344,12 @@ function SeatCard(props: {
           </Button>
         </div>
       ) : null}
-      {connection.meters.length === 0 ? (
+      {connection.limits.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {connection.canReconnect ? "Sign in again to keep using it." : "Usage appears after the first request."}
         </p>
       ) : (
-        <SubscriptionMeters meters={connection.meters} />
+        <SubscriptionLimits limits={connection.limits} />
       )}
     </Card>
   )

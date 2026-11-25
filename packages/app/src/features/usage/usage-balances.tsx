@@ -7,7 +7,7 @@ import { CreditsCard } from "../../components/credits-card.js"
 import { useShapeId } from "../../components/page.js"
 import { ProviderMark } from "../../components/provider-mark.js"
 import { StatusBadge } from "../../components/status-badge.js"
-import { SubscriptionMeters } from "../../components/subscription-meters.js"
+import { SubscriptionLimits } from "../../components/subscription-limits.js"
 import { RouterContext } from "../../lib/router-context.js"
 
 const link = "block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50 *:h-full"
@@ -29,7 +29,7 @@ const sampleConnection: RenInferenceConnection = {
   status: { tone: "ok", label: "Connected" },
   canManage: false,
   canReconnect: false,
-  meters: [{ key: "sample", title: "Current session", percent: 0 }],
+  limits: [{ key: "sample", title: "Current session", percent: 0 }],
 }
 
 function SubscriptionSummary(props: { connection: RenInferenceConnection }) {
@@ -47,10 +47,10 @@ function SubscriptionSummary(props: { connection: RenInferenceConnection }) {
             {connection.plan ? <span>· {connection.plan}</span> : null}
           </span>
         </div>
-        {connection.meters.length === 0 ? (
+        {connection.limits.length === 0 ? (
           <p className="text-xs text-muted-foreground">Usage appears after the first request.</p>
         ) : (
-          <SubscriptionMeters meters={connection.meters} />
+          <SubscriptionLimits limits={connection.limits} />
         )}
       </Card>
     </Link>
