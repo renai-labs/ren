@@ -1,106 +1,74 @@
 ---
 title: Automations
 icon: Clock
-description: Start chats in a space on a schedule, or when another app sends a request to a webhook, and see each run and request.
-summary: Start chats on a schedule or an event
+description: Run an agent in a space on a schedule, or when another app sends a request to a webhook, and see what each run did.
+summary: Run agents on a schedule or an event
 ---
 
-An automation starts a chat in a [space](/docs/spaces/) without you. A schedule starts one at set times. A webhook starts one when another app sends it a request.
+An automation runs an agent in a [space](/docs/spaces/) without you. It has instructions, an agent and one trigger: a **Schedule**, which runs it at set times, or a **Webhook**, which runs it when another app sends a request.
 
 <Screenshot
   shot="automations/schedules"
-  alt="The Automations page with six schedules across four spaces, each with its frequency, last run, next run and status switch"
+  alt="The Automations page on the Schedules tab with schedules across four spaces, each with its frequency, next run and status"
   caption="Automations, with the schedules of every space."
 />
 
-**Automations** in the sidebar lists every space's automations. Each space also has its own, under **Schedules** and **Webhooks**.
+**Automations** in the sidebar lists the automations of all your spaces, on a **Schedules** tab and a **Webhooks** tab. Each space also has its own **Automations** page.
+
+## Create an automation
+
+1. Select **New automation**, and pick the space.
+2. Name it, and write the instructions: what the agent should do each time it runs.
+3. Pick the agent. Without one, Ren runs it with the space's settings.
+4. Select **Add trigger** and pick **Schedule** or **Webhook**. **From an app** turns on a webhook that one of the space's [apps](/docs/apps/) offers, with its instructions already written.
+5. Select **Save**, then **Test** to run it once now.
+
+Use the switch in the header to turn it on or off. **Duplicate** and **Delete** are in `⋯`. Deleting an automation stops its trigger. The chats it started stay.
 
 ## Schedules
 
-### Create a schedule
+Pick how often it runs: **Hourly**, **Daily**, **Weekdays**, **Weekly**, **Monthly**, **Once** on a date, or **Custom (cron)**.
 
-<Steps>
+Under **Advanced**, set the time zone, which starts as yours from **Settings → Preferences**, and an end date. Each run starts a new chat.
 
-1. Open the **Schedules** tab and select **Create schedule**.
-
-2. Write the prompt. Without a name, the schedule uses the first line of the prompt.
-
-3. Choose how often it runs and at what time, or choose **Custom cron** and enter a cron expression.
-
-4. Optionally choose an agent and an end date. Without an agent, the chat uses the default settings of the space.
-
-5. Select **Create schedule**.
-
-</Steps>
-
-A schedule follows the timezone in its form. New schedules start in your timezone from **Settings → Preferences**.
-
-### Runs
-
-Each run starts a new chat, or posts into the chat it targets.
-
-Select a schedule to see its runs. Select **Run now** to run it.
-
-A run fails when it cannot reach its chat. Ren skips a run when the previous run is still working, the schedule is paused or deleted, the owner or the agent left the space, or the target chat is archived.
-
-Pause a schedule with the switch in its row; edit or delete it from `⋯`.
-
-### When Ren pauses a schedule
-
-| Status                     | Cause                     | To fix                                 |
-| -------------------------- | ------------------------- | -------------------------------------- |
-| **Paused · owner left**    | The owner left the space. | Edit it to become the owner.           |
-| **Paused · agent removed** | The agent left the space. | Choose another agent.                  |
-| **Paused · failing**       | The last 5 runs failed.   | Open the failed runs, fix, turn it on. |
+A space can have 50 active schedules, each at least 5 minutes apart.
 
 ## Webhooks
 
-A webhook is a URL that another app sends requests to, such as Stripe on a payment or Linear on a new issue. Each request it accepts starts or continues a session.
+A webhook is a URL that another app sends requests to, such as Stripe on a failed payment or Linear on a new issue. Each request it accepts starts or continues a chat.
 
-### Create a webhook
+### Set up a webhook
 
-<Steps>
-
-1. Open the **Webhooks** tab and select **Create webhook**.
-
-2. Enter a name and the message: what the agent must do with each request. Optionally choose an agent.
-
-3. Select **Create webhook**, then copy the URL into the other app. The URL holds a token. Treat it like a password.
-
-4. Set the [signing secret](#signature) if the other app signs its requests.
-
-5. Send a test event from the other app. It shows under its requests.
-
-6. Turn the switch from **Debug** to **Live**.
-
-</Steps>
-
-**Debug** only records requests; **Live** acts on them.
-
-An app can also offer webhooks. They show under **From apps** on the **Webhooks** tab. Their message and rules come from the app, and their page shows the setup steps for the other app.
+1. Save the automation to get its URL, then select **Requests, filter and signature**.
+2. Copy the URL into the other app. It holds a token, so treat it like a password.
+3. If the other app signs its requests, set the [signature](#signature).
+4. Send a test event from the other app. It shows under **Requests**.
+5. Switch it from **Debug** to **Live**. **Debug** only records requests. **Live** runs the agent on them.
 
 ### Signature
 
-Pick the check the other app supports:
+Pick the check that the other app supports:
 
-| Check                        | Use it for                                 |
-| ---------------------------- | ------------------------------------------ |
-| **URL only**                 | Apps that cannot sign requests.            |
-| **Header equals the secret** | Apps that send a fixed secret in a header. |
-| **HMAC of the body**         | Apps that sign the body, such as GitHub.   |
-| **Standard Webhooks**        | Svix, Clerk, Resend.                       |
-| **Stripe**                   | Stripe.                                    |
+| Check                        | Use it for                                |
+| ---------------------------- | ----------------------------------------- |
+| **URL only**                 | Apps that cannot sign requests            |
+| **Header equals the secret** | Apps that send a fixed secret in a header |
+| **HMAC of the body**         | Apps that sign the body, such as GitHub   |
+| **Standard Webhooks**        | Svix, Clerk, Resend                       |
+| **Stripe**                   | Stripe                                    |
 
-Select **Set the signing secret**. Ren makes a secret and shows it once, or you paste the one the other app gave you. **Live** stays off until the secret is set.
+Select **Set secret**. Ren makes a secret and shows it once, or you paste the one the other app gave you. **Live** stays off until the secret is set.
 
-### Which requests start a session
+### Which requests run the agent
 
-- Start a session when: a condition on the request, such as "the action is create". Other requests are ignored. Without a condition, every request does.
-- Session continuation key: a value from the request, such as an issue ID. Requests with the same value go to one session.
-- Event identifier: a delivery ID. Ren skips a request it has already seen.
-- Session title: a value from the request that names the new session.
+| Setting                      | What it does                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| **Start a session when**     | A condition, such as "the action is create". Other requests are ignored.      |
+| **Session continuation key** | A value, such as an issue ID. Requests with the same value continue one chat. |
+| **Event identifier**         | A delivery ID. Ren skips a request it has already seen.                       |
+| **Session title**            | A value that names the chat, such as the issue title.                         |
 
-To set one, open a recorded request, select a value in its body, and select **Add as condition**, **Use as session continuation key** or **Use as session title**. Then select **Save**.
+To set one, open a recorded request, select a value in its body, and pick what to use it for. Then select **Save**. **Check** tests the rules on the last 20 requests.
 
 <Screenshot
   shot="automations/request-menu"
@@ -113,46 +81,54 @@ For the expression syntax, see [Ren as code](/docs/developers/ren-as-code/).
 
 ### Requests
 
-The webhook page lists its requests.
+The webhook lists its requests from the last 30 days, with their outcome:
 
-| Outcome   | Meaning                                                                    |
-| --------- | -------------------------------------------------------------------------- |
-| Failed    | The session did not take it.                                               |
-| Recorded  | Kept, no session: the webhook is in **Debug**, or its owner or agent left. |
-| Ignored   | The condition was false, or a rule failed.                                 |
-| Duplicate | Ren saw its event identifier before.                                       |
-| Rejected  | Wrong or missing signature, or a body over 1 MB.                           |
-| Throttled | Over 60 requests in one minute.                                            |
-| Answered  | A URL check from the other app.                                            |
+| Outcome   | Meaning                                          |
+| --------- | ------------------------------------------------ |
+| Queued    | Waiting to run.                                  |
+| Started   | It started a chat.                               |
+| Continued | It continued a chat.                             |
+| Recorded  | Kept without a run: the webhook is in **Debug**. |
+| Ignored   | The condition was false.                         |
+| Duplicate | Ren saw its event identifier before.             |
+| Rejected  | Wrong or missing signature, or a body over 1 MB. |
+| Throttled | Over 60 requests in one minute.                  |
+| Failed    | The agent could not take it.                     |
+| Answered  | A URL check from the other app.                  |
 
-Select **Replay** to send the queued, recorded, throttled and failed requests to their sessions. The webhook must be **Live**.
+Select **Replay** to run the queued, recorded, throttled and failed requests. The webhook must be **Live**.
 
-### Rotate the URL
+When the URL leaks, select **Rotate URL** and paste the new one in the other app.
 
-Select **Rotate URL** when the URL leaks. Paste the new one in the other app.
+## Run history
 
-### When Ren turns a webhook back to Debug
+Select **Run history** on an automation to see each run from the last 30 days. Select a run to open its chat beside the list, and reply to continue it.
+
+## Needs attention
+
+Ren stops an automation and marks it **Needs attention** when it cannot run as set up:
+
+| Cause                                         | Fix                                      |
+| --------------------------------------------- | ---------------------------------------- |
+| Its owner left the space                      | Save it to run it as you                 |
+| Its agent left the space                      | Pick another agent                       |
+| The last 5 runs failed                        | Open the failed runs, fix it, turn it on |
+| A webhook's rule broke on 5 requests in a row | Fix the rule, then turn it **Live**      |
+| The app no longer offers the webhook          | Delete it                                |
 
 <Screenshot
   shot="automations/webhook-warning"
   frame="detail"
-  alt="The Webhooks tab with Stripe failed payments marked with a red warning and the reason Debug: the parser broke on 5 requests in a row"
-  caption="A webhook that Ren switched back to Debug."
+  alt="The Webhooks tab with Stripe failed payments marked Needs attention and Linear new bugs marked Off"
+  caption="A webhook that needs attention."
 />
 
-Ren switches a webhook to **Debug**, marked with a warning, when:
+After you fix a webhook, select **Replay** to run the requests it recorded meanwhile.
 
-- the owner and the fallback person left the space,
-- its agent left the space,
-- 5 requests in a row broke a rule,
-- the app removed the webhook it offered.
+## Who an automation runs as
 
-Fix the cause, turn it **Live**, then select **Replay** to run the requests it recorded meanwhile.
+An automation runs as its owner: the last person who changed what it does, such as its instructions, agent, schedule or rules. Any member of the space can manage its automations.
 
-## Good to know
+For a webhook, **If the owner leaves the space** under **Advanced** decides what happens: **Switch it to Debug**, **Run it as me**, or run it as another member.
 
-- A chat from an automation denies any action that needs approval, unless you allow it in the [permissions](/docs/permissions/).
-- An automation runs as its owner: the last person who changed what it does, such as its prompt, agent, time or rules. Any member of the space can manage its automations.
-- After a webhook's owner leaves the space, its sessions run as the fallback person. Select **Use me instead** on the webhook to become it.
-- Runs and requests are kept for 30 days.
-- A space can have 50 active schedules, each at least 5 minutes apart. After its end date, a schedule is **Ended**.
+A chat from an automation has nobody to approve a permission card, so actions that ask first are denied. Allow what it needs in [permissions](/docs/permissions/).
