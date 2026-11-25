@@ -1,8 +1,33 @@
 ---
 title: Ren MCP
 icon: Chatbot
-description: This page is not written yet.
+description: Connect Claude, ChatGPT or another AI tool to Ren, so it can start chats, create tasks and change your Ren setup for you.
 summary: Use Ren from Claude or ChatGPT
 ---
 
-This page is not written yet.
+The Ren MCP connects another AI tool to Ren. From Claude or ChatGPT, you can then ask it to create a task, start a chat in a space, add an app or read what Ren did.
+
+## Connect claude.ai or chatgpt.com
+
+1. Add a custom connector in your tool:
+
+   | Tool        | Where                                |
+   | ----------- | ------------------------------------ |
+   | claude.ai   | **Customize → Connectors**           |
+   | chatgpt.com | **Settings → Connectors → Advanced** |
+
+2. Use `https://api.useren.ai/mcp` as the server URL.
+3. Sign in to Ren in the window that opens, pick the **Organization**, and allow the tool to use Ren.
+4. Start a new chat in the tool. It now has the Ren tools.
+
+For Claude Code, Codex and other coding agents, see [MCP](/docs/developers/mcp/) on the Developers tab.
+
+## What the tool can do
+
+The tool acts as you, in the organization you picked, with your access. It can do what you can do in the app, such as:
+
+- "Create a task in Engineering to upgrade Postgres on staging, and assign it to the fixer."
+- "Ask Ren in Growth for last week's churn by plan."
+- "Add the Linear app to the Customer Success space."
+
+To stop it, remove the connector in the tool.
