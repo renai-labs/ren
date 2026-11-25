@@ -8,18 +8,18 @@ Apply works today for org settings, shared spaces, agents, `uses`, `factory`, cu
 
 `plan` reports each of these as a problem (`core/src/infra-specs.ts:74`, `:721`, `:727`, `:747`):
 
-| Part                                                 | Today                                                    |
-| ---------------------------------------------------- | -------------------------------------------------------- |
-| `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."                 |
-| `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."      |
-| One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.              |
-| Linear channel mappings                              | Not managed: only GitHub and Slack mappings are applied. |
+| Part                                                 | Today                                                |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."             |
+| `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."  |
+| One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.          |
+| Linear channel mappings                              | Not managed: Ren has no Linear channel provider yet. |
 
 Rules that hold for these parts:
 
 1. The spec contains no value that belongs to one deployment. `deploy.yaml` binds each slot of the spec to a real value, so two organizations can use one spec with different bindings.
 2. The environment of a space is its `environment.yaml` plus the union of the environment packages of the apps it uses. Two versions of the same package fail validation.
-3. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it.
+3. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it. Channel mappings are the exception: a mapping has no archived state, so apply removes it the way unmapping a place in the app does, and the row is deleted.
 
 ## 2. Listings and seeds
 
