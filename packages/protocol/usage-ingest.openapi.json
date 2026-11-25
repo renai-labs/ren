@@ -3,7 +3,7 @@
   "info": {
     "title": "Ren Usage Ingest API",
     "version": "1",
-    "description": "Internal API where a trusted producer, such as the model gateway, sends the costs that it saw."
+    "description": "Internal API where a trusted producer, such as the inference service, sends the costs that it saw."
   },
   "paths": {
     "/usage/v1/events": {
@@ -385,7 +385,7 @@
           },
           "operation": {
             "type": "string",
-            "description": "The gateway’s call type, such as completion, image_generation, speech, transcription or decisions."
+            "description": "The inference service’s call type, such as completion, image_generation, speech, transcription or decisions."
           },
           "kind": {
             "type": "string"

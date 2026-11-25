@@ -1728,6 +1728,7 @@ export type ProviderInfo = {
   enabled: boolean
   method?: ModelsMethod
   methods: Array<ModelsMethod>
+  signIn?: string
   fields: Array<InferencePluginField>
   key: ProviderKey | null
   seats: Array<RenInferenceConnection>

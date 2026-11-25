@@ -12,7 +12,7 @@ import { toast } from "@ren/ui/sonner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { formatDateTime, formatUtcDate } from "@ren/ui/time"
+import { formatDateTime, formatUtcDate, formatUtcMonth } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
@@ -26,6 +26,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { ConnectDialog } from "./connect-dialog.js"
 import { ModelTypes } from "./model-types.js"
+import { formatPerMillion } from "../../lib/format.js"
 
 const route = getRouteApi("/_authed/_shell/settings/providers/$id/")
 
@@ -33,8 +34,6 @@ const methods = [
   { value: "key", label: "API key" },
   { value: "subscription", label: "Subscription" },
 ] as const
-
-const signIn: Readonly<Record<string, string>> = { anthropic: "Connect your Claude", openai: "Sign in with ChatGPT" }
 
 const filters = ["All", "On", "Free"] as const
 type Filter = (typeof filters)[number]
@@ -45,7 +44,7 @@ const shownBy: Readonly<Record<Filter, (model: ProviderModel) => boolean>> = {
   Free: (model) => model.free,
 }
 
-const usd = (value: number | undefined) => (value === undefined ? "–" : `$${value.toFixed(2)}`)
+const usd = (value: number | undefined) => (value === undefined ? "–" : formatPerMillion(value))
 
 const tokens = (value: number | undefined) => {
   if (value === undefined) return "–"
@@ -53,9 +52,11 @@ const tokens = (value: number | undefined) => {
   return `${Math.round(value / 1000)}K`
 }
 
-// oxlint-disable-next-line ren/no-comments -- models.dev dates are `YYYY-MM-DD` or `YYYY-MM`.
-const released = (value: string | undefined) =>
-  value ? formatUtcDate(value.length === 7 ? `${value}-01` : value) : "–"
+// oxlint-disable-next-line ren/no-comments -- models.dev dates are `YYYY-MM-DD` or `YYYY-MM`; a month shows as a month, not as its first day.
+const released = (value: string | undefined) => {
+  if (!value) return "–"
+  return value.length === 7 ? formatUtcMonth(`${value}-01`) : formatUtcDate(value)
+}
 
 const sample: ProviderModelList = {
   canManage: false,
@@ -305,7 +306,7 @@ function Subscriptions(props: {
         <h2 className="text-sm font-medium">Subscriptions</h2>
         <Button size="sm" variant="outline" onClick={() => props.onSignIn()}>
           <IconPlus />
-          {signIn[provider.id] ?? `Connect ${provider.name}`}
+          {provider.signIn ?? `Connect ${provider.name}`}
         </Button>
       </div>
       {provider.seats.length === 0 ? (

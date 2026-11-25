@@ -15,7 +15,7 @@ import { Separator } from "@ren/ui/separator"
 import { Loading } from "@ren/ui/loading"
 import { cn } from "cn"
 import { ChatPreferences } from "../lib/chat-preferences.js"
-import { modelKey } from "../lib/format.js"
+import { formatPerMillion, modelKey } from "../lib/format.js"
 import { Preference } from "../lib/preference.js"
 import { PaletteDialog, PaletteEmpty, PaletteHeading } from "./palette.js"
 
@@ -64,21 +64,17 @@ export function pickModel(
   return { id: choice.id, providerID: choice.providerID, ...(variant && { variant }) }
 }
 
-// oxlint-disable-next-line ren/no-comments -- Providers P24: only Anthropic and OpenAI have two methods, so only their rows say which one serves.
-const twoMethods = new Set(["anthropic", "openai", "claude-agent"])
-
 const providerOf = (model: Choice) => model.providerName ?? capitalize(model.providerID)
 
+// oxlint-disable-next-line ren/no-comments -- Providers P24: Ren sends a method only for a provider with two, so only those rows say which one serves.
 const providerLabel = (model: Choice) =>
-  model.method && twoMethods.has(model.providerID)
+  model.method
     ? `${providerOf(model)} (${model.method === "subscription" ? "subscription" : "key"})`
     : providerOf(model)
 
-const perMillion = (value: number) => `$${value < 10 ? value.toFixed(2).replace(/\.?0+$/u, "") : Math.round(value)}`
-
 const priceLabel = (model: Choice) => {
   if (model.free) return "Free"
-  return model.price && `${perMillion(model.price.input)} / ${perMillion(model.price.output)}`
+  return model.price && `${formatPerMillion(model.price.input)} / ${formatPerMillion(model.price.output)}`
 }
 
 const normalize = (value: string) =>
@@ -96,8 +92,6 @@ const matches = (query: string, model: Choice) => {
     (value) => normalize(value).includes(search) || normalize(value).replaceAll(" ", "").includes(compact),
   )
 }
-
-const providerRank = (provider: string) => (provider === "Ren" ? 0 : 1)
 
 interface Group {
   readonly key: string
@@ -119,7 +113,8 @@ const groupsOf = (
     shown.filter((model) => !listed.has(modelKey(model))),
     providerLabel,
   )
-  const providers = [...byProvider.keys()].toSorted((a, b) => providerRank(a) - providerRank(b) || a.localeCompare(b))
+  // oxlint-disable-next-line ren/no-comments -- Providers in the order Ren lists them: the built-in ones first.
+  const providers = [...byProvider.keys()]
   return [
     ...(recent.length ? [{ key: "recent", title: "Recent", section: true, models: recent }] : []),
     ...providers.flatMap((provider) => {

@@ -5,6 +5,7 @@ const utcDateFormat = new Intl.DateTimeFormat("en", {
   year: "numeric",
   timeZone: "UTC",
 })
+const utcMonthFormat = new Intl.DateTimeFormat("en", { month: "short", year: "numeric", timeZone: "UTC" })
 const shortDateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" })
 const dateTimeFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" })
 const clockFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -13,6 +14,8 @@ const narrowRelativeFormat = new Intl.RelativeTimeFormat("en", { style: "narrow"
 export const formatDate = (value: string | Date) => dateFormat.format(new Date(value))
 
 export const formatUtcDate = (value: string | Date) => utcDateFormat.format(new Date(value))
+
+export const formatUtcMonth = (value: string | Date) => utcMonthFormat.format(new Date(value))
 
 export const formatShortDate = (value: string | Date) => shortDateFormat.format(new Date(value))
 

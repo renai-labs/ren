@@ -13476,7 +13476,7 @@
             }
           }
         },
-        "description": "Send one small request with the fields, through the provider’s gateway, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
+        "description": "Send one small request with the fields, through the provider’s inference service, and save nothing. A failed test returns the vendor’s message. Only admins and owners.",
         "summary": "Test a provider key",
         "requestBody": {
           "content": {
@@ -13568,7 +13568,7 @@
             }
           }
         },
-        "description": "Test the fields, then store them in the provider’s gateway. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
+        "description": "Test the fields, then store them in the provider’s inference service. Ren keeps the last 4 characters and never stores or logs the key. A failed test saves nothing (400 with the vendor’s message). Only admins and owners.",
         "summary": "Save a provider key",
         "requestBody": {
           "content": {
@@ -13658,7 +13658,7 @@
             }
           }
         },
-        "description": "Remove the key from the provider’s gateway. The provider’s models leave pickers at the next push. Only admins and owners.",
+        "description": "Remove the key from the provider’s inference service. The provider’s models leave pickers at the next push. Only admins and owners.",
         "summary": "Remove a provider key"
       }
     },
@@ -13865,7 +13865,7 @@
         ],
         "responses": {
           "200": {
-            "description": "What the chat’s current model uses up: the limits of its model gateway and the Ren credit. Empty when a source does not answer.",
+            "description": "What the chat’s current model uses up: the limits of its inference service and the Ren credit. Empty when a source does not answer.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13905,7 +13905,7 @@
             }
           }
         },
-        "description": "Return what the chat’s current model uses up: the limits its model gateway reports (the free cap of a free model; the windows of the seat that served the chat’s last seat call) and, for a model Ren pays for, the organization’s Ren credit. Ren reads the gateway and billing on each call. A member of the chat’s space reads it.",
+        "description": "Return what the chat’s current model uses up: the limits its inference service reports (the free cap of a free model; the windows of the seat that served the chat’s last seat call) and, for a model Ren pays for, the organization’s Ren credit. Ren reads the inference service and billing on each call. A member of the chat’s space reads it.",
         "summary": "Read the limits of a chat’s model"
       }
     },
@@ -22042,7 +22042,7 @@
         },
         "required": ["limits", "credit"],
         "additionalProperties": false,
-        "description": "What the chat’s current model uses up: the limits of its model gateway and the Ren credit. Empty when a source does not answer."
+        "description": "What the chat’s current model uses up: the limits of its inference service and the Ren credit. Empty when a source does not answer."
       },
       "Limits.Limit": {
         "anyOf": [
@@ -22053,7 +22053,7 @@
             "$ref": "#/components/schemas/Limits.Free"
           }
         ],
-        "description": "A cap the model gateway or a vendor enforces, with a reset: a seat’s window or the free cap."
+        "description": "A cap the inference service or a vendor enforces, with a reset: a seat’s window or the free cap."
       },
       "Limits.Seat": {
         "type": "object",
@@ -22096,7 +22096,7 @@
           },
           "title": {
             "type": "string",
-            "description": "The gateway’s name of the window."
+            "description": "The inference service’s name of the window."
           }
         },
         "required": ["_tag", "key", "percent", "resetsAt", "seat", "providerName", "window", "title"],
@@ -23987,6 +23987,11 @@
               "$ref": "#/components/schemas/Models.Method"
             }
           },
+          "signIn": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The label of the button that starts a member’s sign-in, for a provider with the subscription method."
+          },
           "fields": {
             "type": "array",
             "items": {
@@ -24040,7 +24045,7 @@
           "canManage"
         ],
         "additionalProperties": false,
-        "description": "One provider of the model gateways, with the organization’s settings of it."
+        "description": "One provider of the inference plugins, with the organization’s settings of it."
       },
       "Provider.Key": {
         "type": "object",
@@ -24075,7 +24080,7 @@
               "type": "string",
               "maxLength": 20000
             },
-            "description": "The Connect form’s fields. Ren forwards them to the provider’s gateway once and never stores them."
+            "description": "The Connect form’s fields. Ren forwards them to the provider’s inference service once and never stores them."
           }
         },
         "required": ["fields"],
@@ -24379,7 +24384,7 @@
           },
           "providerId": {
             "type": "string",
-            "description": "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older gateway."
+            "description": "The card the seat belongs to: `anthropic` or `openai`. Omitted by an older inference service."
           },
           "iconUrl": {
             "type": "string"

@@ -28,6 +28,9 @@ export const Info = Schema.Struct({
   enabled: Schema.Boolean,
   method: Schema.optionalKey(Models.Method).annotate({ description: "Absent on a built-in provider." }),
   methods: Schema.Array(Models.Method),
+  signIn: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The label of the button that starts a member’s sign-in, for a provider with the subscription method.",
+  }),
   fields: Schema.Array(InferencePlugin.Field),
   key: Schema.NullOr(Key),
   seats: Schema.Array(RenInference.Connection).annotate({

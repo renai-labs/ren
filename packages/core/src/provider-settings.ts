@@ -146,6 +146,9 @@ export const layer = Layer.effect(
                   ),
                 )
               : (each.provider.modelTypes ?? { chat: each.provider.modelCount ?? 0 })
+            const signIn = each.provider.auth
+              .flatMap((auth) => (auth._tag === "subscription" ? [auth.signIn] : []))
+              .at(0)
             return {
               id: each.provider.id,
               name: each.provider.name,
@@ -157,6 +160,7 @@ export const layer = Layer.effect(
               enabled: state.enabled,
               ...(state.method && { method: state.method }),
               methods: ModelLists.methodsOf(each.provider),
+              ...(signIn && { signIn }),
               fields: keyFields(each.provider),
               seats: seats.filter((seat) => seat.providerId === each.provider.id),
               key: key

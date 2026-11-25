@@ -35,7 +35,10 @@ const sample: ProviderPage = {
 const normalized = (value: string) => value.trim().toLowerCase()
 
 // oxlint-disable-next-line ren/no-comments -- Providers §6.4.1: a provider reaches chats only while it is connected: built in, a saved key, or a member's subscription.
-const connected = (provider: ProviderInfo) => provider.builtIn || provider.key !== null || provider.seats.length > 0
+const connected = (provider: ProviderInfo) => {
+  if (provider.builtIn) return true
+  return provider.method === "subscription" ? provider.seats.length > 0 : provider.key !== null
+}
 
 function Connection(props: { provider: ProviderInfo }) {
   const provider = props.provider
@@ -71,7 +74,10 @@ function ProviderCard(props: { provider: ProviderInfo; onConnect: () => void }) 
         {connected(provider) ? (
           <Badge variant={provider.enabled ? "secondary" : "outline"}>{provider.enabled ? "On" : "Off"}</Badge>
         ) : null}
-        {!connected(provider) && provider.canManage && provider.fields.length > 0 ? (
+        {!connected(provider) &&
+        provider.canManage &&
+        provider.method !== "subscription" &&
+        provider.fields.length > 0 ? (
           <Button
             size="sm"
             variant="outline"
