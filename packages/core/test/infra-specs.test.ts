@@ -491,7 +491,7 @@ describe("InfraSpecs", () => {
       expect(plan.problems).toEqual([
         {
           path: "deploy.yaml/spaces/gone",
-          message: "deploy.yaml binds space “gone”, which the spec does not declare.",
+          message: "deploy.yaml binds space “gone”, which the folder does not declare.",
         },
       ])
     }),

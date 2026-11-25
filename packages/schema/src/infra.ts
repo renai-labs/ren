@@ -197,7 +197,7 @@ export const Spec = Schema.Struct({
               : [
                   {
                     path: ["spaces", space, named.part, "environment"],
-                    issue: `The ${named.part} of space "${space}" names environment template "${named.name}", which the spec does not declare.`,
+                    issue: `The ${named.part} of space "${space}" names environment template "${named.name}", which the folder does not declare.`,
                   },
                 ],
           ),
@@ -222,7 +222,7 @@ export const Spec = Schema.Struct({
         ].flatMap((renamed) =>
           (renamed.renamedFrom ?? []).filter(renamed.defined).map((earlier) => ({
             path: [...renamed.path, "renamedFrom"],
-            issue: `${renamed.noun} "${renamed.name}" is renamed from "${earlier}", which the spec still defines.`,
+            issue: `${renamed.noun} "${renamed.name}" is renamed from "${earlier}", which the folder still defines.`,
           })),
         ),
         ...(["skills", "mcps"] as const).flatMap((kind) =>
@@ -379,7 +379,7 @@ export const bindingIssues = (spec: Spec, bindings: Bindings) => {
   return [
     ...bound
       .filter(([slug]) => !(slug in spec.spaces))
-      .map(([slug]) => ({ path: ["spaces", slug], issue: `The spec declares no space "${slug}".` })),
+      .map(([slug]) => ({ path: ["spaces", slug], issue: `The folder declares no space "${slug}".` })),
     ...bound.flatMap(([slug, space]) => {
       const declaration = spec.spaces[slug]
       if (!declaration) return []
@@ -458,7 +458,7 @@ export const Change = Schema.Struct({
   kind: Kind,
   path: Schema.String.annotate({
     description:
-      "Where the spec declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
+      "Where the folder declares it: org, environments/<name>, spaces/<slug>, spaces/<slug>/agents/<name>, spaces/<slug>/uses/agents/<name>, spaces/<slug>/apps/<slug>, spaces/<slug>/schedules/<slug>, spaces/<slug>/webhooks/<slug>, spaces/<slug>/channels/<slug>, memory/<file>, spaces/<slug>/memory/<file>, deploy.yaml/profiles/<app>/<profile> or deploy.yaml/spaces/<slug>/profiles/<app>/<profile>.",
   }),
   from: Schema.optionalKey(Schema.String.annotate({ description: "The path before a rename or a move." })),
   fields: Schema.Array(Schema.String).annotate({ description: "The fields that an update changes." }),
@@ -577,5 +577,5 @@ export const Pulled = Schema.Struct({
 }).annotate({
   identifier: "Infra.Pulled",
   description:
-    "The part of the org spec that infra applies today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
+    "The part of the organization that a folder manages today: organization settings and memory, environment templates, shared spaces with their runtime, agents, apps, schedules, channels and memory, the organization’s shared profiles, and the channel and profile bindings of each space.",
 })

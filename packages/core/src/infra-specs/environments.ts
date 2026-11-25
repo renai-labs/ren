@@ -210,7 +210,7 @@ export const make = Effect.gen(function* () {
           .filter((space) => space.uses.includes(template.id))
           .map((space) => ({
             path: path(template.name),
-            message: `Space “${space.name}” uses this environment template, and the spec does not manage it. Pick another brain or hand for it in the app first.`,
+            message: `Space “${space.name}” uses this environment template, and the folder does not manage it. Pick another brain or hand for it in the app first.`,
           })),
       ),
       ...archived.flatMap((template) =>

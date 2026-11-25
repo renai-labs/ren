@@ -257,7 +257,7 @@ export const make = Effect.gen(function* () {
       if (entry.current && !context.shared.has(entry.current.spaceId)) {
         problems.push({
           path: path(entry.space.slug, entry.slug),
-          message: `This ${entry.title} place is mapped to a space that the spec does not manage. Unmap it there first.`,
+          message: `This ${entry.title} place is mapped to a space that the folder does not manage. Unmap it there first.`,
         })
         return false
       }

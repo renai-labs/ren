@@ -319,8 +319,8 @@ export const validate = async (root: string): Promise<Validated> => {
       kind: "invalid",
       problems: [
         present.has("space.yaml")
-          ? { path: "space.yaml", message: "Private specs are not supported yet." }
-          : { path: ".", message: "No spec here. An org spec has org.yaml, and a private spec has space.yaml." },
+          ? { path: "space.yaml", message: "Personal spaces can’t be in a folder yet." }
+          : { path: ".", message: "No Ren folder here: it needs org.yaml." },
       ],
     }
 

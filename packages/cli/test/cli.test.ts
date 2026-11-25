@@ -130,7 +130,7 @@ describe("ren", () => {
     const pretty = await ren(["infra", "validate", "--output", "pretty"], { cwd: root })
 
     expect(piped).toEqual({ code: 0, stdout: '{\n  "valid": true\n}\n', stderr: "" })
-    expect(pretty).toEqual({ code: 0, stdout: "The spec is valid.\n", stderr: "" })
+    expect(pretty).toEqual({ code: 0, stdout: "The folder is valid.\n", stderr: "" })
   })
 
   test("infra validate fails with each problem, structured in JSON", async () => {

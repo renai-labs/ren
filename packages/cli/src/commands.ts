@@ -3,7 +3,7 @@ export * as Commands from "./commands.js"
 import { Argument, Command, Flag } from "effect/cli"
 
 export const folder = {
-  folder: Argument.String("folder").pipe(Argument.withDescription("Spec folder"), Argument.withDefault(".ren")),
+  folder: Argument.String("folder").pipe(Argument.withDescription("Folder to use"), Argument.withDefault(".ren")),
 }
 
 export const planOptions = {
@@ -45,7 +45,9 @@ export const whoami = Command.make("whoami").pipe(Command.withDescription("Show 
 export const upgrade = Command.make("upgrade", upgradeOptions).pipe(Command.withDescription("Update ren"))
 export const health = Command.make("health").pipe(Command.withDescription("Check server health"))
 export const infra = Command.make("infra").pipe(Command.withDescription("Manage infrastructure"))
-export const validate = Command.make("validate", folder).pipe(Command.withDescription("Validate a local spec"))
+export const validate = Command.make("validate", folder).pipe(Command.withDescription("Check the folder’s files"))
 export const plan = Command.make("plan", planOptions).pipe(Command.withDescription("Preview changes"))
 export const apply = Command.make("apply", applyOptions).pipe(Command.withDescription("Apply changes"))
-export const pull = Command.make("pull", folder).pipe(Command.withDescription("Pull org settings, spaces and agents"))
+export const pull = Command.make("pull", folder).pipe(
+  Command.withDescription("Write the organization’s setup into the folder"),
+)

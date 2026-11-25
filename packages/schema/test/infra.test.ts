@@ -109,7 +109,7 @@ describe("Infra.Spec", () => {
     expect(Exit.isSuccess(runtime({ Python: declared, Node: declared }))).toBe(true)
     const exit = runtime({ Python: declared })
     expect(String(exit)).toContain(
-      'The hand of space "engineering" names environment template "Node", which the spec does not declare.',
+      'The hand of space "engineering" names environment template "Node", which the folder does not declare.',
     )
     expect(String(exit)).not.toContain('"Python"')
   })
@@ -179,8 +179,8 @@ describe("Infra.Spec", () => {
       },
       support: { name: "Support" },
     })
-    expect(String(exit)).toContain('Space "engineering" is renamed from "support", which the spec still defines.')
-    expect(String(exit)).toContain('Agent "build" is renamed from "qa", which the spec still defines.')
+    expect(String(exit)).toContain('Space "engineering" is renamed from "support", which the folder still defines.')
+    expect(String(exit)).toContain('Agent "build" is renamed from "qa", which the folder still defines.')
   })
 
   const mcp = (fields: Record<string, unknown>) =>
@@ -333,7 +333,7 @@ describe("Infra.bindingIssues", () => {
       'spaces.engineering.channels.gone: spaces/engineering/channels.yaml declares no channel "gone".',
       'spaces.engineering.channels.help: Bind channel "help" to a Slack place.',
       'spaces.engineering.channels.ren: Channel "ren" is a GitHub channel, so bind it to a GitHub place.',
-      'spaces.ops: The spec declares no space "ops".',
+      'spaces.ops: The folder declares no space "ops".',
     ])
   })
 

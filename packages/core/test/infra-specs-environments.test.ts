@@ -216,7 +216,7 @@ describe("InfraSpecs environments", () => {
         {
           path: "environments/Python",
           message:
-            "Space “Team” uses this environment template, and the spec does not manage it. Pick another brain or hand for it in the app first.",
+            "Space “Team” uses this environment template, and the folder does not manage it. Pick another brain or hand for it in the app first.",
         },
       ])
     }),
