@@ -13323,15 +13323,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Provider.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider.Page"
-                }
-              }
-            }
+          "204": {
+            "description": "<No Content>"
           },
           "400": {
             "description": "InvalidRequestError",
@@ -13521,15 +13514,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Provider.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider.Page"
-                }
-              }
-            }
+          "204": {
+            "description": "<No Content>"
           },
           "400": {
             "description": "InvalidRequestError",
@@ -13618,15 +13604,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Provider.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider.Page"
-                }
-              }
-            }
+          "204": {
+            "description": "<No Content>"
           },
           "400": {
             "description": "InvalidRequestError",
@@ -13794,15 +13773,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "A provider’s models and their switches, the latest release first. A new model is always on.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Provider.ModelList"
-                }
-              }
-            }
+          "204": {
+            "description": "<No Content>"
           },
           "400": {
             "description": "InvalidRequestError",

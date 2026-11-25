@@ -4,6 +4,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Changed, Field, Limit, Listed, Provider, Window } from "@ren/schema/model-gateway"
 import type { Models } from "@ren/schema/models"
+import type { Provider as ProviderInput } from "@ren/schema/provider"
 import type { Space } from "@ren/schema/space"
 import { Context, type DateTime, Effect, Layer, Option, type Redacted, Schema, type Stream } from "effect"
 
@@ -70,11 +71,16 @@ export interface Gateway {
   readonly settings: (
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<Readonly<Record<string, ProviderSettings>>, Unavailable>
-  // oxlint-disable-next-line ren/no-comments -- Providers P29: writes a provider's settings; the gateway allows only what is on and connected (§6.4.1).
-  readonly configure: (
+  // oxlint-disable-next-line ren/no-comments -- Providers P29: changes only the fields sent, so two changes at once never undo each other; the gateway allows only what is on and connected (§6.4.1).
+  readonly update: (
     provider: string,
     organizationId: Auth.OrganizationID,
-    settings: Settings,
+    change: ProviderInput.UpdateInput,
+  ) => Effect.Effect<void, Unavailable>
+  readonly switchModels: (
+    provider: string,
+    organizationId: Auth.OrganizationID,
+    models: ProviderInput.ModelListInput["models"],
   ) => Effect.Effect<void, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- A key provider: test the fields without saving; save them after a passing test; remove them. Ren never stores the fields.
   readonly test: (

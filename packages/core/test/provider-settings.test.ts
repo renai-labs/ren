@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test"
 import { PgClient } from "@effect/sql-pg"
 import { Testing } from "@ren/db/testing"
-import { Effect, Layer, Queue, Redacted } from "effect"
+import { ConfigProvider, Effect, Exit, Layer, Queue, Redacted } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import { Access } from "../src/access.js"
 import { BrainPush } from "../src/brain-push.js"
@@ -114,7 +114,8 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
           ["groq", false],
         ])
 
-        const page = yield* found.providers.connect(found.admin, "groq", fields(secret))
+        yield* found.providers.connect(found.admin, "groq", fields(secret))
+        const page = yield* found.providers.page(found.admin)
         expect(page.providers.find((each) => each.id === "groq")).toMatchObject({
           enabled: true,
           method: "key",
@@ -153,7 +154,6 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         yield* found.providers.update(found.admin, "groq", { enabled: false })
         expect((yield* found.test.gateway.settings(found.organizationId)).groq).toMatchObject({
           enabled: false,
-          method: "key",
           off: [],
           key: { last4: "9f2c" },
         })
@@ -195,9 +195,8 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
   it.live("a model switched off leaves only its organization's list, after the gateway heard it", () =>
     Effect.gen(function* () {
       const found = yield* setup
-      const after = yield* found.providers.updateModels(found.admin, "ren", {
-        models: [{ id: "ren/vendor/two", enabled: false }],
-      })
+      yield* found.providers.updateModels(found.admin, "ren", { models: [{ id: "ren/vendor/two", enabled: false }] })
+      const after = yield* found.providers.models(found.admin, "ren")
       expect(after.models.map((model) => [model.id, model.enabled])).toEqual([
         ["ren/vendor/one", true],
         ["ren/vendor/two", false],
@@ -211,6 +210,35 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
 
       yield* found.providers.update(found.admin, "ren", { enabled: false })
       expect(yield* found.lists.list(found.organizationId)).toEqual([])
+    }),
+  )
+
+  it.live("a model the provider does not list is refused, and the gateway hears nothing", () =>
+    Effect.gen(function* () {
+      const found = yield* setup
+      const refused = yield* Effect.flip(
+        found.providers.updateModels(found.admin, "ren", { models: [{ id: "ren/vendor/gone", enabled: false }] }),
+      )
+      expect(refused).toMatchObject({ _tag: "Primitive.Invalid", message: "Unknown models: ren/vendor/gone." })
+      expect(yield* found.test.gateway.settings(found.organizationId)).toEqual({})
+    }),
+  )
+
+  it.live("a default model that is not <provider>/<model> stops Ren at start, not at each signup", () =>
+    Effect.gen(function* () {
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const built = yield* Effect.exit(
+        Layer.build(
+          ProviderSettings.layer.pipe(
+            Layer.provideMerge(ModelLists.layer),
+            Layer.provideMerge(ModelGateway.layer([Effect.succeed(test.gateway)])),
+            Layer.provideMerge(Access.layer),
+            Layer.provide(RenInference.layerNone),
+            Layer.provide(ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ REN_DEFAULT_MODEL: "default-model" }))),
+          ),
+        ),
+      )
+      expect(Exit.isFailure(built)).toBe(true)
     }),
   )
 })

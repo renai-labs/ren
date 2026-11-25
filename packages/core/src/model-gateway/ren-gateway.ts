@@ -50,11 +50,10 @@ export const gateway = Effect.gen(function* () {
         ),
       ),
     settings: (organizationId) => inference.providerSettings(organizationId).pipe(Effect.mapError(unavailable)),
-    // oxlint-disable-next-line ren/no-comments -- The gateway's PUT needs a method, and ignores it on a provider the deployment connects.
-    configure: (provider, organizationId, settings) =>
-      inference
-        .configureProvider(organizationId, provider, { ...settings, method: settings.method ?? "key" })
-        .pipe(Effect.mapError(unavailable)),
+    update: (provider, organizationId, change) =>
+      inference.updateProvider(organizationId, provider, change).pipe(Effect.mapError(unavailable)),
+    switchModels: (provider, organizationId, models) =>
+      inference.switchModels(organizationId, provider, models).pipe(Effect.mapError(unavailable)),
     test: (provider, organizationId, fields) =>
       inference.testKey(organizationId, provider, fields).pipe(Effect.mapError(rejectedOr)),
     connect: (provider, organizationId, fields, savedBy) =>

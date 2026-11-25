@@ -1,6 +1,6 @@
 import { Provider } from "@ren/schema/provider"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } from "../errors.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
@@ -24,7 +24,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.patch("provider.update", "/providers/:id", {
       params: ProviderParams,
       payload: Provider.UpdateInput,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
@@ -54,7 +54,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.put("provider.key.save", "/providers/:id/key", {
       params: ProviderParams,
       payload: Provider.KeyInput,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
@@ -68,7 +68,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
   .add(
     HttpApiEndpoint.delete("provider.key.remove", "/providers/:id/key", {
       params: ProviderParams,
-      success: Provider.Page,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({
@@ -97,7 +97,7 @@ export const ProviderGroup = HttpApiGroup.make("provider")
     HttpApiEndpoint.patch("provider.models.update", "/providers/:id/models", {
       params: ProviderParams,
       payload: Provider.ModelListInput,
-      success: Provider.ModelList,
+      success: HttpApiSchema.NoContent,
       error: errors,
     }).annotateMerge(
       OpenApi.annotations({

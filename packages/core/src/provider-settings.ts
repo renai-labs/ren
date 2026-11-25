@@ -21,20 +21,16 @@ type Fields = Provider.KeyInput["fields"]
 
 export interface Interface {
   readonly page: (actor: Actor.Info) => Effect.Effect<Provider.Page, Failure>
-  readonly update: (
-    actor: Actor.Info,
-    providerId: string,
-    input: Provider.UpdateInput,
-  ) => Effect.Effect<Provider.Page, Failure>
+  readonly update: (actor: Actor.Info, providerId: string, input: Provider.UpdateInput) => Effect.Effect<void, Failure>
   readonly test: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<Provider.TestResult, Failure>
-  readonly connect: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<Provider.Page, Failure>
-  readonly disconnect: (actor: Actor.Info, providerId: string) => Effect.Effect<Provider.Page, Failure>
+  readonly connect: (actor: Actor.Info, providerId: string, fields: Fields) => Effect.Effect<void, Failure>
+  readonly disconnect: (actor: Actor.Info, providerId: string) => Effect.Effect<void, Failure>
   readonly models: (actor: Actor.Info, providerId: string) => Effect.Effect<Provider.ModelList, Failure>
   readonly updateModels: (
     actor: Actor.Info,
     providerId: string,
     input: Provider.ModelListInput,
-  ) => Effect.Effect<Provider.ModelList, Failure>
+  ) => Effect.Effect<void, Failure>
   readonly applyDefaultModel: (organizationId: Auth.OrganizationID) => Effect.Effect<void>
 }
 
@@ -64,7 +60,20 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const lists = yield* ModelLists.Service
     const inference = yield* RenInference.Service
-    const defaultModel = yield* Config.option(Config.String("REN_DEFAULT_MODEL"))
+    // oxlint-disable-next-line ren/no-comments -- Read once when Ren starts: a bad value stops the start, not each signup.
+    const defaultModel = yield* Config.option(
+      Config.schema(
+        Schema.String.check(Schema.isPattern(/^[^/]+\/.+$/u, { message: "REN_DEFAULT_MODEL is <provider>/<model>" })),
+        "REN_DEFAULT_MODEL",
+      ),
+    ).pipe(
+      Effect.map(
+        Option.map((value) => ({
+          endpointId: value.slice(0, value.indexOf("/")),
+          modelId: value.slice(value.indexOf("/") + 1),
+        })),
+      ),
+    )
 
     const canManage = (actor: Actor.Info) =>
       access.isAllowed({ actor, action: ProviderPolicy.actions.manage, resource: Access.organization })
@@ -188,22 +197,14 @@ export const layer = Layer.effect(
 
     return Service.of({
       page,
-      // oxlint-disable-next-line ren/no-comments -- The gateway hears a change first, so it refuses what is off before pickers change.
+      // oxlint-disable-next-line ren/no-comments -- The gateway hears a change first, so it refuses what is off before pickers change. A write answers nothing: a page read that fails after it must not make the client send the write again.
       update: Effect.fn("ProviderSettings.update")(function* (actor, providerId, input) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         if (input.method && !ModelLists.methodsOf(owned.provider).includes(input.method))
           return yield* new Primitive.Invalid({ message: `${owned.provider.name} has no ${input.method} method.` })
-        const current = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
-        const enabled = input.enabled ?? current.enabled
-        const method = input.method ?? current.method
-        yield* owned.gateway.configure(providerId, actor.organizationId, {
-          enabled,
-          ...(method && { method }),
-          off: current.off,
-        })
+        yield* owned.gateway.update(providerId, actor.organizationId, input)
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
       test: Effect.fn("ProviderSettings.test")(function* (actor, providerId, fields) {
         yield* manager(actor)
@@ -219,14 +220,12 @@ export const layer = Layer.effect(
           owned.gateway.connect(providerId, actor.organizationId, fields, yield* Actor.memberOf(database.db, actor)),
         )
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
       disconnect: Effect.fn("ProviderSettings.disconnect")(function* (actor, providerId) {
         yield* manager(actor)
         const owned = yield* ownedOf(providerId)
         yield* owned.gateway.disconnect(providerId, actor.organizationId)
         yield* lists.refresh(actor.organizationId)
-        return yield* page(actor)
       }),
       models,
       updateModels: Effect.fn("ProviderSettings.updateModels")(function* (actor, providerId, input) {
@@ -238,30 +237,14 @@ export const layer = Layer.effect(
           return yield* new Primitive.Invalid({
             message: `Unknown models: ${unknown.map((model) => model.id).join(", ")}.`,
           })
-        const current = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
-        const changed = new Set(input.models.map((model) => model.id))
-        const off = [
-          ...current.off.filter((id) => !changed.has(id)),
-          ...input.models.filter((model) => !model.enabled).map((model) => model.id),
-        ]
-        yield* owned.gateway.configure(providerId, actor.organizationId, {
-          enabled: current.enabled,
-          ...(current.method && { method: current.method }),
-          off,
-        })
+        yield* owned.gateway.switchModels(providerId, actor.organizationId, input.models)
         yield* lists.refresh(actor.organizationId)
-        return yield* models(actor, providerId)
       }),
       // oxlint-disable-next-line ren/no-comments -- Providers P15: a new organization starts on the deployment's default model, `<provider>/<model>`. Without the setting it takes Ren's settings.
       applyDefaultModel: Effect.fn("ProviderSettings.applyDefaultModel")(function* (organizationId) {
         if (Option.isNone(defaultModel)) return
-        const separator = defaultModel.value.indexOf("/")
-        if (separator < 1) return yield* Effect.die(new Error("REN_DEFAULT_MODEL is <provider>/<model>"))
         const encoded = yield* Schema.encodeEffect(Settings.Info)({
-          model: {
-            endpointId: defaultModel.value.slice(0, separator),
-            modelId: defaultModel.value.slice(separator + 1),
-          },
+          model: defaultModel.value,
           permissions: [],
           references: [],
         }).pipe(Effect.orDie)

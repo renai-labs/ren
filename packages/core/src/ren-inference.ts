@@ -7,6 +7,7 @@ import { ModelGateway } from "@ren/schema/model-gateway"
 import { Models } from "@ren/schema/models"
 import type { Usage } from "@ren/schema/usage"
 import { RenInference } from "@ren/schema/ren-inference"
+import type { Provider } from "@ren/schema/provider"
 import type { Space } from "@ren/schema/space"
 import { and, eq, gte, inArray, max, type SQL, sql } from "drizzle-orm"
 import { Clock, Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
@@ -24,13 +25,6 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("RenInference
 
 export interface KeyFields {
   readonly [name: string]: Redacted.Redacted
-}
-
-// oxlint-disable-next-line ren/no-comments -- Providers §10: a provider's settings as the gateway takes them: on or off, method, the models switched off.
-export interface ProviderState {
-  readonly enabled: boolean
-  readonly method: Models.Method
-  readonly off: ReadonlyArray<string>
 }
 
 export interface SavedKey {
@@ -96,10 +90,15 @@ export interface Interface {
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
   readonly providers: Effect.Effect<ReadonlyArray<ModelGateway.Provider>, Failure>
   readonly providerSettings: (organizationId: Auth.OrganizationID) => Effect.Effect<ProviderSettings, Failure>
-  readonly configureProvider: (
+  readonly updateProvider: (
     organizationId: Auth.OrganizationID,
     provider: string,
-    state: ProviderState,
+    change: Provider.UpdateInput,
+  ) => Effect.Effect<void, Failure>
+  readonly switchModels: (
+    organizationId: Auth.OrganizationID,
+    provider: string,
+    models: Provider.ModelListInput["models"],
   ) => Effect.Effect<void, Failure>
   readonly testKey: (
     organizationId: Auth.OrganizationID,
@@ -493,8 +492,11 @@ export const layer = Layer.effect(
       providerSettings: Effect.fn("RenInference.providerSettings")(function* (organizationId) {
         return yield* call({ org: organizationId }, "GET", "/v1/providers/settings", ProviderSettings)
       }),
-      configureProvider: Effect.fn("RenInference.configureProvider")(function* (organizationId, provider, state) {
-        yield* send({ org: organizationId }, "PUT", providerPath(provider), state)
+      updateProvider: Effect.fn("RenInference.updateProvider")(function* (organizationId, provider, change) {
+        yield* send({ org: organizationId }, "PUT", providerPath(provider), change)
+      }),
+      switchModels: Effect.fn("RenInference.switchModels")(function* (organizationId, provider, models) {
+        yield* send({ org: organizationId }, "PATCH", `${providerPath(provider)}/models`, { models })
       }),
       testKey: Effect.fn("RenInference.testKey")(function* (organizationId, provider, fields) {
         const answer = yield* call({ org: organizationId }, "POST", `${providerPath(provider)}/test`, TestAnswer, {
@@ -568,7 +570,8 @@ export const layerNone = Layer.succeed(
     harnessPlan: () => Effect.fail(notConfigured()),
     providers: Effect.fail(notConfigured()),
     providerSettings: () => Effect.fail(notConfigured()),
-    configureProvider: () => Effect.fail(notConfigured()),
+    updateProvider: () => Effect.fail(notConfigured()),
+    switchModels: () => Effect.fail(notConfigured()),
     testKey: () => Effect.fail(notConfigured()),
     saveKey: () => Effect.fail(notConfigured()),
     removeKey: () => Effect.fail(notConfigured()),

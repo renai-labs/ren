@@ -97,7 +97,10 @@ export const layer = Layer.effect(
       )
 
     const notify = (organizationId: Auth.OrganizationID) =>
-      pg.notify(Postgres.brainsChannel, `org:${organizationId}`).pipe(Effect.orDie)
+      pg.notify(Postgres.brainsChannel, `org:${organizationId}`).pipe(
+        // oxlint-disable-next-line ren/no-comments -- A push that fails only delays brains to their next pull (Providers §6.4); the change itself is saved.
+        Effect.catch((error) => Effect.logWarning("Brains were not told of a model change", error)),
+      )
 
     return Service.of({
       providers: Cache.get(providers, "providers"),

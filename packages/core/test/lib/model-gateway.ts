@@ -49,7 +49,7 @@ export const make = Effect.fnUntraced(function* (options: {
       const providers = all.get(organizationId) ?? {}
       return new Map(all).set(organizationId, {
         ...providers,
-        [providerId]: next(providers[providerId] ?? { enabled: true, method: "key", off: [] }),
+        [providerId]: next(providers[providerId] ?? { enabled: true, off: [] }),
       })
     })
   const lifetime = options.keyLifetime ?? Duration.hours(6)
@@ -92,8 +92,23 @@ export const make = Effect.fnUntraced(function* (options: {
         unlessDown,
         Effect.map(Ref.get(settings), (all) => all.get(organizationId) ?? {}),
       ),
-    configure: (providerId, organizationId, next) =>
-      change(providerId, organizationId, (current) => ({ ...next, ...(current.key && { key: current.key }) })),
+    update: (providerId, organizationId, next) =>
+      change(providerId, organizationId, (current) => ({
+        ...current,
+        ...(next.enabled !== undefined && { enabled: next.enabled }),
+        ...(next.method && { method: next.method }),
+      })),
+    switchModels: (providerId, organizationId, models) =>
+      change(providerId, organizationId, (current) => {
+        const switched = new Set(models.map((model) => model.id))
+        return {
+          ...current,
+          off: [
+            ...current.off.filter((id) => !switched.has(id)),
+            ...models.filter((model) => !model.enabled).map((model) => model.id),
+          ],
+        }
+      }),
     // oxlint-disable-next-line ren/no-comments -- The vendor takes the key `good-…`; any other key gets the vendor's message.
     test: (_, __, fields) =>
       Effect.succeed(
