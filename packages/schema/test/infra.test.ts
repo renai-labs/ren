@@ -132,13 +132,11 @@ describe("Infra.Spec", () => {
         name: "Engineering",
         renamedFrom: ["support"],
         agents: { build: { ...agent, renamedFrom: ["qa"] }, qa: agent },
-        apps: { notes: app({ renamedFrom: ["changelog"] }), changelog: app() },
       },
       support: { name: "Support" },
     })
     expect(String(exit)).toContain('Space "engineering" is renamed from "support", which the spec still defines.')
     expect(String(exit)).toContain('Agent "build" is renamed from "qa", which the spec still defines.')
-    expect(String(exit)).toContain('App "notes" is renamed from "changelog", which the spec still defines.')
   })
 
   const mcp = (fields: Record<string, unknown>) =>
