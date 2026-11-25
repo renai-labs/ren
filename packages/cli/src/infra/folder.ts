@@ -452,10 +452,12 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
   const deploy = join(root, "deploy.yaml")
   const bound = await parsed(deploy)
   const bindings = under("deploy.yaml/spaces/")
+  const catalogue = under("deploy.yaml/profiles/")
   const channelBindings = paths.filter((path) => /^spaces\/[^/]+\/channels\//u.test(path))
   if (
     !(await Bun.file(deploy).exists()) ||
     bindings.length > 0 ||
+    catalogue.length > 0 ||
     channelBindings.length > 0 ||
     bound["organization"] !== pulled.bindings.organization
   ) {
@@ -492,9 +494,27 @@ export const write = async (root: string, pulled: typeof Infra.Pulled.Encoded) =
         return Object.keys(kept).length > 0 ? [[slug, kept]] : []
       }),
     )
+    const declared = fields(bound["profiles"])
+    const profiles = replaced(declared, [...new Set(catalogue.map((path) => path.split("/").at(0) ?? ""))], (app) =>
+      filled(
+        replaced(
+          fields(declared[app]),
+          catalogue.flatMap((path) => (path.startsWith(`${app}/`) ? [path.slice(app.length + 1)] : [])),
+          (slug) =>
+            writes.has(`deploy.yaml/profiles/${app}/${slug}`) ? pulled.bindings.profiles[app]?.[slug] : undefined,
+        ),
+      ),
+    )
     await Bun.write(
       deploy,
-      dump(filled({ ...without(bound, ["spaces"]), organization: pulled.bindings.organization, spaces: written })),
+      dump(
+        filled({
+          ...without(bound, ["profiles", "spaces"]),
+          organization: pulled.bindings.organization,
+          profiles: filled(profiles),
+          spaces: written,
+        }),
+      ),
     )
   }
 
