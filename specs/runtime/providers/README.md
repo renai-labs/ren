@@ -143,12 +143,12 @@ Settings → Providers: one grid of every provider the model gateways offer, 3 p
 
 A provider's page (Settings → Providers → <provider>):
 
-| Element                           | Behaviour                                                                                                                                                                                                         |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Header                            | Logo, the provider switch (Off removes its models from pickers at the next push) and, for Anthropic and OpenAI, the method: `API key` or `Subscription`                                                           |
-| API key                           | The last 4 characters, who saved it, when it was tested. Add, replace, remove                                                                                                                                     |
-| Subscriptions (Anthropic, OpenAI) | One card per seat: who connected it, plan, status, limits (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the gateway's sign-in page. "Sign in again" when needed                            |
-| Models                            | Filters All, On, Free; one tab per model type the provider has. Columns: model, features (reasoning, reads images, reads PDFs, each with a tooltip), context, prices per 1M tokens, the switch. A new model is on |
+| Element                           | Behaviour                                                                                                                                                                                                                                                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Header                            | Logo, the provider switch (Off removes its models from pickers at the next push) and, for Anthropic and OpenAI, the method: `API key` or `Subscription`                                                                                                                                                             |
+| API key                           | The last 4 characters, who saved it, when it was tested. Add, replace, remove                                                                                                                                                                                                                                       |
+| Subscriptions (Anthropic, OpenAI) | One card per seat: who connected it, plan, status, limits (Claude only). "Connect your Claude" or "Sign in with ChatGPT" opens the inference service's sign-in page. After access, Claude shows a code; ChatGPT opens an address that does not load. The person pastes it on that page. "Sign in again" when needed |
+| Models                            | Filters All, On, Free; one tab per model type the provider has. Columns: model, features (reasoning, reads images, reads PDFs, each with a tooltip), context, prices per 1M tokens, the switch. A new model is on                                                                                                   |
 
 ### 5.2 Ren models
 
