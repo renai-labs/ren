@@ -5,7 +5,6 @@ import {
   use,
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -566,6 +565,11 @@ const linkSafety = { enabled: false } as const
 
 const noApps: ReadonlyArray<CatalogApp> = []
 
+const proseRehype = (options: { readonly workspace: boolean; readonly videos: boolean }) => {
+  const base = options.workspace ? workspaceRehypePlugins : rehypePlugins
+  return options.videos ? [...base, videoLinks] : base
+}
+
 export function Markdown(props: {
   children: string
   streaming?: boolean | undefined
@@ -594,24 +598,21 @@ export function Markdown(props: {
   const dark = useSyncExternalStore(wantsMermaid ? subscribeDark : unsubscribed, isDark, () => false)
   const user = props.source === "user"
   const reduced = ReducedMotion.useReduced()
-  const workspace = props.workspaceImage !== undefined
-  const videos = props.videos === true
   // oxlint-disable-next-line ren/no-comments -- Streamdown re-renders every block of a message when these change identity, which on each streamed chunk made every finished block and earlier message render again.
-  const rehype = useMemo(() => {
-    const base = workspace ? workspaceRehypePlugins : rehypePlugins
-    return [...(user ? userRehypePlugins : videos ? [...base, videoLinks] : base), headingIds(id)]
-  }, [user, workspace, videos, id])
-  const plugins = useMemo(() => ({ ...(math && { math }), ...(mermaid && { mermaid }) }), [math, mermaid])
-  const remarkRehypeOptions = useMemo(() => ({ clobberPrefix: `${id}-` }), [id])
+  const rehype = [
+    ...(user
+      ? userRehypePlugins
+      : proseRehype({ workspace: props.workspaceImage !== undefined, videos: props.videos === true })),
+    headingIds(id),
+  ]
+  const plugins = { ...(math && { math }), ...(mermaid && { mermaid }) }
+  const remarkRehypeOptions = { clobberPrefix: `${id}-` }
   const streaming = props.streaming === true
   const diagrams = mermaid !== null
   const workspaceImage = props.workspaceImage
   const fileReference = props.fileReference
   const driveFile = props.driveFile
-  const context = useMemo(
-    () => ({ apps, streaming, mermaid: diagrams, workspaceImage, fileReference, driveFile }),
-    [apps, streaming, diagrams, workspaceImage, fileReference, driveFile],
-  )
+  const context = { apps, streaming, mermaid: diagrams, workspaceImage, fileReference, driveFile }
   return (
     <MarkdownContext value={context}>
       <div

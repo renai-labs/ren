@@ -1,5 +1,5 @@
 import { Seed, SessionPages } from "@ren/client/react"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { useAtomRefresh } from "@effect/atom-react"
 import {
   ChatState,
@@ -41,6 +41,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { useShellHistory } from "../../lib/use-shell-history.js"
 import { Browser } from "../../lib/browser.js"
+import { HandlerSlot } from "../../lib/handler-slot.js"
 
 export interface WorkspaceCommands {
   readonly openTerminal: () => void
@@ -267,7 +268,7 @@ export function useChat(
   const modelList = AsyncResult.isSuccess(models) ? models.value : catalog.models
   const draftStore = Drafts.useStore(Drafts.session(root))
   const shell = Drafts.useValue(draftStore, Composer.isShell)
-  const runner = useRef<Runner | undefined>(undefined)
+  const runner = HandlerSlot.useSlot<Runner>()
   const [reverting, setReverting] = useState(false)
   const [picking, setPicking] = useState(false)
   const abilities = capabilitiesOf(info)
@@ -310,7 +311,10 @@ export function useChat(
 
   const chatModel = ChatState.model(state, root)
   const switchTo = () => Composer.switching(draftStore.get(), chatModel)
-  const run: Runner = (request, send) => (runner.current ? runner.current(request, send) : send(request))
+  const run: Runner = (request, send) => {
+    const current = runner.get()
+    return current ? current(request, send) : send(request)
+  }
   const statuses = ChatState.pendingStatuses(state, view.viewed)
   const bootStatus = bootStatusOf(
     { status: connection, retryAt: AsyncResult.getOrElse(view.session.retryAt, () => 0) },
@@ -373,9 +377,7 @@ export function useChat(
     draftStore,
     chatModel,
     fallbackModel: catalog.fallback,
-    registerRunner: (next: Runner) => {
-      runner.current = next
-    },
+    runner,
     prompt,
     runShell,
     workspace: options.workspace,
@@ -532,9 +534,7 @@ export function useChatComposer(chat: ReturnType<typeof useChat>) {
     rename: chat.rename,
     apps: () => chat.apps.onOpenChange(true),
   })
-  const register = chat.registerRunner
-  const run = suggestions.run
-  useEffect(() => register(run), [register, run])
+  HandlerSlot.useFill(chat.runner, suggestions.run)
   return {
     draft,
     setDraft: store.set,

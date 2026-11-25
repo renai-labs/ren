@@ -1,4 +1,4 @@
-import { useState, type Ref } from "react"
+import { useState } from "react"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { IconDownload, IconRefresh, IconX } from "@tabler/icons-react"
 import {
@@ -64,7 +64,7 @@ function DriveFileCard(props: {
     return <MediaUnavailable reason="Not in the drive" title={props.file.name} />
   return (
     <DriveFileChip
-      ref={seen.ref}
+      observe={seen.observe}
       spaceId={props.spaceId}
       file={props.file}
       drive={drive}
@@ -75,7 +75,7 @@ function DriveFileCard(props: {
 }
 
 function DriveFileChip(props: {
-  ref: Ref<HTMLDivElement>
+  observe: ReturnType<typeof useSeen>["observe"]
   spaceId: string | undefined
   file: SessionMessage.DriveFile
   drive: ReturnType<typeof useDriveFile>
@@ -88,7 +88,7 @@ function DriveFileChip(props: {
   const navigate = useNavigate()
   const [previewing, setPreviewing] = useState(false)
   return (
-    <Attachment ref={props.ref} size="sm" state={drive.deleted ? "error" : "done"}>
+    <Attachment ref={(node) => props.observe(node)} size="sm" state={drive.deleted ? "error" : "done"}>
       <DriveFileThumbnail file={file} thumbnail={thumbnail} onError={drive.reload} onDownload={drive.download} />
       <AttachmentContent>
         <AttachmentTitle>{file.name}</AttachmentTitle>
