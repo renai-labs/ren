@@ -5,7 +5,7 @@ description: Choose what agents may do without asking, what they must ask first,
 summary: Choose what agents can do without asking
 ---
 
-Permissions decide what agents may do on their own, such as run commands, edit files or search the web. Each action is **Allow**, **Ask** or **Deny**.
+Permissions control whether an agent may take an action, such as run a command, edit a file or fetch a web page. A common setup asks before every `git push`, and never lets agents touch `.env` files.
 
 <Screenshot
   shot="permissions/simple"
@@ -13,13 +13,15 @@ Permissions decide what agents may do on their own, such as run commands, edit f
   caption="Settings → Permissions, in Simple view."
 />
 
-| Effect    | What happens                                                                                                                              |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Allow** | The agent does it.                                                                                                                        |
-| **Ask**   | The agent stops and shows a [permission card](/docs/chats/#questions-and-permission-requests). Someone in the chat approves or denies it. |
-| **Deny**  | The agent cannot do it.                                                                                                                   |
+## Effects
 
-## Where to set them
+| Effect    | Result                                                                                                                                    |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Allow** | The agent goes ahead.                                                                                                                     |
+| **Ask**   | The agent stops and shows a [permission card](/docs/chats/#questions-and-permission-requests). Someone in the chat approves or denies it. |
+| **Deny**  | The agent can't do it.                                                                                                                    |
+
+## Levels
 
 | Level        | Where                            |
 | ------------ | -------------------------------- |
@@ -27,15 +29,15 @@ Permissions decide what agents may do on their own, such as run commands, edit f
 | Space        | The space's **Permissions** page |
 | Agent        | The agent's page                 |
 
-Ren checks every level, and the strictest answer wins. If the organization asks before `git push`, a space cannot allow it without asking. Set the organization's rules for what must hold everywhere, and tighten a space or an agent where its work needs it.
+Ren checks every level, and the strictest answer wins: **Deny** over **Ask** over **Allow**. If the organization asks before `git push`, a space can't allow it without asking. Set what must hold everywhere in the organization, and tighten a space or an agent where its work needs it.
 
-## Allow, ask or deny one action
+## Allow, ask or deny an action
 
 In **Simple**, pick **Allow**, **Ask** or **Deny** next to an action. It applies to every use of that action.
 
 ## Rules for one command, file or website
 
-To ask or deny only some uses, select **Add rule**:
+To ask or deny only some uses of an action, select **Add rule**:
 
 <Screenshot
   shot="permissions/add-rule"
@@ -46,13 +48,32 @@ To ask or deny only some uses, select **Add rule**:
 
 <Steps>
 
-1. Pick the action, such as **Run commands** or **Edit files**.
-2. Type the pattern. `*` matches any text: `git push *` matches every push, and `/etc/*` every file in `/etc`.
+1. Pick the action, such as **Run commands**, **Edit files** or **Fetch web pages**.
+2. Type the pattern: a command, a file path or a URL.
 3. Pick **Ask first** or **Never**, and select **Add rule**.
 
 </Steps>
 
-**Rules** lists every rule of the level. **JSON** shows them as JSON, to copy them to another space.
+| Pattern      | Matches                                     |
+| ------------ | ------------------------------------------- |
+| `*`          | Any text, including `/`                     |
+| `?`          | One character                               |
+| `git push *` | Every `git push`, with or without arguments |
+| `*.env`      | Every file that ends in `.env`              |
+
+**Rules** lists the rules of the level. **JSON** shows them as JSON, to copy them to another space.
+
+## Approvals
+
+On a permission card, pick one of:
+
+| Choice           | Result                                                       |
+| ---------------- | ------------------------------------------------------------ |
+| **Allow once**   | Approves this request only.                                  |
+| **Always allow** | Approves it, and the same request for the rest of this chat. |
+| **Deny**         | Refuses it.                                                  |
+
+An approval never overrides **Deny**.
 
 ## Chats that nobody watches
 
