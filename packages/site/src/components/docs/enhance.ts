@@ -57,3 +57,13 @@ const restoreHarness = () => showHarness(localStorage.getItem(HARNESS_KEY) ?? ""
 
 restoreHarness()
 document.addEventListener("astro:after-swap", restoreHarness)
+
+document.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return
+  const toggle = event.target.closest<HTMLButtonElement>("[data-expand-toggle]")
+  if (!toggle) return
+  const open = toggle.getAttribute("aria-expanded") !== "true"
+  toggle.setAttribute("aria-expanded", String(open))
+  toggle.dataset.label ??= toggle.textContent.trim()
+  toggle.textContent = open ? "Show less" : toggle.dataset.label
+})

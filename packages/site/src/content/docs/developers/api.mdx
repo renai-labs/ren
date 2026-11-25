@@ -94,7 +94,7 @@ With the access token in `REN_TOKEN`, ask who it acts as:
 curl https://api.useren.ai/me -H "Authorization: Bearer $REN_TOKEN"
 ```
 
-```json
+```json title="Response"
 {
   "user": {
     "id": "usr_01JZ7K2M4N6P8Q0R2S4T6V8W0X",
@@ -145,7 +145,7 @@ curl "https://api.useren.ai/tasks?spaceId=spc_01JZ8Q2N4M7XK3V9T6R5B1C0DE&page=2&
   -H "Authorization: Bearer $REN_TOKEN"
 ```
 
-```text
+```text title="Response"
 { "items": [ …14 tasks… ], "page": 2, "pageSize": 20, "total": 34 }
 ```
 
@@ -155,7 +155,7 @@ curl "https://api.useren.ai/tasks?spaceId=spc_01JZ8Q2N4M7XK3V9T6R5B1C0DE&page=2&
 
 An error has a status and a JSON body with its type in `_tag` and a `message`:
 
-```json
+```json title="Response"
 { "_tag": "NotFoundError", "message": "Space not found." }
 ```
 

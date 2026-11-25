@@ -1,0 +1,10 @@
+---
+type Props = { label: string }
+---
+
+<div class="docs-expand">
+  <slot />
+  <button type="button" class="docs-expand-toggle" data-expand-toggle aria-expanded="false">
+    {Astro.props.label}
+  </button>
+</div>
