@@ -88,6 +88,8 @@ describe("InfraFolder.validate", () => {
   test("reports each problem at the file and field that hold it", async () => {
     const root = await folder({
       "org.yaml": "settings: {}\n",
+      "deploy.yaml":
+        "organization: acme\nprofiles:\n  github:\n    acme: { name: ' Acme' }\nspaces:\n  support:\n    timezone: Asia/Kolkata\n",
       "environments.yaml": "Python:\n  provider: docker\n  config: {}\n  sessionsPerEnvironment: 0\n",
       "spaces/engineering/space.yaml": "description: No name.\n",
       "spaces/engineering/agents/build/agent.yaml": "isSubagent: maybe\n",
@@ -102,12 +104,12 @@ describe("InfraFolder.validate", () => {
       "spaces/support/apps/notes/app.yaml": "name: Notes\ndescription: Writes notes.\nrenamedFrom: [changelog]\n",
       "memory/memory.md": "- Be brief.\n",
       "memory/logo.png": new Uint8Array([137, 80, 78, 71, 0, 1]),
-      "deploy.yaml": "organization: acme\nspaces:\n  support:\n    timezone: Asia/Kolkata\n",
     })
 
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
+      "deploy.yaml: profiles.github.acme.name: Remove spaces at the start and end.",
       "deploy.yaml: spaces.support.timezone: A space has no time zone. Each schedule has its own.",
       "environments.yaml: Python.sessionsPerEnvironment: Use 1 to 100 sessions per environment.",
       "memory/logo.png: A memory holds text files only.",
@@ -210,7 +212,7 @@ describe("InfraFolder.write", () => {
   const pulled = {
     bindings: {
       organization: "acme",
-      profiles: {},
+      profiles: { github: { acme: { name: "Acme" }, everyone: { name: "Everyone", allSpaces: true } } },
       spaces: {
         engineering: {
           channels: { ren: { kind: "github" as const, repository: "acme/ren" } },
@@ -339,6 +341,8 @@ describe("InfraFolder.write", () => {
     },
     lock: { organization: "acme", resources: {} },
     write: [
+      "deploy.yaml/profiles/github/acme",
+      "deploy.yaml/profiles/github/everyone",
       "deploy.yaml/spaces/engineering/profiles/github/acme",
       "environments/Python",
       "memory/memory.md",
@@ -382,6 +386,7 @@ describe("InfraFolder.write", () => {
       "name: Home\nuses:\n  agents:\n    - build\n",
     )
     expect(result.bindings?.spaces["engineering"]).toMatchObject(pulled.bindings.spaces.engineering)
+    expect(result.bindings?.profiles).toEqual(pulled.bindings.profiles)
   })
 
   test("keeps the other frontmatter of a SKILL.md", async () => {
@@ -402,6 +407,7 @@ describe("InfraFolder.write", () => {
     expect(await Bun.file(join(root, "spaces/engineering/apps/tools/skills/gone/SKILL.md")).exists()).toBe(false)
     expect(Bun.YAML.parse(await Bun.file(join(root, "deploy.yaml")).text())).toEqual({
       organization: "acme",
+      profiles: pulled.bindings.profiles,
       spaces: { engineering: pulled.bindings.spaces.engineering },
     })
     const result = await InfraFolder.validate(root)
@@ -467,13 +473,17 @@ describe("InfraFolder.write", () => {
         "local:\n  cron: '0 1 * * *'\n  timeZone: UTC\n  message: Ours.\nnightly:\n  cron: '0 2 * * *'\n  timeZone: UTC\n  message: Old.\n",
       "spaces/home/space.yaml": "name: Home\nuses:\n  agents: [review]\n",
       "deploy.yaml":
-        "organization: acme\nspaces:\n  engineering:\n    channels:\n      ren:\n        kind: github\n        repository: acme/mine\n",
+        "organization: acme\nprofiles:\n  github:\n    mine: { name: Mine }\n    gone: { name: Gone }\nspaces:\n  engineering:\n    channels:\n      ren:\n        kind: github\n        repository: acme/mine\n",
     })
 
     await InfraFolder.write(root, {
       ...pulled,
-      write: ["spaces/engineering/schedules/nightly", "spaces/home/uses/agents/build"],
-      remove: ["spaces/home/uses/agents/review"],
+      write: [
+        "deploy.yaml/profiles/github/acme",
+        "spaces/engineering/schedules/nightly",
+        "spaces/home/uses/agents/build",
+      ],
+      remove: ["deploy.yaml/profiles/github/gone", "spaces/home/uses/agents/review"],
     })
 
     const text = (file: string) => Bun.file(join(root, file)).text()
@@ -484,9 +494,11 @@ describe("InfraFolder.write", () => {
       nightly: pulled.spec.spaces.engineering.schedules.nightly,
     })
     expect(Bun.YAML.parse(await text("spaces/home/space.yaml"))).toEqual({ name: "Home", uses: { agents: ["build"] } })
-    expect(await text("deploy.yaml")).toBe(
-      "organization: acme\nspaces:\n  engineering:\n    channels:\n      ren:\n        kind: github\n        repository: acme/mine\n",
-    )
+    expect(Bun.YAML.parse(await text("deploy.yaml"))).toEqual({
+      organization: "acme",
+      profiles: { github: { mine: { name: "Mine" }, acme: { name: "Acme" } } },
+      spaces: { engineering: { channels: { ren: { kind: "github", repository: "acme/mine" } } } },
+    })
     expect(await Bun.file(join(root, "org.yaml")).exists()).toBe(false)
   })
 })
