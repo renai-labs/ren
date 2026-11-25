@@ -3,7 +3,7 @@ import { Link } from "@ren/ui/link"
 import { lazy, Suspense, useState, type ReactNode } from "react"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import { IconBook, IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
@@ -12,7 +12,6 @@ import { Loading } from "@ren/ui/loading"
 import { formatUsdRate } from "@ren/ui/format"
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@ren/ui/item"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@ren/ui/sheet"
-import { Spinner } from "@ren/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { AppIcon, appTile } from "./app-icon.js"
 import { AccountMenu } from "./account-menu.js"
@@ -21,9 +20,11 @@ import { GitHubMark } from "../icons/brands.js"
 import { StatusDot } from "./status-dot.js"
 import { ReadMore } from "./read-more.js"
 import { ToolbarSearch } from "./toolbar-search.js"
+import { WorkspacePending } from "./workspace-pending.js"
 import { categoryLabel, hasManaged, reachedSpaces, statusLabel, statusOf } from "../lib/apps.js"
 import { plural } from "../lib/format.js"
 import { McpInspect } from "../lib/mcp-inspect.js"
+import { QueryResult } from "../lib/query-result.js"
 import { cn } from "cn"
 import type { AppListingTool, AppProfileInfo, Apps } from "@ren/client"
 import { RouterContext } from "../lib/router-context.js"
@@ -34,7 +35,9 @@ import type { CatalogApp } from "../lib/apps.js"
 type App = CatalogApp
 
 // oxlint-disable-next-line ren/no-comments -- Markdown brings Streamdown and its plugins; the app shell's loading skeleton imports this file, so it loads only when a skill or tool opens.
-const Markdown = lazy(() => import("./markdown.js").then((module) => ({ default: module.Markdown })))
+const loadMarkdown = () => import("./markdown.js")
+const Markdown = lazy(() => loadMarkdown().then((module) => ({ default: module.Markdown })))
+const preloadMarkdown = () => void loadMarkdown()
 type AppProfile = AppProfileInfo
 
 function AttentionDot() {
@@ -415,8 +418,16 @@ type Skill = NonNullable<App["skills"]>[string]
 function SkillInstructions(props: { appId: string; slug: string }) {
   const { api } = RouterContext.useRouterContext()
   const skills = useQuery({ ...api["app-skills"].get.queryOptions({ idOrSlug: props.appId }), gcTime: 0 })
-  const skill = skills.data?.[props.slug]
-  if (skills.isPending) return <Spinner className="mx-auto mb-6" />
+  if (skills.data === undefined)
+    return (
+      <WorkspacePending
+        result={QueryResult.of(skills)}
+        icon={<IconBook />}
+        title="Couldn’t load the skill’s instructions"
+        onRetry={() => void skills.refetch()}
+      />
+    )
+  const skill = skills.data[props.slug]
   if (skill?.type !== "content" || !skill.instructions.trim()) return null
   return (
     <div className="mx-6 mb-6 min-h-0 overflow-y-auto overscroll-contain rounded-xl border bg-card px-5 py-4">
@@ -500,6 +511,8 @@ function SkillCards(props: { app: App; skills: Readonly<Record<string, Skill>> }
             variant="ghost"
             aria-haspopup="dialog"
             onClick={() => setOpened(slug)}
+            onPointerEnter={preloadMarkdown}
+            onFocus={preloadMarkdown}
             className="h-auto min-w-0 justify-start gap-3 rounded-lg p-2 text-left font-normal active:not-aria-[haspopup]:scale-none"
           >
             {icon(slug, skill)}

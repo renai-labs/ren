@@ -30,7 +30,9 @@ import { errorMessage, errorStatus } from "../lib/errors.js"
 import { McpInspect } from "../lib/mcp-inspect.js"
 import { pickerPageSize } from "../lib/pagination.js"
 import { Preference } from "../lib/preference.js"
+import { QueryResult } from "../lib/query-result.js"
 import { RouterContext } from "../lib/router-context.js"
+import { WorkspacePending } from "./workspace-pending.js"
 import { Debounce } from "@ren/client/react"
 import { useSignIn } from "../lib/use-sign-in.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -552,6 +554,19 @@ function EditApp(props: { appId: string; onClose: () => void }) {
     gcTime: 0,
   })
   const data = app.data && skills.data && { ...app.data, skills: skills.data }
+  const error = app.error ?? skills.error
+  if (!data && error)
+    return (
+      <div className="flex flex-col gap-4 p-5">
+        <DialogTitle>Edit app</DialogTitle>
+        <WorkspacePending
+          result={QueryResult.of({ data: undefined, error })}
+          icon={<IconAlertCircle />}
+          title="Couldn’t open the app for editing"
+          onRetry={() => void Promise.all([app.refetch(), skills.refetch()])}
+        />
+      </div>
+    )
   if (!data)
     return (
       <div className="flex flex-col gap-4 p-5">
