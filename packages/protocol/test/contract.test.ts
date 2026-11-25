@@ -12,7 +12,7 @@ test("rejects a primitive group that omits a declared operation", () => {
     plural: "things",
     id: ID,
     info: Schema.Struct({ id: ID }),
-    get: true,
+    get: "id",
     archive: true,
   } as const
   const api = HttpApi.make("test").add(Primitive.group(definition, "sdk", [Primitive.get(definition)]))

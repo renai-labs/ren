@@ -125,7 +125,7 @@ export const definition = Primitive.define({
   id: ID,
   info: Info,
   list: { input: ListInput, page: Pagination.Page(Info).annotate({ identifier: "App.Page" }) },
-  get: true,
+  get: "slug",
   create: { input: CreateInput, result: Info },
   update: { input: UpdateInput, result: Info },
   archive: true,

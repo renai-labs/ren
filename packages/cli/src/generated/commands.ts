@@ -107,21 +107,17 @@ export const AgentMembershipArchive = {
   id: Argument.String("membership").pipe(Argument.withDescription("Membership ID")),
 }
 
-export const SpaceSettingsGet = {
-  idOrSlug: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
-}
+export const SpaceSettingsGet = { idOrSlug: Argument.String("space").pipe(Argument.withDescription("Space ID")) }
 
 export const SpaceSettingsUpdate = {
-  id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")),
+  id: Argument.String("space").pipe(Argument.withDescription("Space ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const OrganizationSettingsGet = {
-  idOrSlug: Argument.String("org").pipe(Argument.withDescription("Org slug or ID")),
-}
+export const OrganizationSettingsGet = { idOrSlug: Argument.String("org").pipe(Argument.withDescription("Org ID")) }
 
 export const OrganizationSettingsUpdate = {
-  id: Argument.String("org").pipe(Argument.withDescription("Org slug or ID")),
+  id: Argument.String("org").pipe(Argument.withDescription("Org ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -220,9 +216,7 @@ export const AppProfileList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const AppProfileGet = {
-  idOrSlug: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
-}
+export const AppProfileGet = { idOrSlug: Argument.String("profile").pipe(Argument.withDescription("Profile ID")) }
 
 export const AppProfileCreate = {
   appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("App slug or ID")),
@@ -242,13 +236,13 @@ export const AppProfileCreate = {
 }
 
 export const AppProfileUpdate = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(Argument.withDescription("Profile ID")),
   name: Flag.String("name").pipe(Flag.optional),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppProfileAccess = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(Argument.withDescription("Profile ID")),
   add: Flag.String("add").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
@@ -264,14 +258,14 @@ export const AppProfileAccess = {
 }
 
 export const AppProfileLink = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(Argument.withDescription("Profile ID")),
   appId: Flag.String("app").pipe(Flag.optional, Flag.withDescription("App slug or ID")),
-  profileId: Flag.String("to").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
+  profileId: Flag.String("to").pipe(Flag.optional, Flag.withDescription("App profile ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const AppProfilePromote = {
-  id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")),
+  id: Argument.String("profile").pipe(Argument.withDescription("Profile ID")),
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
@@ -330,9 +324,9 @@ export const SessionList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const SessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
-export const SessionArchive = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionArchive = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
 export const TaskList = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
@@ -540,9 +534,7 @@ export const ScheduleList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const ScheduleGet = {
-  idOrSlug: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
-}
+export const ScheduleGet = { idOrSlug: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")) }
 
 export const ScheduleCreate = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
@@ -557,27 +549,27 @@ export const ScheduleCreate = {
 }
 
 export const ScheduleUpdate = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")),
   name: Flag.String("name").pipe(Flag.optional),
   message: Flag.String("message").pipe(Flag.optional),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const ScheduleArchive = { id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")) }
+export const ScheduleArchive = { id: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")) }
 
 export const SchedulePause = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const ScheduleResume = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const ScheduleRun = {
-  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  id: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -587,7 +579,7 @@ export const WebhookList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const WebhookGet = { idOrSlug: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+export const WebhookGet = { idOrSlug: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")) }
 
 export const WebhookCreate = {
   spaceId: Flag.String("space").pipe(Flag.optional, Flag.withDescription("Space slug or ID")),
@@ -600,7 +592,7 @@ export const WebhookCreate = {
 }
 
 export const WebhookUpdate = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
   message: Flag.String("message").pipe(Flag.optional, Flag.withDescription("Not for a preset.")),
   agentId: Flag.String("agent").pipe(Flag.optional, Flag.withDescription("Agent slug or ID")),
@@ -617,26 +609,26 @@ export const WebhookUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const WebhookArchive = { id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")) }
+export const WebhookArchive = { id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")) }
 
 export const WebhookRotateUrl = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookSetSigningSecret = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   secret: Flag.String("secret").pipe(Flag.optional, Flag.withDescription("The secret that the provider gave.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookRevealSigningSecret = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookTest = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   requestIds: Flag.String("request-ids").pipe(
     Flag.atLeast(0),
     Flag.withMetavar("list"),
@@ -646,12 +638,12 @@ export const WebhookTest = {
 }
 
 export const WebhookReplay = {
-  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook slug or ID")),
+  id: Argument.String("webhook").pipe(Argument.withDescription("Webhook ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const WebhookRequestList = {
-  webhookId: Flag.String("webhook").pipe(Flag.withDescription("Webhook slug or ID")),
+  webhookId: Flag.String("webhook").pipe(Flag.withDescription("Webhook ID")),
   outcome: Flag.Literals("outcome", [
     "queued",
     "started",
@@ -679,18 +671,16 @@ export const ArtifactList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const ArtifactGet = {
-  idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
-}
+export const ArtifactGet = { idOrSlug: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")) }
 
 export const ArtifactUpdate = {
-  id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")),
+  id: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")),
   title: Flag.String("title").pipe(Flag.optional, Flag.withDescription("The new title.")),
   name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("The new name.")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact slug or ID")) }
+export const ArtifactArchive = { id: Argument.String("artifact").pipe(Argument.withDescription("Artifact ID")) }
 
 export const CredentialList = {
   owner: Flag.Literals("owner", ["org", "space", "person", "profile"]).pipe(Flag.optional),
@@ -704,9 +694,7 @@ export const CredentialList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const CredentialGet = {
-  idOrSlug: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
-}
+export const CredentialGet = { idOrSlug: Argument.String("credential").pipe(Argument.withDescription("Credential ID")) }
 
 export const CredentialCreate = {
   label: Flag.String("label").pipe(Flag.optional),
@@ -719,7 +707,7 @@ export const CredentialCreate = {
 }
 
 export const CredentialUpdate = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   name: Flag.String("name").pipe(Flag.optional),
   delivery: Flag.Literals("delivery", ["egress", "delivered"]).pipe(
     Flag.optional,
@@ -729,22 +717,22 @@ export const CredentialUpdate = {
 }
 
 export const CredentialRotate = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialMove = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialCopy = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const CredentialRemove = {
-  id: Argument.String("credential").pipe(Argument.withDescription("Credential slug or ID")),
+  id: Argument.String("credential").pipe(Argument.withDescription("Credential ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -754,7 +742,7 @@ export const EnvironmentTemplateList = {
 }
 
 export const EnvironmentTemplateGet = {
-  idOrSlug: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  idOrSlug: Argument.String("template").pipe(Argument.withDescription("Template ID")),
 }
 
 export const EnvironmentTemplateCreate = {
@@ -766,7 +754,7 @@ export const EnvironmentTemplateCreate = {
 }
 
 export const EnvironmentTemplateUpdate = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("Template ID")),
   name: Flag.String("name").pipe(Flag.optional),
   description: Flag.String("description").pipe(Flag.optional),
   sessionsPerEnvironment: Flag.Finite("sessions-per-environment").pipe(Flag.optional),
@@ -774,16 +762,16 @@ export const EnvironmentTemplateUpdate = {
 }
 
 export const EnvironmentTemplateArchive = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("Template ID")),
 }
 
 export const EnvironmentTemplateRetryBuild = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("Template ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
 export const EnvironmentTemplateAffectedSpaces = {
-  id: Argument.String("template").pipe(Argument.withDescription("Template slug or ID")),
+  id: Argument.String("template").pipe(Argument.withDescription("Template ID")),
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
@@ -792,7 +780,7 @@ export const OauthAppList = {
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
 }
 
-export const OauthAppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const OauthAppGet = { idOrSlug: Argument.String("app").pipe(Argument.withDescription("App ID")) }
 
 export const OauthAppCreate = {
   name: Flag.String("name").pipe(Flag.optional),
@@ -817,7 +805,7 @@ export const OauthAppCreate = {
 }
 
 export const OauthAppUpdate = {
-  id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")),
+  id: Argument.String("app").pipe(Argument.withDescription("App ID")),
   name: Flag.String("name").pipe(Flag.optional),
   clientId: Flag.String("client-id").pipe(Flag.optional),
   clientSecret: Flag.String("client-secret").pipe(Flag.optional),
@@ -839,11 +827,9 @@ export const OauthAppUpdate = {
   input: Flag.String("input").pipe(Flag.optional, Flag.withDescription("JSON input, @file or @- for stdin")),
 }
 
-export const OauthAppArchive = { id: Argument.String("app").pipe(Argument.withDescription("App slug or ID")) }
+export const OauthAppArchive = { id: Argument.String("app").pipe(Argument.withDescription("App ID")) }
 
-export const OauthSessionGet = {
-  idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
-}
+export const OauthSessionGet = { idOrSlug: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
 export const ChannelInstallList = {
   page: Flag.Finite("page").pipe(Flag.optional),
@@ -892,15 +878,13 @@ export const SpaceInviteLinkGet = { id: Argument.String("space").pipe(Argument.w
 
 export const SpaceInviteLinkReset = { id: Argument.String("space").pipe(Argument.withDescription("Space slug or ID")) }
 
-export const SessionProfiles = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionProfiles = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
-export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionLinks = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
-export const SessionUsage = { id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")) }
+export const SessionUsage = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
-export const SessionPullRequests = {
-  id: Argument.String("session").pipe(Argument.withDescription("Session slug or ID")),
-}
+export const SessionPullRequests = { id: Argument.String("session").pipe(Argument.withDescription("Session ID")) }
 
 export const TaskPullRequests = { id: Argument.String("task").pipe(Argument.withDescription("Task slug or ID")) }
 
@@ -910,10 +894,10 @@ export const AppToolsGet = {
   idOrSlug: Argument.String("app").pipe(Argument.withDescription("Registry app slug or ID")),
 }
 
-export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.withDescription("Profile slug or ID")) }
+export const AppProfileDelete = { id: Argument.String("profile").pipe(Argument.withDescription("Profile ID")) }
 
 export const ScheduleRunList = {
-  scheduleId: Argument.String("schedule").pipe(Argument.withDescription("Schedule slug or ID")),
+  scheduleId: Argument.String("schedule").pipe(Argument.withDescription("Schedule ID")),
   status: Flag.Literals("status", ["pending", "started", "skipped", "failed"]).pipe(Flag.optional),
   page: Flag.Finite("page").pipe(Flag.optional),
   pageSize: Flag.Finite("page-size").pipe(Flag.optional),
@@ -1003,7 +987,7 @@ export const FilesDelete = {
 }
 
 export const CredentialConnect = {
-  profileId: Flag.String("profile").pipe(Flag.optional, Flag.withDescription("App profile slug or ID")),
+  profileId: Flag.String("profile").pipe(Flag.optional, Flag.withDescription("App profile ID")),
   reconnect: Flag.Boolean("reconnect").pipe(Flag.optional),
   returnTo: Flag.String("return-to").pipe(
     Flag.optional,

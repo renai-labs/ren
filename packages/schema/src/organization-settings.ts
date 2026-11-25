@@ -23,6 +23,6 @@ export const definition = Primitive.define({
   plural: "organization-settings",
   id: Auth.OrganizationID,
   info: Info,
-  get: true,
+  get: "id",
   update: { input: UpdateInput, result: Info },
 })

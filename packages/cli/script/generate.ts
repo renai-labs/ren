@@ -308,23 +308,23 @@ const gets: Readonly<Record<string, string>> = {
   "AppProfile.ID": "app-profile.get",
 }
 
-const references: Readonly<Record<string, { readonly title: string; readonly name?: string }>> = {
-  spaceId: { title: "Space" },
-  ownerSpaceId: { title: "Space", name: "space" },
-  defaultSpaceId: { title: "Default space", name: "default-space" },
-  agentId: { title: "Agent" },
-  appId: { title: "App" },
-  taskId: { title: "Task" },
-  parentId: { title: "Parent task" },
-  scheduleId: { title: "Schedule" },
-  webhookId: { title: "Webhook" },
-  profileId: { title: "App profile" },
-}
+const references: Readonly<Record<string, { readonly title: string; readonly group: string; readonly name?: string }>> =
+  {
+    spaceId: { title: "Space", group: "space" },
+    ownerSpaceId: { title: "Space", group: "space", name: "space" },
+    defaultSpaceId: { title: "Default space", group: "space", name: "default-space" },
+    agentId: { title: "Agent", group: "agent" },
+    appId: { title: "App", group: "app" },
+    taskId: { title: "Task", group: "task" },
+    parentId: { title: "Parent task", group: "task" },
+    scheduleId: { title: "Schedule", group: "schedule" },
+    webhookId: { title: "Webhook", group: "webhook" },
+    profileId: { title: "App profile", group: "app-profile" },
+  }
 
 const resolved = (name: string, operation: string) => ({
   names: { id: name },
   lookups: { id: { operation, input: "idOrSlug", output: "id" } },
-  descriptions: { id: `${name.charAt(0).toUpperCase()}${name.slice(1)} slug or ID` },
 })
 
 const extra: ReadonlyArray<EmitCli.Command> = [
@@ -556,11 +556,19 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
   const descriptions = Object.fromEntries(
     fields.flatMap((field) => {
       const reference = references[field.name]
-      if (reference !== undefined) return [[field.name, `${reference.title} slug or ID`]]
+      if (reference !== undefined) return [[field.name, `${reference.title} ${accepts(reference.group)}`]]
+      const lookup = command.lookups?.[field.name]
+      if (own === undefined && lookup !== undefined)
+        return [
+          [
+            field.name,
+            `${capitalized(command.names?.[field.name] ?? field.name)} ${accepts(lookup.operation.slice(0, lookup.operation.lastIndexOf(".")))}`,
+          ],
+        ]
       if (own === undefined || field.source !== "params") return []
       const title = capitalized(own.resource.name)
-      if (field.name === "idOrSlug") return [[field.name, `${title} slug or ID`]]
-      if (field.name === "id") return [[field.name, own.self === undefined ? `${title} ID` : `${title} slug or ID`]]
+      if (field.name === "idOrSlug" || field.name === "id")
+        return [[field.name, `${title} ${accepts(own.resource.group)}`]]
       return []
     }),
   )
@@ -581,6 +589,12 @@ const shaped = (command: EmitCli.Command, own?: { readonly resource: Resource; r
   }
 }
 
+const accepts = (group: string) => {
+  const found = sdk.find((each) => each.identifier === group)
+  if (found === undefined) throw new Error(`Not an SDK group: ${group}`)
+  return Context.getOrUndefined(found.annotations, Primitive.Annotation)?.get === "slug" ? "slug or ID" : "ID"
+}
+
 const groupOf = (resource: Resource) => {
   const group = sdk.find((each) => each.identifier === resource.group)
   if (group === undefined) throw new Error(`Not an SDK group: ${resource.group}`)
@@ -594,7 +608,7 @@ const definitionOf = (resource: Resource) => {
 }
 
 const primitive = resources.flatMap((resource) => {
-  const self = definitionOf(resource).get === true ? `${resource.group}.get` : undefined
+  const self = definitionOf(resource).get === undefined ? undefined : `${resource.group}.get`
   return Object.keys(groupOf(resource).endpoints)
     .filter((operation) => !elsewhere.has(operation))
     .map((operation) => {

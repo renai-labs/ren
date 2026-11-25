@@ -43,7 +43,7 @@ export interface Definition {
   readonly id: Schema.Top
   readonly info: Schema.Top
   readonly list?: List
-  readonly get?: true
+  readonly get?: "id" | "slug"
   readonly create?: Write
   readonly update?: Write
   readonly archive?: true

@@ -162,7 +162,7 @@ export const definition = Primitive.define({
   id: ID,
   info: Info,
   list: { input: ListInput, page: Page },
-  get: true,
+  get: "id",
   update: { input: UpdateInput, result: Info },
   archive: true,
 })

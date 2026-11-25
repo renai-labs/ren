@@ -41,5 +41,5 @@ export const definition = Primitive.define({
   plural: "oauth-sessions",
   id: ID,
   info: Info,
-  get: true,
+  get: "id",
 })

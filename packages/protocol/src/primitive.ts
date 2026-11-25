@@ -44,18 +44,19 @@ export const list = <
 }
 
 export const get = <const Name extends string, const Plural extends string, Info extends Schema.Top>(
-  definition: Named<Name, Plural> & { readonly info: Info; readonly get: true },
+  definition: Named<Name, Plural> & { readonly info: Info; readonly get: "id" | "slug" },
 ) => {
   const identifier = Primitive.action(definition, "get")
+  const by = definition.get === "slug" ? "ID or slug" : "ID"
   return HttpApiEndpoint.get(identifier, `/${definition.plural}/:idOrSlug`, {
-    params: { idOrSlug: Schema.String },
+    params: { idOrSlug: Schema.String.annotate({ description: `The ${definition.name}’s ${by}.` }) },
     success: definition.info,
     error: NotFoundError,
   }).annotateMerge(
     OpenApi.annotations({
       identifier,
       summary: `Get ${definition.name}`,
-      description: `Return one ${definition.name} by ID or slug.`,
+      description: `Return one ${definition.name} by ${by}.`,
     }),
   )
 }
