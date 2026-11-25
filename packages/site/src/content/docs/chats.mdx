@@ -9,7 +9,7 @@ A chat is a conversation with Ren in a [space](/docs/spaces/). Ren uses the inst
 
 <Screenshot
   shot="chats/overview-split"
-  alt="A chat in the Engineering space with the Changes tab open in the right side panel, in Split view"
+  alt="A chat in the Engineering space about order email currencies, with the Changes tab open in the side panel showing a diff of order-confirmation.ts"
   caption="A chat with the side panel open."
 />
 
@@ -121,7 +121,12 @@ Activity lists every step Ren took, such as each command it ran and each file it
 
 ### Changes
 
-Changes shows each file Ren edited, with removed lines in red and added lines in green. Select **Split** to see the old and new versions side by side, or **Stacked** to see them in one column.
+Changes shows each changed file, with removed lines in red and added lines in green:
+
+- **Repository**: every change in the repository since its last commit, by Ren or by you.
+- **Ren's edits**: only the files Ren edited in this chat.
+
+Select a file in the tree to jump to it. The buttons above the diff switch between one column and side by side.
 
 ### Files
 
@@ -143,7 +148,22 @@ Browser shows the page that Ren uses, live. Select **Take control** to use the p
 
 ### Terminal
 
-Terminal opens a shell on the computer of the chat. You can open more than one. You can also send `/terminal`, or press `⇧⌘X` to switch the composer to shell mode.
+Terminal opens a shell on the computer of the chat. You can open more than one. You can also send `/terminal`.
+
+## Run a command
+
+To run one command on the computer of the chat without opening a terminal, type `!` in an empty composer, or press `⇧⌘X`. The composer switches to shell mode: it shows `$` and **Shell**.
+
+<Screenshot
+  shot="chats/shell-mode"
+  frame="detail"
+  alt="The composer in shell mode with $ git status --short, the Shell label and the run button"
+  caption="Type ! to run a command."
+/>
+
+Type the command and press Enter. The command and its output show as a step in the chat. Ren does not reply to it, but it reads the command and the output with your next message, so you can ask about them.
+
+To go back to messages, press Esc, or press Backspace in the empty composer.
 
 ## Quote or comment on a reply
 
@@ -167,14 +187,20 @@ Select text in a reply of Ren to quote it in your next message, or to comment on
 
 Select `⋯` at the top right of the chat to rename the chat, copy its link or archive it.
 
-When the chat is linked to tasks, pull requests, issues or channel threads, the same menu lists them. An archived chat leaves your chat list. Only the API can bring it back.
+When the chat is linked to tasks, pull requests, issues or channel threads, the same menu lists them. An archived chat leaves your chat list.
 
 ## Commands
 
-Type `/` in the composer to see every command.
+Type `/` in the composer to see the commands. Keep typing to filter them, then press Enter.
+
+<Screenshot
+  shot="chats/slash-menu"
+  frame="detail"
+  alt="The Commands menu above the composer with /model, /compact, /undo, /clear, /terminal, /open, /rename and /apps"
+  caption="Type / to see the commands."
+/>
 
 ## Good to know
 
 - On Windows and Linux, use Ctrl instead of `⌘`.
 - A chat from a channel or a schedule denies any action that needs approval, unless you allow it in the [permissions](/docs/permissions/).
-- If neither the space nor the organization has a default model, Ren uses its system default.
