@@ -237,8 +237,14 @@ export const layer = Layer.effect(
                   current.icon !== metadata.icon ||
                   AppValidation.canonical(current.webhooks) !== AppValidation.canonical(metadata.webhooks)
                 const isExecutionChanged =
-                  AppValidation.execution(yield* AppQueries.info(transaction, current)) !==
-                  AppValidation.execution(publication)
+                  AppValidation.execution({
+                    requiredCredentials: current.required_credentials,
+                    environment: current.environment ?? undefined,
+                    skills: current.skills,
+                    mcps: current.mcps,
+                    dependsOn: (yield* AppQueries.info(transaction, current)).dependsOn,
+                    webhooks: current.webhooks,
+                  }) !== AppValidation.execution(publication)
                 if (!isExecutionChanged) {
                   if (isMetadataChanged)
                     yield* transaction
