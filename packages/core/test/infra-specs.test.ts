@@ -60,7 +60,7 @@ describe("InfraSpecs", () => {
       const pulled = yield* infra.pull(o.admin, {})
 
       expect({ bindings: pulled.bindings, spec: pulled.spec }).toEqual({
-        bindings: { organization: o.bindings.organization, spaces: {} },
+        bindings: { organization: o.bindings.organization, profiles: {}, spaces: {} },
         spec: {
           org: { settings: { ...empty, instructions: "Be brief." } },
           memory: { "memory.md": "" },
@@ -451,7 +451,8 @@ describe("InfraSpecs", () => {
       expect((yield* infra.plan(member, input).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
       expect((yield* infra.pull(member, {}).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
       expect(
-        (yield* infra.plan(o.admin, { ...input, bindings: { organization: "elsewhere", spaces: {} } })).problems,
+        (yield* infra.plan(o.admin, { ...input, bindings: { organization: "elsewhere", profiles: {}, spaces: {} } }))
+          .problems,
       ).toEqual([
         {
           path: "deploy.yaml",
@@ -460,7 +461,9 @@ describe("InfraSpecs", () => {
       ])
       const lock = { organization: "elsewhere", resources: {} }
       expect(
-        yield* infra.pull(o.admin, { ...input, bindings: { organization: "elsewhere", spaces: {} } }).pipe(Effect.flip),
+        yield* infra
+          .pull(o.admin, { ...input, bindings: { organization: "elsewhere", profiles: {}, spaces: {} } })
+          .pipe(Effect.flip),
       ).toMatchObject({
         _tag: "Primitive.Invalid",
         message: `deploy.yaml names “elsewhere”, but you are signed in to “${o.bindings.organization}”.`,

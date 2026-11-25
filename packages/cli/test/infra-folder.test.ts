@@ -210,6 +210,7 @@ describe("InfraFolder.write", () => {
   const pulled = {
     bindings: {
       organization: "acme",
+      profiles: {},
       spaces: {
         engineering: {
           channels: { ren: { kind: "github" as const, repository: "acme/ren" } },

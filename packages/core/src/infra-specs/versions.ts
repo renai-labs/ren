@@ -45,6 +45,7 @@ export interface Source {
       }
     >
   >
+  readonly profiles: InfraProfiles.Catalogue
   readonly bindings: Readonly<
     Record<
       string,
@@ -141,6 +142,12 @@ export const resources = (source: Source, live?: Resources): Resources => {
       InfraMemory.path(file.slug, file.name),
       { kind: "memory", value: { content: file.value } },
     ]),
+    ...Object.entries(source.profiles).flatMap(([app, profiles]) =>
+      Object.entries(profiles).map(([slug, declaration]): [string, Resource] => [
+        InfraProfiles.declaredPath(app, slug),
+        { kind: "profile", value: InfraProfiles.canonical(declaration) },
+      ]),
+    ),
     ...Object.entries(source.bindings).flatMap(([slug, bindings]) =>
       Object.entries(bindings.profiles).flatMap(([app, profiles]) =>
         profiles.map((profile): [string, Resource] => [
