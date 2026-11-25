@@ -1,0 +1,124 @@
+---
+title: Configuration files
+icon: Folder
+description: Lay out the .ren folder of a Ren spec, name and connect its resources, bind it to an organization in deploy.yaml and keep ren.lock in Git.
+summary: Lay out the .ren folder and its files
+---
+
+Your spec is a `.ren` folder of YAML and Markdown files that describe your organization, with a folder for each space, agent and app.
+
+## Folder layout
+
+Every `ren infra` command uses the `.ren` folder in the current directory unless you pass another path, such as `ren infra plan ren-setup/.ren`. Keep it in your main repository, or in a repository of its own.
+
+```text
+.ren/
+├── org.yaml
+├── instructions.md
+├── deploy.yaml
+├── environments.yaml
+├── ren.lock
+├── memory/
+│   └── memory.md
+└── spaces/
+    └── engineering/
+        ├── space.yaml
+        ├── instructions.md
+        ├── schedules.yaml
+        ├── webhooks.yaml
+        ├── channels.yaml
+        ├── memory/
+        │   └── memory.md
+        ├── agents/
+        │   └── planner/
+        │       ├── agent.yaml
+        │       └── instructions.md
+        └── apps/
+            └── engineering-tools/
+                ├── app.yaml
+                ├── mcps.yaml
+                └── skills/
+                    └── release-notes/
+                        └── SKILL.md
+```
+
+| Path                              | What it holds                                               | Page                                                                 |
+| --------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| `org.yaml`                        | The organization's settings. Every spec has it.             | [Organization](/docs/developers/iac/organization/)                   |
+| `deploy.yaml`                     | Which organization the spec belongs to                      | [deploy.yaml](#deployyaml)                                           |
+| `environments.yaml`               | The organization's machines                                 | [Machines](/docs/developers/iac/machines/)                           |
+| `ren.lock`                        | What Ren looked like at your last sync. Ren writes it.      | [ren.lock](#renlock)                                                 |
+| `spaces/<slug>/space.yaml`        | A shared space                                              | [Spaces](/docs/developers/iac/spaces/)                               |
+| `spaces/<slug>/agents/<name>/`    | An agent that the space owns                                | [Agents](/docs/developers/iac/agents/)                               |
+| `spaces/<slug>/apps/<slug>/`      | An app that the space owns, with its skills and MCP servers | [Apps](/docs/developers/iac/apps/)                                   |
+| `schedules.yaml`, `webhooks.yaml` | The space's automations                                     | [Automations](/docs/developers/iac/automations/)                     |
+| `channels.yaml`                   | The space's Slack and GitHub channels                       | [Channels](/docs/developers/iac/channels/)                           |
+| `instructions.md`, `memory/`      | Instructions and memory, at each level                      | [Instructions and memory](/docs/developers/iac/instructions-memory/) |
+
+The commands ignore any other file, so you can keep a `README.md` in the folder.
+
+## YAML and Markdown
+
+Settings go in YAML. Longer text, such as instructions, memory and skills, goes in Markdown files next to it, where it's easier to write and to review:
+
+```yaml title="spaces/engineering/space.yaml"
+name: Engineering
+description: Plans, builds and reviews changes to the example app.
+```
+
+```md title="spaces/engineering/instructions.md"
+Open a pull request for every change.
+```
+
+## Names
+
+A folder's name, or a key in a YAML file, is how Ren identifies that resource. Most names are slugs: lowercase letters and digits joined by single dashes, at most 64 characters long.
+
+| Name                                  | Where it is                | Rules                                                 |
+| ------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| Space slug, such as `engineering`     | Folder under `spaces/`     | A slug. The display name is `name` in `space.yaml`.   |
+| Agent name, such as `planner`         | Folder under `agents/`     | A slug, unique in the organization                    |
+| App slug, such as `engineering-tools` | Folder under `apps/`       | A slug, unique across Ren                             |
+| Skill, such as `release-notes`        | Folder under `skills/`     | The same as `name` in its `SKILL.md`, in one app only |
+| Schedule, webhook or channel          | Key in its YAML file       | A slug                                                |
+| Machine, such as `Node build`         | Key in `environments.yaml` | Any name                                              |
+
+Files refer to each other by these names. A schedule names its agent, a space names its machine, and a space can use an agent that another space owns:
+
+```yaml title="spaces/support/space.yaml"
+name: Support
+uses:
+  agents: [tester]
+```
+
+`ren infra validate` checks that every name a file uses exists.
+
+## deploy.yaml
+
+`deploy.yaml` holds what ties the spec to one real organization: the organization's slug, the Slack channels and GitHub repositories behind its channels, and its shared profiles.
+
+```yaml title="deploy.yaml"
+organization: acme
+profiles:
+  engineering-tools:
+    acme-bot:
+      name: Acme bot
+spaces:
+  engineering:
+    channels:
+      example-app:
+        kind: github
+        repository: acme/example-app
+    profiles:
+      engineering-tools: [acme-bot]
+```
+
+Only `organization` is required. Plan, apply and pull check that you're signed in to that organization, so you can't apply the spec to the wrong one. [Channels](/docs/developers/iac/channels/) and [Profiles](/docs/developers/iac/profiles/) explain the other keys.
+
+If the file is missing, `ren infra pull` writes it.
+
+## ren.lock
+
+`ren.lock` records the version of each resource in Ren at your last pull or apply, which are the two commands that write it. A plan reads it to tell the changes you made in the spec from the changes someone made in Ren since, which is how it spots conflicts.
+
+Don't edit `ren.lock`, and commit it after each pull and apply. If you have no `ren.lock` yet, run `ren infra pull` before you plan.

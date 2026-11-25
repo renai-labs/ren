@@ -54,13 +54,48 @@ const DOCS: Section = {
 
 const DEVELOPERS: Section = {
   title: "Developers",
-  description: "CLI and MCP",
+  description: "CLI, API and IaC",
   icon: "Code",
-  home: "developers/cli",
+  home: "developers",
   groups: [
-    { title: "Get started", items: ["developers/cli", "developers/mcp"] },
-    { title: "Guides", items: ["developers/inference-setup"] },
-    { title: "Reference", items: ["developers/llms-txt"] },
+    {
+      title: "Get started",
+      items: [
+        { slug: "developers", label: "Overview" },
+        "developers/cli",
+        "developers/mcp",
+        "developers/import-agent",
+        "developers/inference-setup",
+        "developers/opencode-plugin",
+      ],
+    },
+    {
+      title: "Infrastructure as code",
+      items: [
+        { slug: "developers/iac", label: "Overview" },
+        "developers/iac/configuration",
+        "developers/iac/plan-and-apply",
+        "developers/iac/organization",
+        "developers/iac/spaces",
+        "developers/iac/agents",
+        "developers/iac/machines",
+        "developers/iac/apps",
+        "developers/iac/profiles",
+        "developers/iac/automations",
+        "developers/iac/channels",
+        "developers/iac/instructions-memory",
+        "developers/iac/factory",
+      ],
+    },
+    {
+      title: "Reference",
+      items: [
+        "developers/cli-commands",
+        "developers/api",
+        "developers/llms-txt",
+        "developers/self-hosting",
+      ],
+    },
   ],
 }
 

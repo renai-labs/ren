@@ -1,0 +1,53 @@
+---
+title: Instructions and memory
+icon: Bulb
+description: Keep the instructions of the organization, each space and each agent in instructions.md files, and their memory in memory folders, and see how each syncs with Ren.
+summary: Instructions and memory as Markdown files
+---
+
+[Instructions](/docs/instructions/) and [memory](/docs/memory/) are plain Markdown files in the spec, so you can write and review them like any other text.
+
+## Instructions
+
+Put an `instructions.md` next to the YAML file of the organization, a space or an agent. Ren uses its text exactly as you write it.
+
+```md title="spaces/engineering/instructions.md"
+- Work in the example-app repository unless the request names another.
+- Write a test first for every bug fix.
+```
+
+Leave the file out for no instructions. This file is the only place for them: validation fails if a YAML file sets `settings.instructions`.
+
+A chat gets the organization's instructions, then its space's, then its agent's; see [Instructions](/docs/instructions/#order).
+
+## Memory
+
+The organization and each space can have a `memory/` folder of Markdown files, in subfolders if you like. Agents have no memory of their own.
+
+```text
+spaces/engineering/memory/
+├── memory.md
+└── people/
+    └── ana.md
+```
+
+```md title="spaces/engineering/memory/memory.md"
+- Releases ship on Fridays.
+- People are in people/.
+```
+
+```md title="spaces/engineering/memory/people/ana.md"
+Ana leads design and approves UI changes.
+```
+
+`memory.md` is the entry point, and a folder with any files needs one. Every chat reads the start of it, then opens the other files when a request needs them, so use it to say what's where. See [Memory](/docs/memory/#reading). Memory holds text only; other files belong in [Drive](/docs/drive/).
+
+## How memory syncs
+
+Memory is the one part of the spec that Ren edits on its own: it writes to a space's memory as it learns. So memory follows gentler rules than the rest of the spec:
+
+- When you add or edit a file and apply, Ren creates or updates that file.
+- When you delete a file and apply, Ren keeps it. Apply never deletes memory. Delete the file in the app instead.
+- When you pull, you get the files that Ren added or changed, and lose the ones deleted in Ren.
+
+Files that Ren added don't show in a plan. A file that Ren changed and you didn't shows as `changed in Ren`, and apply leaves it alone. If you both changed it, that's a conflict; see [Pull and resolve conflicts](/docs/developers/iac/plan-and-apply/#pull-and-resolve-conflicts).

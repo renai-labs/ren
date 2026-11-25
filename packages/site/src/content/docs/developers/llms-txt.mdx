@@ -1,37 +1,41 @@
 ---
 title: llms.txt
 icon: BookOpen
-description: Give the Ren docs to your AI agent as Markdown, so it can help you work with Ren.
-summary: The docs as plain text for AI tools
+description: Give the Ren docs to an AI agent as Markdown, as an index, one file with every page, or one page at a time.
+summary: Ren docs as Markdown for AI agents
 ---
 
-The Ren docs are available as Markdown files for AI agents. Give one of these files to your agent, and it can help you work with Ren.
-
-```text
-https://useren.ai/llms-full.txt
-```
+The Ren docs are available as Markdown files, so an AI agent can read them before it helps you with Ren.
 
 ## Files
 
-| File                                 | When to use it                                                 |
-| ------------------------------------ | -------------------------------------------------------------- |
-| [`/llms.txt`](/llms.txt)             | Let the agent choose pages from an index of titles and links.  |
-| [`/llms-full.txt`](/llms-full.txt)   | Give the agent all the docs at once.                           |
-| [`/llms-small.txt`](/llms-small.txt) | Use shorter docs when the agent has limited space for context. |
+| URL                                | What it contains                                                       | When to use it                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `https://useren.ai/llms.txt`       | Each page's title, link and one-sentence description, by sidebar group | The agent can fetch URLs and should read only the pages it needs |
+| `https://useren.ai/llms-full.txt`  | Every page as Markdown, in sidebar order                               | The agent should read all the docs at once                       |
+| `https://useren.ai/llms-small.txt` | Every page as Markdown, without code blocks                            | The agent has less room for context                              |
 
-## Use the docs with your agent
+Without code blocks, `llms-small.txt` loses the commands and configuration examples of the Developers pages. For CLI, API or infrastructure-as-code work, use `llms-full.txt` or the pages themselves.
 
-Give your agent the URL above, or paste the file contents into your agent.
+## One page
 
-## Use one page
+Add `/raw` before a page's path and `.md` after it to get that page as Markdown:
 
-1. Open the page.
-2. Select **Copy page**.
+| Page                                     | Markdown                                       |
+| ---------------------------------------- | ---------------------------------------------- |
+| `https://useren.ai/docs/`                | `https://useren.ai/raw/docs.md`                |
+| `https://useren.ai/docs/tasks/`          | `https://useren.ai/raw/docs/tasks.md`          |
+| `https://useren.ai/docs/developers/cli/` | `https://useren.ai/raw/docs/developers/cli.md` |
 
-The **Copy page** menu also shows **Open Markdown**, **Chat in Claude**, and **Chat in ChatGPT**.
+On each page, under **On this page**, **Copy page** copies its Markdown, **View as Markdown** opens it, and **Ask Ren about this page** opens Ren with a prompt to read it.
 
-## Good to know
+## Example
 
-- The files contain only published pages.
-- Each page is available as Markdown at `/raw/<page-path>.md`.
-- This page is at [`/raw/docs/developers/llms-txt.md`](/raw/docs/developers/llms-txt.md).
+Paste this into your agent:
+
+```text
+Read https://useren.ai/llms.txt and open the Ren docs pages you need as
+Markdown, at https://useren.ai/raw/docs/<path>.md. Then help me add a
+reviewer agent to the engineering space of my Acme organization. Use the
+Ren CLI, and show me each command before you run it.
+```

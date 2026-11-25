@@ -1,0 +1,145 @@
+---
+title: Automations
+icon: Webhook
+description: Declare the schedules and webhooks of a space in Ren as code, and set a webhook's signing secret outside the spec before it goes live.
+summary: Declare schedules and webhooks as files
+---
+
+A space's [automations](/docs/automations/) live in two files in its folder, `schedules.yaml` and `webhooks.yaml`. Each key in them is the slug of one automation.
+
+## Add a schedule
+
+This schedule has the planner plan the week every Monday at 9:00 in New York. Each run starts a new chat in Engineering with the message:
+
+```yaml title="spaces/engineering/schedules.yaml"
+weekly-triage:
+  agent: planner
+  cron: "0 9 * * 1"
+  timeZone: America/New_York
+  message: Review the open issues of acme/example-app and plan next week.
+```
+
+## Schedules
+
+| Key        | Required | What it sets                                                                             |
+| ---------- | -------- | ---------------------------------------------------------------------------------------- |
+| `cron`     | Yes      | When it runs, as a cron expression with five fields                                      |
+| `timeZone` | Yes      | The IANA time zone of the cron, such as `Europe/Berlin`                                  |
+| `message`  | Yes      | What the agent does each run, up to 20,000 characters                                    |
+| `agent`    | No       | The agent of each chat. If you leave it out, the chat gets the space's default settings. |
+| `name`     | No       | The name in the app. Defaults to the slug.                                               |
+| `until`    | No       | The last time it runs, in UTC                                                            |
+| `enabled`  | No       | `false` pauses it. The default is `true`.                                                |
+
+This schedule runs the tests every night until the end of March 2027, and is paused for now:
+
+```yaml title="spaces/engineering/schedules.yaml"
+nightly-tests:
+  name: Nightly tests
+  agent: tester
+  cron: "30 2 * * *"
+  timeZone: UTC
+  message: Run the full test suite of acme/example-app and report failures.
+  until: "2027-03-31T23:59:00Z"
+  enabled: false
+```
+
+The spec only covers recurring schedules that start a new chat. One-time schedules, and schedules that post into an existing chat, stay in the app: pull skips them and apply leaves them alone.
+
+## Webhooks
+
+A webhook in `webhooks.yaml` is either custom, with its own message and rules, or a preset that one of the space's apps offers.
+
+### Custom webhooks
+
+This webhook has the planner triage alerts that a monitoring service signs with HMAC-SHA256:
+
+```yaml title="spaces/engineering/webhooks.yaml"
+alerts:
+  name: Production alerts
+  agent: planner
+  message: Triage this alert and open a task if it needs a fix.
+  signature:
+    kind: hmac
+    header: x-signature
+    encoding: hex
+    prefix: sha256=
+  filter: body.kind == "alert"
+  eventId: headers["x-delivery-id"]
+  threadKey: body.alert.id
+  title: body.alert.title
+```
+
+Only `message` is required, and `name` and `agent` work as they do for a schedule. The other four keys are rules: [CEL](https://cel.dev) expressions of up to 1,000 characters that read the request's `method`, `query`, `headers` and `body`. Write header names in lowercase.
+
+| Key         | In the app                   | What it returns                                                                                                                                               |
+| ----------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `filter`    | **Start a session when**     | A bool. Only a request where it is true starts or continues a chat. Without it, every request does.                                                           |
+| `threadKey` | **Session continuation key** | A string. Requests with the same value continue one chat.                                                                                                     |
+| `eventId`   | **Event identifier**         | A string unique to each delivery, such as a delivery-ID header. Ren ignores a value it has already seen, so a retry doesn't run twice. Don't use a timestamp. |
+| `title`     | **Session title**            | A string, used as the title of a new chat                                                                                                                     |
+
+`signature` sets how Ren checks that a request really comes from the sender. Use `none` only when the sender can't sign its requests.
+
+| `kind`     | Other keys                                         | Ren checks                                                                        |
+| ---------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `none`     |                                                    | The token in the URL only. The default.                                           |
+| `header`   | `header`                                           | That the header equals the signing secret                                         |
+| `hmac`     | `header`, `encoding` (`hex` or `base64`), `prefix` | The HMAC-SHA256 of the body with the signing secret, in the header after `prefix` |
+| `standard` |                                                    | The Standard Webhooks signature (Svix, Clerk, Resend)                             |
+| `stripe`   |                                                    | The `stripe-signature` header                                                     |
+
+### App presets
+
+To turn on a preset, name the app and the preset's key in that app's webhooks:
+
+```yaml title="spaces/engineering/webhooks.yaml"
+pull-requests:
+  app: engineering-tools
+  preset: pull-requests
+  agent: reviewer
+```
+
+A preset takes only `app`, `preset`, `agent` and `mode`. Its name, message and rules come from the app, so change them there; see [Webhook presets](/docs/developers/iac/apps/#webhook-presets).
+
+### Listening and live
+
+A new webhook starts out listening (**Debug** in the app): Ren records each request but starts no chat, so you can test your rules safely. It starts and continues chats once you set `mode: live`.
+
+A webhook that checks a signature needs a signing secret before it can go live, and a spec never holds secrets. So going live takes two applies:
+
+<Steps>
+
+1. Declare it without `mode`, then plan and apply.
+
+2. Find its ID and URL:
+
+   ```sh
+   ren webhook list --space engineering | jq '.items[] | {slug, id, url}'
+   ```
+
+3. Paste the URL into the other service, and set the secret it gave you:
+
+   ```sh
+   ren webhook set-signing-secret <webhook-id> --secret <secret>
+   ```
+
+   Without `--secret`, Ren generates a secret and prints it once. You can also select **Set secret** in the app.
+
+4. Send a test event, and run `ren webhook test <webhook-id>` to see what the rules do with the recorded requests.
+
+5. Add `mode: live`, then plan and apply.
+
+</Steps>
+
+A preset with `secret: ren` skips these steps. Ren generates its secret when apply turns it on, so you can declare it live right away.
+
+The webhook's URL isn't in the spec either. If it leaks, run `ren webhook rotate-url <webhook-id>` and paste the new one into the other service.
+
+## Who they run as
+
+An automation runs with its owner's access; see [Who an automation runs as](/docs/automations/#who-an-automation-runs-as). Apply runs as you, so you become the owner of each automation it creates, and of each one whose message, agent, time or rules it changes. Keep that in mind when you apply a teammate's change.
+
+## Change and remove
+
+Changing a key updates the automation, and removing its slug archives it. A slug can't be renamed: apply archives the old automation and creates a new one, and a new webhook has a new URL. You also can't switch a webhook between custom and preset, or to another preset; give the new webhook another slug.

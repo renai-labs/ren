@@ -1,0 +1,222 @@
+---
+title: Apps
+icon: Apps
+description: Declare a custom app in a space's apps folder, with its MCP servers, skills from files or GitHub, the secrets it needs, setup packages and webhook presets.
+summary: Declare custom apps, skills and MCP servers
+---
+
+A custom [app](/docs/apps/) packages the tools you give your agents: MCP servers, skills, the secrets they need and the webhooks they offer. Each one is a folder in `apps/` of the space that owns it.
+
+## Declare an app
+
+An app needs an `app.yaml` with a `name` and a `description`. It can also have a `mcps.yaml` for its [MCP servers](#mcp-servers) and a `skills/` folder with one folder per [skill](#skills):
+
+```text
+spaces/engineering/apps/engineering-tools/
+├── app.yaml
+├── mcps.yaml
+└── skills/
+    └── code-review/
+        └── SKILL.md
+```
+
+```yaml title="spaces/engineering/apps/engineering-tools/app.yaml"
+name: Engineering tools
+description: Review and release tools for acme/example-app.
+```
+
+The folder's name is the app's slug. It must be unique across all of Ren, not just your organization.
+
+When apply creates an app, Ren also creates its first shared [profile](/docs/developers/iac/profiles/#the-first-profile), which holds the app's sign-ins and secrets for the owner space.
+
+| Field in `app.yaml`   | What it sets                                                                  |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `name`                | Required. The name shown in Ren. It can't be the name of the owner space.     |
+| `description`         | Required. What the app does.                                                  |
+| `icon`                | An `https://` address of the app's logo                                       |
+| `dependsOn`           | Slugs of apps it includes. See [Dependencies](#dependencies).                 |
+| `requiredCredentials` | The secrets the app needs. See [Secrets](#secrets).                           |
+| `environment`         | Packages and commands for the machine. See [Setup packages](#setup-packages). |
+| `webhooks`            | Webhooks that a space can turn on. See [Webhook presets](#webhook-presets).   |
+
+## MCP servers
+
+`mcps.yaml` lists the app's MCP servers, keyed by slug:
+
+```yaml title="spaces/engineering/apps/engineering-tools/mcps.yaml"
+docs:
+  name: Docs
+  description: Searches the acme engineering docs.
+  transport:
+    type: remote
+    url: https://docs.acme.example/mcp
+  auth:
+    type: bearer
+    credential: bearerToken
+  requiredCredentials:
+    - kind: secret
+      name: bearerToken
+```
+
+`transport` says where the server runs. A `remote` server is at an `https://` `url`. A `local` server runs on the space's machine from a `command`, with optional `cwd` and `env`.
+
+`auth` says what each profile supplies so Ren can sign in to the server:
+
+| `auth.type`       | Each profile supplies                                      | Other keys             |
+| ----------------- | ---------------------------------------------------------- | ---------------------- |
+| `none`            | Nothing                                                    |                        |
+| `oauth`           | A sign-in                                                  | `tokenEndpointAuth`    |
+| `bearer`          | A secret, sent as `Authorization: Bearer`                  | `credential`           |
+| `header`, `query` | A secret, sent in the header or query parameter you `name` | `credential`, `name`   |
+| `basic`           | A username and a password                                  | `username`, `password` |
+
+`credential`, `username` and `password` each name a secret, which the server lists under `requiredCredentials` as in the example. See [Secrets](#secrets).
+
+## Skills
+
+Each skill is a folder under `skills/`, named after the skill. It holds either the skill's own files or a pointer to them on GitHub.
+
+### Skill files
+
+`SKILL.md` starts with frontmatter that has a `name`, which must match the folder's name, and a `description`. Every other file in the folder is part of the skill and must be text:
+
+```text
+skills/code-review/
+├── SKILL.md
+└── references/
+    └── rules.md
+```
+
+```md title="spaces/engineering/apps/engineering-tools/skills/code-review/SKILL.md"
+---
+name: code-review
+description: Reviews a pull request of acme/example-app against Acme's review rules.
+---
+
+Read the diff, then check it against references/rules.md.
+```
+
+Ren keeps a copy of these files, so to update the skill, edit them and apply. If the skill already lives in a GitHub repository, point to it instead, so there's one place to edit.
+
+### Skills from GitHub
+
+For a public skill, or one you keep in a repository, put a `skill.yaml` in the folder in place of `SKILL.md`. Ren then reads the skill from GitHub.
+
+```yaml title="spaces/engineering/apps/engineering-tools/skills/release-notes/skill.yaml"
+upstream:
+  url: https://github.com/acme/agent-skills
+  ref: main
+  path: skills/release-notes
+```
+
+| Key    | What it sets                                                                                   |
+| ------ | ---------------------------------------------------------------------------------------------- |
+| `url`  | The repository's address, `https://github.com/<owner>/<repo>`                                  |
+| `path` | Required. The folder in the repository that holds `SKILL.md`, or `.` for the repository's root |
+| `ref`  | A branch, a tag or a full 40-character commit. Without it, the repository's default branch.    |
+
+With a branch, a tag or no `ref`, the skill follows new commits without an apply: Ren checks for them at most every 5 minutes. To freeze a skill until you decide to update it, set `ref` to a commit.
+
+Ren reads skills from GitHub only. A public repository needs no setup. For a private one, [connect GitHub](/docs/channels/github/#connect-github) for your organization and give the Ren app access to the repository. If Ren can't read the repository, it keeps the last version it read, and chats go without the skill until it has read one.
+
+## Secrets
+
+The spec never holds a secret's value. It only names the secrets the app needs, under `requiredCredentials`. Each [profile](/docs/developers/iac/profiles/) then gets its own values, which someone enters in the app or with the CLI.
+
+```yaml title="spaces/engineering/apps/engineering-tools/app.yaml"
+name: Engineering tools
+description: Review and release tools for acme/example-app.
+requiredCredentials:
+  - kind: env
+    name: DEPLOY_TOKEN
+    description: A token for the deploy API.
+```
+
+There are two kinds:
+
+- `kind: env` is an environment variable that the app's commands read. Declare it in `app.yaml`, or with the skill that needs it.
+- `kind: secret` is a value that an MCP server's `auth` uses. Declare it with that server in `mcps.yaml`.
+
+A skill declares its own under `metadata` in the frontmatter of `SKILL.md`, or next to `upstream` in `skill.yaml`:
+
+```md title="spaces/engineering/apps/engineering-tools/skills/changelog/SKILL.md"
+---
+name: changelog
+description: Publishes the changelog of acme/example-app.
+metadata:
+  requiredCredentials:
+    - kind: env
+      name: CHANGELOG_TOKEN
+---
+
+Publish the changelog of the last release.
+```
+
+Add `optional: true` to a secret the app can work without. A profile then connects without it, and only the part that needs it fails.
+
+Don't put a secret in a local MCP server's `env`. Those values are plain text that anyone who can read the app sees.
+
+## Dependencies
+
+`dependsOn` lists other apps that this app includes. A space that adds the app gets those apps too, and one profile connects all of them.
+
+```yaml title="spaces/engineering/apps/engineering-tools/app.yaml"
+name: Engineering tools
+description: Review and release tools for acme/example-app.
+dependsOn: [release-tools]
+```
+
+A dependency can be one of your organization's apps or one from the registry. A skill or MCP server belongs to one app only, so to share one between two apps, move it into a third app that both depend on.
+
+## Setup packages
+
+If the app's tools need software installed, list it under `environment`. Ren installs the packages and runs the commands on the machine where a chat runs its tools:
+
+```yaml title="spaces/engineering/apps/engineering-tools/app.yaml"
+name: Engineering tools
+description: Review and release tools for acme/example-app.
+environment:
+  packages:
+    apt: [jq]
+    npm: [vercel]
+  buildCommands:
+    - vercel --version
+```
+
+`packages` also takes `pip` and `go` lists. For software that every chat in a space needs, build it into the space's [machine](/docs/developers/iac/machines/) instead.
+
+## Webhook presets
+
+An app can offer ready-made webhooks, so each space that uses it doesn't have to write its own. Declare them under `webhooks` in `app.yaml`, keyed by the preset's slug:
+
+```yaml title="spaces/engineering/apps/engineering-tools/app.yaml"
+name: Engineering tools
+description: Review and release tools for acme/example-app.
+webhooks:
+  deploy-failed:
+    name: Deploy failed
+    description: Starts a chat when a deploy of acme/example-app fails.
+    message: A deploy failed. Find the cause and report it.
+    secret: provider
+    setup: |
+      1. Open the deploy settings of acme/example-app.
+      2. Add a webhook with the URL and the signing secret.
+```
+
+A preset takes the same keys as a [custom webhook](/docs/developers/iac/automations/#custom-webhooks), such as `message`, `signature` and `filter`, plus three of its own:
+
+| Key           | What it sets                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `description` | Required. What the webhook does.                                                                                                                                  |
+| `secret`      | Required. `ren`: Ren makes the signing secret when a space turns the preset on. `provider`: the person who turns it on pastes the secret that the provider gives. |
+| `setup`       | Required. The steps to follow after turning it on, in Markdown                                                                                                    |
+
+A space turns a preset on in its `webhooks.yaml`; see [App presets](/docs/developers/iac/automations/#app-presets). The preset stays in the app, so when you change it, every space that uses it gets the change.
+
+## Change, move or remove an app
+
+When you change any file of the app, apply replaces the app's whole definition, and spaces get it in their next chat. To give the app to another space, move its folder there.
+
+An app can't be renamed. If you rename its folder, apply archives the app and creates a new one.
+
+Deleting the folder archives the app. Every space that uses it loses its tools and skills, and its profiles stop working.

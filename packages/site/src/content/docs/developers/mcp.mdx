@@ -1,104 +1,75 @@
 ---
 title: MCP
 icon: Mcp
-description: Connect a coding agent or a chat website to the Ren MCP server, so that it can manage your Ren setup.
-summary: Connect any MCP client to Ren
+description: Add the Ren MCP server to Claude Code, Codex or another MCP client, sign in to an organization and use Ren's tools.
+summary: Connect a coding agent to Ren
 ---
 
-The Ren MCP server lets another AI tool manage your Ren setup. For example, Claude can add an app to a space, create a task, or start a chat. Add a remote MCP server with Streamable HTTP and this URL:
+The Ren MCP server lets Claude Code, Codex or any other MCP client manage your Ren organization. For claude.ai and chatgpt.com, see [Ren MCP](/docs/ren-mcp/).
+
+## Add the server
+
+Add a remote server to your client with this URL:
 
 ```text
 https://api.useren.ai/mcp
 ```
 
-## When to use the MCP server
+Many clients take a JSON entry like this one. Check your client's docs for its file and field names.
 
-| Surface                             | Use it when                                             |
-| ----------------------------------- | ------------------------------------------------------- |
-| MCP server                          | Another AI tool manages your Ren setup.                 |
-| [CLI](/docs/developers/cli/)        | Your coding agent has a shell, or a script manages Ren. |
-| [Web app](/docs/#use-from-anywhere) | You chat with Ren itself and review its work.           |
-
-## Connect a coding agent
-
-To add the MCP server to Claude Code, run:
-
-```sh
-claude mcp add --transport http ren https://api.useren.ai/mcp
-```
-
-For opencode, add the server to `opencode.json`:
-
-```json title="opencode.json"
+```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
+  "mcpServers": {
     "ren": {
-      "type": "remote",
-      "url": "https://api.useren.ai/mcp",
-      "enabled": true
+      "type": "http",
+      "url": "https://api.useren.ai/mcp"
     }
   }
 }
 ```
 
-For a different client, open the MCP settings of that client. Add a remote MCP server with the name `ren` and the URL above.
-
-## Connect a website
-
-Create a custom connector in your client. Use `https://api.useren.ai/mcp` as the server URL and OAuth for authentication.
-
-| Website     | Where to add the custom connector    |
-| ----------- | ------------------------------------ |
-| claude.ai   | **Customize → Connectors**           |
-| chatgpt.com | **Settings → Connectors → Advanced** |
-
-After you add the connector, start a new chat. Then the website loads the Ren tools.
+If your client asks for a transport, choose Streamable HTTP. You don't need an API key or headers, because the client signs in with OAuth.
 
 ## Sign in
 
-<Steps>
+The first time the client calls Ren, it opens your browser. Sign in to Ren, pick the **Organization** and click **Allow**.
 
-1. Use a Ren tool. Your client opens the authorization page in your browser.
-2. If necessary, sign in.
-3. On the **Authorize access** screen, choose an **Organization**.
-4. Select **Allow**.
-
-</Steps>
-
-<Screenshot
-  shot="mcp/consent"
-  alt="The Authorize access screen with the organization picker and the Allow button"
-  caption="The Authorize access screen, where you choose the organization for the connection."
-/>
-
-The connection can act only in the organization that you choose.
+The client then works as you in that organization, so it can do what you can do in the app. It renews its access on its own. To switch organizations, sign the client out of Ren and sign in again.
 
 ## Check the connection
 
-Ask your agent:
+Ask your client:
 
 ```text
-Summarize my Ren setup.
+Use Ren to show who I'm signed in as, then list my spaces.
 ```
 
-The answer must name your organization and its spaces.
+It calls `me_get` and `space_list`, and answers with your email, your organization and spaces such as Engineering.
 
-## Troubleshooting
+## Tools
 
-### Your client does not show the Ren tools
+Each tool is one operation of the [Ren API](/docs/developers/api/). It has the operation's name and takes the same inputs. For example:
 
-Examine the connection status of the server in your client. Then start a new chat.
+| Tool            | What it does                           |
+| --------------- | -------------------------------------- |
+| `me_get`        | Shows who you are and the organization |
+| `space_list`    | Lists the spaces you can see           |
+| `space_get`     | Shows one space, by slug or ID         |
+| `task_create`   | Creates a task in a space              |
+| `space_archive` | Archives a space                       |
 
-## Limits
+Your client lists every tool once it connects. Tools that only read are marked read-only and tools that remove something are marked destructive, so your client can ask you before it runs them.
 
-| It cannot                          | Where to go                                                                       |
-| ---------------------------------- | --------------------------------------------------------------------------------- |
-| Send a follow-up message in a chat | The web app or a channel. The MCP server can start a chat with its first message. |
-| Invite people to your organization | The web app                                                                       |
+Most tools work in one space, so say which one in your prompt: "list the open tasks in Engineering".
 
-## Good to know
+Tools can't add, change or remove a [secret](/docs/credentials/), and can't set or show a webhook's signing secret. Do those in the app or with the [CLI](/docs/developers/cli/).
 
-- The server URL is `https://api.useren.ai/mcp` for every client.
-- A website loads the Ren tools only in a new chat, after you add the connector.
-- A connection acts in one organization only. To use a different organization, disconnect and sign in again.
+## When it fails
+
+A tool error starts with the error's type, such as `NotFoundError: Space not found.`
+
+| What you see                                        | Fix                                                                                                                                                                                                                                                                          |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sign-in fails before your browser opens             | Your client can't sign in the way Ren needs. Ren uses OAuth client ID metadata documents, which MCP added in its 2025-11-25 version, and doesn't support the older dynamic client registration. Update the client, try another one, or use the [CLI](/docs/developers/cli/). |
+| The client lists no Ren tools                       | Sign the client out of Ren and sign in again.                                                                                                                                                                                                                                |
+| `NotFoundError` for a space you can open in the app | The client is signed in to another organization. Sign in again and pick the organization of that space.                                                                                                                                                                      |

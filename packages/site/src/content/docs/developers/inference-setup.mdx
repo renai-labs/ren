@@ -1,93 +1,90 @@
 ---
 title: Inference setup
-icon: Developer
-description: Connect Claude Code, Codex, OpenCode, Pi, or Hermes to Ren inference with one CLI command.
-summary: Connect your own model provider from the CLI
+icon: Brain
+description: Point Claude Code, Codex, OpenCode, Pi or Hermes at Ren's models with one CLI command, then keep it up to date or undo it.
+summary: Point your coding tools at Ren's models
 ---
 
-Ren inference connects local coding tools to the Claude and ChatGPT subscriptions of your organization. Before you set up a tool, you need a connected provider and the Ren CLI.
+`ren inference setup` points a coding tool on your computer at the models Ren offers, using one of your [inference keys](/docs/model-providers/#call-rens-models-from-other-tools).
 
-```bash
-ren inference setup claude-code
-```
+## Before you start
 
-## Connect a provider
+- [Install the CLI and sign in](/docs/developers/cli/). Any member of the organization can run setup.
+- Install the tool you want to set up: Claude Code (`claude-code`), Codex (`codex`), OpenCode (`opencode`), Pi (`pi`) or Hermes (`hermes`). The name in parentheses is what you pass to the command.
 
-An organization admin connects the subscriptions that Ren sends requests through.
+Calls made with your key are billed to your organization. To run them on your organization's Claude or ChatGPT subscription instead, an admin connects it in **Settings → Providers**; see [Models](/docs/model-providers/#run-on-your-own-subscription).
 
-<Steps>
+## Set up a tool
 
-1. Open **Settings → Providers** and select **Connect**.
-2. Choose **Claude** or **ChatGPT**.
-3. Do the authorization steps for your provider. The table below shows them.
-
-</Steps>
-
-| Provider    | Authorization                                                                                                                                  |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Claude**  | Authorize access in the new tab. Paste the complete authorization code into Ren, including `#`.                                                |
-| **ChatGPT** | First, turn on **Enable device code authorization for Codex** in the security settings of ChatGPT. Then type the one-time code that Ren shows. |
-
-When the connection is complete, the subscription shows on the Providers page.
-
-## Install the CLI
-
-The installer installs the CLI and signs you in.
-
-```bash
-curl -fsSL https://useren.ai/install | bash
-```
-
-For other options, see [CLI installation](/docs/developers/cli/).
-
-## Set up your coding tool
-
-Install your coding tool, then run its setup command. The setup command uses your newest inference key, or creates one named after your computer. It shows a preview of the changes and makes a backup of each file that it changes.
-
-### Claude Code
-
-```bash
-ren inference setup claude-code
-```
-
-Setup writes Ren models to `~/.claude/settings.json`. To send a test request, run `claude -p 'which model are you?'`.
-
-### Codex
-
-```bash
-ren inference setup codex
-```
-
-Setup adds a `ren` profile under `~/.codex/`. To start Ren inference, run `codex --profile ren`. Plain `codex` continues to use your OpenAI account.
-
-### OpenCode
-
-```bash
+```sh
 ren inference setup opencode
 ```
 
-Setup adds a Ren provider to `~/.config/opencode/opencode.jsonc`. To see the Ren models, use `/models`.
+Setup asks Ren which changes that tool needs for your organization's current models. It prints each file it would change, with the lines it adds (`+`) and removes (`-`), then asks you to type `yes`. When it's done, it tells you where the backup is and how to check the tool:
 
-### Pi
-
-```bash
-ren inference setup pi
+```text
+Set up opencode.
+Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
+Check it: opencode run --model ren/anthropic/claude-sonnet-5-5 'say hello'
 ```
 
-Setup adds a `ren` provider to `~/.pi/agent/models.json`. To start Pi, run `pi --provider ren`.
+Run that check command. Then confirm the call reached Ren:
 
-### Hermes
-
-```bash
-ren inference setup hermes
+```sh
+ren inference key usage --period 7d
 ```
 
-Setup writes `~/.hermes/config.yaml` and `~/.hermes/.env`. To send a test request, run `hermes -z 'hello'`.
+It lists the calls, tokens and charges of each key, by model. **Settings → Providers → Inference keys** shows the same in the app.
 
-## Good to know
+## Options
 
-- Setup writes the inference key into the files of your coding tool. Keep those files out of repositories.
-- If someone sees your key, revoke it under **Settings → Providers → Inference keys**, then run the setup again to create a new key.
-- To preview the changes without writing files, add `--dry-run` to the setup command.
-- To restore the files from the latest setup, run `ren inference setup --undo`.
-- After you connect another provider, run `ren inference sync` to refresh the model list of each tool that you set up.
+| Option            | What it does                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`       | Shows the changes and writes nothing. It doesn't create a key either, so you may see `${REN_INFERENCE_KEY}` in place of one. |
+| `--yes`           | Writes without asking. A script or coding agent needs this or `--dry-run`, because it can't type `yes`.                      |
+| `--with-optional` | Also applies changes that replace one of the tool's defaults, such as its model                                              |
+| `--key-env <VAR>` | Names the variable that holds the key, for a tool that reads it from the environment                                         |
+| `--undo`          | Restores the files of the newest backup. See [Undo](#undo).                                                                  |
+
+## What changes
+
+Setup only edits files in your home folder:
+
+| Tool        | Files                                                                          |
+| ----------- | ------------------------------------------------------------------------------ |
+| Claude Code | `~/.claude/settings.json`                                                      |
+| Codex       | `~/.codex/config.toml`, `~/.codex/ren.config.toml`, `~/.codex/ren-models.json` |
+| OpenCode    | `~/.config/opencode/opencode.jsonc`                                            |
+| Pi          | `~/.pi/agent/models.json`                                                      |
+| Hermes      | `~/.hermes/config.yaml`, `~/.hermes/.env`                                      |
+
+It touches only Ren's entries, so your comments, key order and other providers stay as they are. Anything that belongs entirely to Ren, such as Codex's `ren` profile, is replaced on each run.
+
+Setup uses your newest active inference key. If you have none, it creates one named `ren on <your computer's name>` that never expires. It writes the key into the tool's file, makes that file readable only by you, and never prints the key. To list your keys without their values, run `ren inference key list`.
+
+## Sync
+
+Ren's model list changes now and then, such as after an admin connects a subscription. To bring your tools up to date:
+
+```sh
+ren inference sync
+```
+
+Sync repeats the setup of every tool you set up on this computer, with the options you used, and writes without asking. It remembers those tools in `~/.config/ren/inference.json`. If your key was revoked, it uses one of your other active keys, or creates one.
+
+## Undo
+
+```sh
+ren inference setup --undo
+```
+
+After you type `yes`, it restores each file from the newest backup and deletes each file that setup created:
+
+```text
+Restored 1 file of the opencode setup.
+```
+
+Undo leaves two things in place:
+
+- Your key. To revoke it, run `ren inference key revoke <key>` with the ID from `ren inference key list`, or select **Revoke** in **Settings → Providers → Inference keys**.
+- The tool's entry in `~/.config/ren/inference.json`, so `ren inference sync` would set it up again. Remove the entry to stop that.

@@ -1,0 +1,172 @@
+---
+title: CLI commands
+icon: List
+description: Find the syntax, global options, environment variables, command groups, input rules, errors and exit codes of the Ren CLI.
+summary: Syntax, options and every command group
+---
+
+The `ren` CLI has a command for each operation of the [Ren API](/docs/developers/api/), plus commands to sign in, upgrade and manage infrastructure as code. To install it and sign in, see [CLI](/docs/developers/cli/).
+
+## Syntax
+
+```text
+ren <group> [<subgroup>] <action> [<resource>] [flags]
+```
+
+```sh
+ren space get engineering
+ren space member list engineering
+ren task comment add ENG-12 --body "On it"
+```
+
+## Global options
+
+These flags work with every command, before or after it.
+
+| Option                             | What it does                                                                                                   |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `--output json`, `--output pretty` | Chooses the format. Without it, `ren` prints readable text in a terminal and JSON when you pipe or redirect it |
+| `--help`, `-h`                     | Shows the actions, arguments and flags at that level. It works without signing in                              |
+| `--version`, `-v`                  | Prints the CLI's version, such as `ren v0.2.0`                                                                 |
+| `--completions <shell>`            | Prints a completion script for `bash`, `zsh`, `fish` or `powershell`                                           |
+
+For example, to add completions to zsh:
+
+```sh
+ren --completions zsh > "${fpath[1]}/_ren"
+```
+
+## Environment variables
+
+| Variable              | What it does                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| `REN_URL`             | The Ren server to call. The default is `https://api.useren.ai`. Each server needs its own `ren login` |
+| `REN_TOKEN`           | A bearer token that `ren` sends instead of the one `ren login` saved                                  |
+| `REN_NO_UPDATE_CHECK` | Set to `1` to skip the daily check for a newer release                                                |
+| `XDG_CONFIG_HOME`     | `ren` keeps its sign-in in `$XDG_CONFIG_HOME/ren`. Without it, the folder is `~/.config/ren`          |
+
+## Input
+
+Most commands take the resource they act on as an argument, and a flag for each field.
+
+```sh
+ren task create --space engineering --title "Fix the build" --agent implementer --labels ci,urgent
+```
+
+| Value      | How to pass it                                                                      |
+| ---------- | ----------------------------------------------------------------------------------- |
+| A resource | Its slug or its ID, wherever help says "slug or ID", such as `--space` or `--agent` |
+| A task     | Its number, such as `ENG-12`, or its ID                                             |
+| A list     | Values separated by commas, as in `--labels ci,urgent`                              |
+| A choice   | One of the values help lists, such as `todo` for `--status`                         |
+
+For nested fields or long text, pass the request body as JSON with `--input`: inline, from a file with `@file`, or from stdin with `@-`. Flags override the same field in `--input`.
+
+```sh
+ren task create --space engineering --input @task.json
+```
+
+```json title="task.json"
+{
+  "title": "Fix the build",
+  "description": "The test job fails on main since the last dependency update.",
+  "priority": "high"
+}
+```
+
+Unlike flags, `--input` uses the API's own field names and takes IDs, not slugs: `spaceId` with a `spc_…` value, not `--space engineering`. The [OpenAPI document](/docs/developers/api/#openapi) has each operation's field names.
+
+## Pagination
+
+A list command returns one page. Choose it with `--page` and `--page-size`, at most 100 per page.
+
+```sh
+ren task list --space engineering --status todo --page-size 2
+```
+
+```text
+ID                              TITLE              STATUS  CREATED AT
+tsk_01JZ9A4C8E2F6G0H3J5K7M9N1P  Fix the build      todo    2026-11-20T09:14:00.000Z
+tsk_01JZ9A5D9F3G7H1J4K6M8N0P2Q  Update the README  todo    2026-11-21T10:02:00.000Z
+
+Page 1 of 3, 5 total. Next: --page 2
+```
+
+In JSON, `ren` prints the API's response unchanged. For the shape of a page, see [Pagination](/docs/developers/api/#pagination).
+
+## Command groups
+
+These commands come with the CLI:
+
+| Command       | What it does                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `ren login`   | Signs you in to an organization. `--no-browser` prints the sign-in link instead of opening it                   |
+| `ren logout`  | Signs you out and revokes the CLI's access                                                                      |
+| `ren whoami`  | Shows your email and organization                                                                               |
+| `ren upgrade` | Installs the latest release, or the one you name                                                                |
+| `ren health`  | Shows the server's status and version. It needs no sign-in                                                      |
+| `ren infra`   | Validates, plans, applies and pulls a `.ren` folder. See [Plan and apply](/docs/developers/iac/plan-and-apply/) |
+
+The other groups each manage one kind of resource through the [Ren API](/docs/developers/api/):
+
+| Group             | What it manages                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `space`           | [Spaces](/docs/spaces/), their members, join requests, agents, settings and invite links                                                     |
+| `agent`           | [Agents](/docs/agents/), and moving an agent to another space                                                                                |
+| `task`            | [Tasks](/docs/tasks/): assign, start, review and finish them, with comments, activity and pull requests                                      |
+| `label`           | Task labels                                                                                                                                  |
+| `view`            | Saved views                                                                                                                                  |
+| `session`         | [Chats](/docs/chats/): list, read and archive them, with their cost, links and pull requests                                                 |
+| `schedule`        | [Automations](/docs/automations/) on a schedule: pause, resume, run now and read their runs                                                  |
+| `webhook`         | [Automations](/docs/automations/) that start from a webhook: URL, signing secret, test and replay                                            |
+| `webhook-request` | The requests that reached a webhook                                                                                                          |
+| `artifact`        | [Artifacts](/docs/artifacts/)                                                                                                                |
+| `app`             | [Apps](/docs/apps/), their profiles and skills, and the app registry                                                                         |
+| `credential`      | [Secrets and profiles](/docs/credentials/): create, rotate, move, copy and remove them, and sign in to an MCP                                |
+| `oauth`           | Your organization's own OAuth clients for apps, and app sign-ins in progress                                                                 |
+| `mcp`             | Reads a remote MCP server's sign-in and tools before you add it                                                                              |
+| `environment`     | [Machines](/docs/machines/): their saved settings, builds and providers                                                                      |
+| `channel`         | [Channels](/docs/channels/): installs for Slack, Linear and GitHub, and the space each place works in                                        |
+| `memory`          | [Memory](/docs/memory/) files                                                                                                                |
+| `drive`           | Downloads a [Drive](/docs/drive/) file                                                                                                       |
+| `files`           | Lists, reads and deletes Drive and memory files                                                                                              |
+| `repository`      | The [repositories](/docs/repositories/) Ren can read on each git host                                                                        |
+| `inference`       | [Model providers](/docs/model-providers/) and inference keys. `setup` and `sync` are on [Inference setup](/docs/developers/inference-setup/) |
+| `org`             | The organization's settings                                                                                                                  |
+| `organization`    | The organization's invite links                                                                                                              |
+| `billing`         | The [plan, credit and invoices](/docs/billing/), and the billing portal                                                                      |
+| `feedback`        | Sends feedback to the people who build Ren                                                                                                   |
+
+## Examples
+
+Give a task to the implementer, then comment on it:
+
+```sh
+ren task create --space engineering --title "Fix the build" --agent implementer
+ren task comment add ENG-12 --body "The failing job is test-unit."
+```
+
+Print the number and title of each task in progress:
+
+```sh
+ren task list --space engineering --status in_progress | jq -r '.items[] | "\(.identifier) \(.title)"'
+```
+
+## Exit codes
+
+| Code  | Meaning                                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------- |
+| `0`   | The command succeeded                                                                             |
+| `1`   | The command failed: the API refused it, the input was invalid or `ren` could not reach the server |
+| `2`   | Usage error: an unknown command or flag, or a missing argument                                    |
+| `130` | You pressed Ctrl+C                                                                                |
+
+## Errors
+
+Errors go to stderr. In a terminal, `ren` prints the message, and the command's help too if you mistyped the command. In JSON, it prints one line:
+
+```json
+{ "error": { "type": "NotFoundError", "message": "Space not found." } }
+```
+
+When the API refused the request, `type` is the API's error type and the error's other fields follow; see [Errors](/docs/developers/api/#errors). Two types come from the CLI itself: `UsageError` for a mistyped command, and `CliError` for anything else, such as a server it can't reach. If a flag or `--input` fails validation, the error also has a `problems` list that names the flag behind each problem.

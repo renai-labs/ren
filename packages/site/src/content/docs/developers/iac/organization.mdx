@@ -1,0 +1,82 @@
+---
+title: Organization
+icon: Building
+description: Declare the instructions, models, permissions and repositories that every space of your organization shares, in org.yaml and instructions.md.
+summary: Settings every space shares, as files
+---
+
+The root of the `.ren` folder holds what every space in your [organization](/docs/organization/) shares: settings in `org.yaml` and instructions in `instructions.md`.
+
+## Declare the organization
+
+Every spec needs `org.yaml`. The smallest one sets nothing:
+
+```yaml title="org.yaml"
+settings: {}
+```
+
+`settings` is the only key, because the organization's name, logo and members stay in the app. The organization's instructions go in `instructions.md` next to it, and its memory in `memory/`; see [Instructions and memory](/docs/developers/iac/instructions-memory/).
+
+## Settings
+
+The same `settings` keys work at three levels: in `org.yaml`, in a space's `space.yaml` and in an agent's `agent.yaml`. All of them are optional.
+
+| Key             | What it sets                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `model`         | The default model: `endpointId`, `modelId` and an optional `variant`                                |
+| `defaultModels` | Models for other types, such as image generation or audio transcription                             |
+| `steps`         | The limit on model calls in one run (**Max steps** in the app), from 1 to 1000. The default is 100. |
+| `permissions`   | [Permission](/docs/permissions/) rules                                                              |
+| `references`    | [Repositories](/docs/repositories/) that chats read                                                 |
+
+This `org.yaml` asks before every `git push`, never lets agents edit `.env` files and gives every chat the example app:
+
+```yaml title="org.yaml"
+settings:
+  steps: 150
+  permissions:
+    - action: shell
+      resource: git push *
+      effect: ask
+    - action: edit
+      resource: "*.env"
+      effect: deny
+  references:
+    - alias: example-app
+      repository: https://github.com/acme/example-app
+      description: The Acme web app, its API and its tests.
+```
+
+### Permissions
+
+A rule has an `action`, a `resource` pattern and an `effect` of `ask` or `deny`. Actions without a rule are allowed.
+
+| Action      | Resource                         |
+| ----------- | -------------------------------- |
+| `read`      | A file path, such as `secrets/*` |
+| `edit`      | A file path, such as `*.env`     |
+| `shell`     | A command, such as `git push *`  |
+| `webfetch`  | A URL                            |
+| `websearch` | A search query                   |
+
+[Permissions](/docs/permissions/) explains the patterns.
+
+### References
+
+A reference needs an `alias`, the `repository` address as `https://<host>/<owner>/<repo>`, and a `description`. Write the description with care, because Ren reads it to decide which repository a request is about. To read a branch other than the default, add `branch`, such as `branch: develop`.
+
+### Models
+
+Model IDs come from your [model providers](/docs/model-providers/) and are awkward to type by hand. Pick the model in the app and run `ren infra pull`, which writes the `model` block for you.
+
+## How levels combine
+
+A chat starts from the organization's settings, then adds its space's, then its agent's. How they combine depends on the key:
+
+| Key            | Result                                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `instructions` | All of them, in that order                                                                                            |
+| `model`        | The chat's model, else the agent's, the space's, then the organization's: the first one that is available             |
+| `steps`        | The agent's, else the space's, else the organization's                                                                |
+| `permissions`  | All rules; the strictest wins                                                                                         |
+| `references`   | All of them. When two use the same alias, the agent's wins over the space's, and the space's over the organization's. |

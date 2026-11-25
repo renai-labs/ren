@@ -1,0 +1,91 @@
+---
+title: Infrastructure as code
+icon: FileCode
+description: Keep your Ren organization's spaces, agents, apps and automations as files in Git, and change Ren with ren infra plan and ren infra apply.
+summary: Keep your Ren setup as files in Git
+---
+
+Infrastructure as code keeps your organization's Ren setup as files in Git, and the `ren infra` commands make Ren match them.
+
+## When to use it
+
+Use it when you want to review setup changes the way you review code: in a pull request, with a plan of what will change and the history in Git. It also suits a coding agent that drafts your setup, because you can read its files and its plan before anything changes.
+
+The files live in a `.ren` folder in your repository. Together they're your spec: a description of what your organization should look like in Ren. `ren infra plan` shows what would change in Ren, `ren infra apply` makes the changes, and a lock file records what Ren looked like the last time you synced.
+
+You can still change things in the app. The next plan shows those changes, and `ren infra pull` writes them into your spec.
+
+## Get started
+
+You need the [CLI](/docs/developers/cli/), signed in as an **Owner** or **Admin** of the organization. This example adds the Engineering space and its `planner` agent to `acme`.
+
+<Steps>
+
+1. Pull your organization into `.ren`:
+
+   ```sh
+   ren infra pull
+   ```
+
+   This creates `.ren` with your organization settings and shared spaces as files, plus `deploy.yaml` and `ren.lock`.
+
+2. Add the space and the agent as files in `.ren`:
+
+   ```yaml title="spaces/engineering/space.yaml"
+   name: Engineering
+   ```
+
+   ```yaml title="spaces/engineering/agents/planner/agent.yaml"
+   description: Breaks a request into steps.
+   ```
+
+   ```md title="spaces/engineering/agents/planner/instructions.md"
+   Break each request into small steps. Name the files you expect to change.
+   ```
+
+3. See what would change in Ren:
+
+   ```sh
+   ren infra plan
+   ```
+
+   ```text
+   + create space spaces/engineering
+   + create agent spaces/engineering/agents/planner
+
+   Digest: 6a1c80664535bd7dc8591f61cc602541d69f82a6900bb3d12bc21578609584ac
+   ```
+
+4. Apply the plan. It lists the changes again and asks you to type the organization's slug:
+
+   ```sh
+   ren infra apply
+   ```
+
+   ```text
+   + create space spaces/engineering
+   + create agent spaces/engineering/agents/planner
+
+   Type acme to apply: acme
+   Applied 2 changes.
+   ```
+
+5. Commit `.ren`, including `ren.lock`.
+
+</Steps>
+
+Engineering and `planner` are now in Ren, and the next `ren infra plan` prints `No changes.` [Plan and apply](/docs/developers/iac/plan-and-apply/) covers the rest: changes made in the app, conflicts, removals, and applying from a script.
+
+## What the spec covers
+
+The spec describes your whole organization: its settings, and every shared space with its agents, apps, automations and channels. It's all or nothing. Once a space has been pulled or applied, deleting its folder archives the space at the next apply, so you can't keep a few spaces in the spec and leave the rest out.
+
+[Configuration files](/docs/developers/iac/configuration/) shows where each file goes and links to the page for each part.
+
+Some things stay in the app:
+
+- Personal spaces.
+- Members, their roles and who is in each space.
+- Secrets and sign-ins. You can declare a shared profile, but you connect it in the app.
+- Connecting Slack or GitHub. You can only point a space at a Slack channel or repository that Ren already has access to.
+- Chats, tasks, Drive and artifacts.

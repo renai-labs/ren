@@ -1,82 +1,103 @@
 ---
 title: CLI
-icon: Code
-description: Install the Ren CLI, sign in from your terminal, and manage Ren from a shell or a coding agent.
-summary: Install and sign in to the Ren CLI
+icon: Terminal
+description: Install the Ren CLI, sign in to an organization and manage its spaces, agents and tasks from a terminal or a script.
+summary: Install the CLI and manage Ren resources
 ---
 
-The Ren CLI, `ren`, manages spaces, tasks, agents, and settings from a terminal or a script. Coding agents with shell access can run it too.
-
-```sh
-curl -fsSL https://useren.ai/install | bash
-```
-
-## When to use the CLI
-
-| Surface                             | Use it to                                                           |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| CLI                                 | Manage Ren from a terminal, a script, or a coding agent             |
-| [Web app](/docs/#use-from-anywhere) | Chat with Ren and review its work                                   |
-| [MCP](/docs/developers/mcp/)        | Connect AI tools that cannot run shell commands, like chat websites |
+The `ren` command manages your Ren organization from a terminal or a script.
 
 ## Install
 
-The installer works on macOS and Linux, on arm64 and x64. It installs `ren` to `~/.ren/bin`, adds that folder to your `PATH`, and runs `ren login` after the installation.
+The installer runs on macOS and on Linux distributions that use glibc, such as Ubuntu and Debian.
 
 ```sh
 curl -fsSL https://useren.ai/install | bash
 ```
 
-To skip the sign-in:
+It puts `ren` in `~/.ren/bin`, adds that folder to your `PATH` and then signs you in. If your terminal can't find `ren` afterwards, open a new one.
+
+To pass options, add them after `bash -s --`:
 
 ```sh
-curl -fsSL https://useren.ai/install | bash -s -- --no-init
+curl -fsSL https://useren.ai/install | bash -s -- --version 0.2.0
 ```
 
-To install version `0.1.0`:
-
-```sh
-curl -fsSL https://useren.ai/install | bash -s -- --version 0.1.0
-```
+| Option               | What it does                                   |
+| -------------------- | ---------------------------------------------- |
+| `--version <number>` | Installs that release instead of the latest    |
+| `--no-modify-path`   | Leaves your `PATH` and shell profile unchanged |
+| `--no-init`          | Skips sign-in                                  |
 
 ## Sign in
 
-<Steps>
+The installer does this for you the first time. Run it yourself to sign in later or to switch to another organization:
 
-1. Run `ren login`. It opens Ren in your browser.
-2. Choose your organization and allow access. To print the sign-in URL instead of opening the browser, use `ren login --no-browser`.
-3. Run `ren whoami` to confirm. It shows your user and your organization.
-
-</Steps>
-
-To switch to another organization, run `ren login` again and choose it.
-
-## Check it worked
-
-Ask your coding agent:
-
-```text
-Summarize my Ren setup using the ren CLI.
+```sh
+ren login
 ```
 
-The answer must name your organization and list its spaces.
+Your browser opens. Sign in to Ren, pick the **Organization** and click **Allow**. From then on, every command runs as you in that organization, so it can do what you can do in the app and nothing more.
 
-## Commands
+If the browser doesn't open, run `ren login --no-browser` and open the link it prints on the same computer.
 
-Commands follow the pattern `ren <noun> <verb>`. A slug works wherever an ID does.
+To check who you're signed in as:
+
+```sh
+ren whoami
+```
+
+```text
+ada@acme.com in Acme
+```
+
+If a command says `Space not found.` for a space you can open in the app, you're probably signed in to a different organization.
+
+## Run commands
+
+Commands take the form `ren <resource> <action>`. Where a command asks for a space or an agent, pass its slug or its ID.
 
 ```sh
 ren space list
-ren space create --name Docs --slug docs
-ren task create --space docs --title "Fix the build"
-ren schedule run nightly
+ren space get engineering
+ren space agent list engineering
+ren task list --space engineering
 ```
 
-In a terminal, the CLI prints tables. When you pipe it or pass `--output json`, it prints JSON, so scripts and agents can read it.
+Add `--help` at any level to see the actions and their options.
 
-## Good to know
+```sh
+ren --help
+ren task create --help
+```
 
-- The CLI cannot send chat messages yet. Send them from the web app or a channel.
-- Ren stores your sign-in in `~/.config/ren/credentials.json`. To sign out, run `ren logout`.
-- For every command and flag, run `ren --help` or `ren <command> --help`.
-- To update the CLI, run `ren upgrade`.
+[CLI commands](/docs/developers/cli-commands/) lists every command. To keep your setup as files in Git, use `ren infra`; see [Infrastructure as code](/docs/developers/iac/).
+
+## Use in scripts
+
+In a terminal, `ren` prints readable text. When you pipe or redirect it, it prints JSON instead, so a script can read the result. Pass `--output json` or `--output pretty` to choose for yourself.
+
+```sh
+ren space list | jq -r '.items[].slug'
+```
+
+Results go to stdout. Progress and errors go to stderr, so `ren space list > spaces.json` saves only the result.
+
+## Update
+
+```sh
+ren upgrade
+```
+
+Add a version, such as `ren upgrade 0.2.0`, to install that release. Once a day, `ren` tells you in the terminal when a newer release is out.
+
+## Sign out and uninstall
+
+`ren logout` signs you out and revokes the CLI's access. To remove the CLI, sign out, then delete its folders:
+
+```sh
+ren logout
+rm -rf ~/.ren/bin ~/.config/ren
+```
+
+Then remove the `~/.ren/bin` line from your shell profile, such as `~/.zshrc`. If the installer linked `ren` into `~/.local/bin` or `~/bin`, delete that link too.
