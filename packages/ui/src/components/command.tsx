@@ -124,7 +124,7 @@ function CommandItem({ className, children, ...props }: React.ComponentProps<typ
       {...props}
     >
       {children}
-      <IconCheck className="ml-auto opacity-0 command-item-has-shortcut:hidden group-data-[checked=true]/command-item:opacity-100" />
+      <IconCheck className="ml-auto opacity-0 group-has-[[data-slot=command-shortcut]]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
     </CommandPrimitive.Item>
   )
 }

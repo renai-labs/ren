@@ -308,7 +308,7 @@ export function Row(props: {
       className={cn("min-h-14 gap-x-4 gap-y-2 px-4 py-3", props.indent && "min-h-10 py-2 pl-8")}
     >
       {props.media ? (
-        <ItemMedia className="item-has-description:translate-y-0 item-has-description:self-center">
+        <ItemMedia className="group-has-[[data-slot=item-description]]/item:translate-y-0 group-has-[[data-slot=item-description]]/item:self-center">
           {props.media}
         </ItemMedia>
       ) : null}

@@ -8,32 +8,7 @@
 @import "./file-icon.css";
 
 @custom-variant dark (&:is(.dark *));
-
-/*
- * Group conditions as plain descendant selectors. Tailwind's group-has-* and not-has-* put :has() inside :is() or
- * :not(), and Chrome then restyles the whole page on every DOM change (300 ms a keystroke on a long task list).
- * `:where(.group\/x):has(...) &` matches the same elements without that cost. Use these instead of group-has-*;
- * the app build fails on a nested :has().
- */
-@custom-variant item-has-description (:where(.group\/item):has([data-slot=item-description]) &);
-@custom-variant menu-item-has-action (:where(.group\/menu-item):has([data-sidebar=menu-action]) &);
-@custom-variant menu-item-has-badge (:where(.group\/menu-item):has([data-sidebar=menu-badge]) &);
-@custom-variant space-has-popup (:where(.group\/space):has([data-popup-open]) &);
-@custom-variant tab-has-active (:where(.group\/tab):has([data-state=active], [data-active]:not([data-active=false])) &);
-@custom-variant alert-has-icon (:where(.group\/alert):has(> svg) &);
-@custom-variant avatar-group-lg (:where(.group\/avatar-group):has([data-size=lg]) &);
-@custom-variant avatar-group-sm (:where(.group\/avatar-group):has([data-size=sm]) &);
-@custom-variant field-has-disabled (:where(.group\/field):has(:disabled) &);
-@custom-variant field-horizontal (:where(.group\/field):has([data-orientation=horizontal]) &);
-@custom-variant field-label-has-focus (:where(.group\/field-label):has(:focus-visible) &);
-@custom-variant choice-card-disabled (&:has(> [data-slot=field]):has(:disabled, [data-disabled]));
-@custom-variant code-block-has-header (:where(.group\/code-block):has([data-slot=code-block-header]) &);
-@custom-variant code-block-has-footer (:where(.group\/code-block):has([data-slot=code-block-footer]) &);
-@custom-variant command-item-has-shortcut (:where(.group\/command-item):has([data-slot=command-shortcut]) &);
-@custom-variant input-group-has-input (:where(.group\/input-group):has(> input) &);
-@custom-variant message-has-footer (:where(.group\/message):has([data-slot=message-footer]) &);
-@custom-variant message-ghost (:where(.group\/message):has([data-variant=ghost]) &);
-@custom-variant questionnaire-choice-has-description (:where(.group\/questionnaire-choice):has([data-slot=questionnaire-choice-description]) &);
+@plugin "./group-has.ts";
 
 [skullet-reveal].flex > [skullet-pane] {
   display: flex;

@@ -265,8 +265,8 @@ export function SpaceEntry(props: {
             sidebarRow,
             "min-w-0 flex-1 gap-2 py-1 pl-1.5 hover:bg-transparent focus-visible:ring-0 active:bg-transparent data-active:bg-transparent data-active:hover:bg-transparent",
             props.space.membershipId === null
-              ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:space-has-popup:pr-8"
-              : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:space-has-popup:pr-15",
+              ? "pr-8 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-8 pointer-fine:group-hover/space:pr-8 pointer-fine:group-has-[[data-popup-open]]/space:pr-8"
+              : "pr-15 pointer-fine:pr-1 pointer-fine:group-focus-within/space:pr-15 pointer-fine:group-hover/space:pr-15 pointer-fine:group-has-[[data-popup-open]]/space:pr-15",
           )}
           isActive={props.path.startsWith(`/spaces/${props.space.id}`)}
           render={<Link to="/spaces/$spaceId" params={{ spaceId: props.space.id }} />}
@@ -459,7 +459,7 @@ export function ChatsList(props: { path: string; filters: Filters; filtered: boo
         {chats.map((chat) => (
           <SidebarMenuItem key={chat.id}>
             <SidebarMenuButton
-              className={cn(sidebarRow, "py-1.5 pr-2 pl-2.25 menu-item-has-badge:pr-7")}
+              className={cn(sidebarRow, "py-1.5 pr-2 pl-2.25 group-has-[[data-sidebar=menu-badge]]/menu-item:pr-7")}
               isActive={props.path === `/sessions/${chat.id}`}
               render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
             >
