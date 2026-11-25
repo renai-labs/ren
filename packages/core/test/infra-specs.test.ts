@@ -472,7 +472,7 @@ describe("InfraSpecs", () => {
     }),
   )
 
-  it.live("plan refuses the kinds that infra does not apply yet", () =>
+  it.live("plan refuses a binding of a space that the spec does not declare", () =>
     Effect.gen(function* () {
       const infra = yield* InfraSpecs.Service
       const o = yield* org
@@ -480,7 +480,7 @@ describe("InfraSpecs", () => {
       const plan = yield* infra.plan(o.admin, {
         bindings: Schema.decodeUnknownSync(Infra.Bindings)({
           organization: o.bindings.organization,
-          spaces: { home: { timezone: "Asia/Kolkata" }, gone: {} },
+          spaces: { home: {}, gone: {} },
         }),
         spec: spec({ home: { name: "Home" } }),
       })
@@ -490,7 +490,6 @@ describe("InfraSpecs", () => {
           path: "deploy.yaml/spaces/gone",
           message: "deploy.yaml binds space “gone”, which the spec does not declare.",
         },
-        { path: "deploy.yaml/spaces/home/timezone", message: "Infra does not apply the timezone of a space yet." },
       ])
     }),
   )

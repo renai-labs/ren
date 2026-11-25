@@ -10,7 +10,6 @@ Apply works today for org settings, the organization's environment templates (`e
 
 | Part                                                    | Today                                                                                                       |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `deploy.yaml` `spaces.<slug>.timezone`                  | "Infra does not apply the timezone of a space yet."                                                         |
 | A brain or hand that names a template with no image yet | A problem: apply does not wait for a build. Apply again once it is built.                                   |
 | Archiving a template that a space outside the spec uses | A problem, as for any space whose brains or chats still run on it.                                          |
 | A renamed environment template                          | Archive and create: templates have no `renamedFrom`.                                                        |

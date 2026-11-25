@@ -20875,9 +20875,6 @@
       "Infra.SpaceBindings": {
         "type": "object",
         "properties": {
-          "timezone": {
-            "type": "string"
-          },
           "channels": {
             "type": "object",
             "propertyNames": {

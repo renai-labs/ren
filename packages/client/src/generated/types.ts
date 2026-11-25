@@ -10375,7 +10375,6 @@ export type InfraPullInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -10787,7 +10786,6 @@ export type InfraPullInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -11199,7 +11197,6 @@ export type InfraPullInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -11616,7 +11613,6 @@ export type InfraPlanInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -12028,7 +12024,6 @@ export type InfraPlanInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -12440,7 +12435,6 @@ export type InfraPlanInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -12857,7 +12851,6 @@ export type InfraApplyInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -13271,7 +13264,6 @@ export type InfraApplyInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -13685,7 +13677,6 @@ export type InfraApplyInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -14099,7 +14090,6 @@ export type InfraApplyInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }
@@ -14513,7 +14503,6 @@ export type InfraApplyInput = {
       readonly organization: string
       readonly spaces?: {
         readonly [x: string]: {
-          readonly timezone?: string
           readonly channels?: {
             readonly [x: string]:
               | { readonly kind: "slack"; readonly channelId: string }

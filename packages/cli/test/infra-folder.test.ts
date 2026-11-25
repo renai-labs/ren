@@ -101,11 +101,13 @@ describe("InfraFolder.validate", () => {
       "spaces/support/memory/people/ana.md": "Ana leads design.\n",
       "memory/memory.md": "- Be brief.\n",
       "memory/logo.png": new Uint8Array([137, 80, 78, 71, 0, 1]),
+      "deploy.yaml": "organization: acme\nspaces:\n  support:\n    timezone: Asia/Kolkata\n",
     })
 
     const result = await InfraFolder.validate(root)
 
     expect(result.problems.map(Output.formatProblem)).toEqual([
+      "deploy.yaml: spaces.support.timezone: A space has no time zone. Each schedule has its own.",
       "environments.yaml: Python.sessionsPerEnvironment: Use 1 to 100 sessions per environment.",
       "memory/logo.png: A memory holds text files only.",
       "spaces/engineering/agents/build/agent.yaml: isSubagent: Expected boolean",
@@ -307,13 +309,13 @@ describe("InfraFolder.write", () => {
     expect(result.bindings?.spaces["engineering"]).toMatchObject(pulled.bindings.spaces.engineering)
   })
 
-  test("keeps the other frontmatter of a SKILL.md and the other bindings of a space", async () => {
+  test("keeps the other frontmatter of a SKILL.md", async () => {
     const root = await folder({
       "spaces/engineering/apps/tools/skills/review/SKILL.md":
         "---\nname: review\ndescription: Old.\nlicense: MIT\nmetadata:\n  icon: https://acme.test/icon.svg\n---\nOld.\n",
       "spaces/engineering/apps/tools/skills/review/stale.md": "Gone.\n",
       "spaces/engineering/apps/tools/skills/gone/SKILL.md": "---\nname: gone\ndescription: Gone.\n---\n",
-      "deploy.yaml": "organization: old\nspaces:\n  engineering:\n    timezone: Asia/Kolkata\n    channels: {}\n",
+      "deploy.yaml": "organization: old\nspaces:\n  engineering:\n    channels: {}\n",
     })
 
     await InfraFolder.write(root, pulled)
@@ -325,7 +327,7 @@ describe("InfraFolder.write", () => {
     expect(await Bun.file(join(root, "spaces/engineering/apps/tools/skills/gone/SKILL.md")).exists()).toBe(false)
     expect(Bun.YAML.parse(await Bun.file(join(root, "deploy.yaml")).text())).toEqual({
       organization: "acme",
-      spaces: { engineering: { timezone: "Asia/Kolkata", ...pulled.bindings.spaces.engineering } },
+      spaces: { engineering: pulled.bindings.spaces.engineering },
     })
     const result = await InfraFolder.validate(root)
     expect(result.problems).toEqual([])
@@ -388,7 +390,8 @@ describe("InfraFolder.write", () => {
       "spaces/engineering/schedules.yaml":
         "local:\n  cron: '0 1 * * *'\n  timeZone: UTC\n  message: Ours.\nnightly:\n  cron: '0 2 * * *'\n  timeZone: UTC\n  message: Old.\n",
       "spaces/home/space.yaml": "name: Home\nuses:\n  agents: [review]\n",
-      "deploy.yaml": "organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n",
+      "deploy.yaml":
+        "organization: acme\nspaces:\n  engineering:\n    channels:\n      ren:\n        kind: github\n        repository: acme/mine\n",
     })
 
     await InfraFolder.write(root, {
@@ -405,7 +408,9 @@ describe("InfraFolder.write", () => {
       nightly: pulled.spec.spaces.engineering.schedules.nightly,
     })
     expect(Bun.YAML.parse(await text("spaces/home/space.yaml"))).toEqual({ name: "Home", uses: { agents: ["build"] } })
-    expect(await text("deploy.yaml")).toBe("organization: acme\nspaces:\n  engineering:\n    timezone: UTC\n")
+    expect(await text("deploy.yaml")).toBe(
+      "organization: acme\nspaces:\n  engineering:\n    channels:\n      ren:\n        kind: github\n        repository: acme/mine\n",
+    )
     expect(await Bun.file(join(root, "org.yaml")).exists()).toBe(false)
   })
 })
