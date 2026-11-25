@@ -117,7 +117,11 @@ export default defineConfig((env) => ({
     preloadFonts,
     noSlowHas,
   ],
-  build: { sourcemap: "hidden" },
+  build: {
+    sourcemap: "hidden",
+    // oxlint-disable-next-line ren/no-comments -- Vite's default targets Firefox 114, which has no :has(), so the CSS minifier wraps every selector list with a :has() in :is() and noSlowHas fails; Firefox 121 is the first with :has().
+    cssTarget: ["chrome111", "edge111", "firefox121", "safari16.4", "ios16.4"],
+  },
   define:
     env.command === "serve"
       ? {

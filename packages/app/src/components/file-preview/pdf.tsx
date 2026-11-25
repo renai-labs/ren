@@ -8,7 +8,8 @@ import { plural } from "../../lib/format.js"
 import { maxFitWidth, type PreviewProps } from "./preview.js"
 import { PageField, useNear, usePageKeys } from "./page-field.js"
 import { workerTimeoutMs } from "./worker-call.js"
-import "pdfjs-dist/web/pdf_viewer.css"
+// oxlint-disable-next-line ren/no-comments -- the text layer rules of pdfjs-dist 6.5.438's web/pdf_viewer.css; the full sheet styles pdf.js's own viewer too, and two of its rules nest :has() inside :not(), which makes Chrome restyle the whole page on every DOM change.
+import "./pdf-text-layer.css"
 
 // oxlint-disable-next-line no-restricted-imports -- type only
 type Pdfjs = typeof import("pdfjs-dist")
