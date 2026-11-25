@@ -422,9 +422,23 @@ export type BillingLink = { url: string }
 
 export type BillingCheckout = { checkoutUrl: string }
 
-export type OnboardingOrganizationStep = "slack.connected" | "member.joined"
+export type OnboardingOrganizationStep =
+  | "slack.connected"
+  | "github.connected"
+  | "member.joined"
+  | "artifact.created"
+  | "schedule.created"
+  | "webhook.created"
+  | "factory.created"
+  | "custom-app.created"
+  | "iac.applied"
 
-export type OnboardingPersonalStep = "gmail.connected"
+export type OnboardingPersonalStep =
+  | "gmail.connected"
+  | "granola.connected"
+  | "github.app.connected"
+  | "drive.connected"
+  | "apps.connected"
 
 export type ChannelInstallID = string
 

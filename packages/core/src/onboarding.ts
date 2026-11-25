@@ -15,6 +15,7 @@ export const PersonalStep = Onboarding.PersonalStep
 export type PersonalStep = Onboarding.PersonalStep
 export const Step = Onboarding.Step
 export type Step = Onboarding.Step
+export const appSteps = Onboarding.appSteps
 
 export interface Person {
   readonly organizationId: Auth.OrganizationID
@@ -22,7 +23,11 @@ export interface Person {
 }
 
 export interface Interface {
-  readonly record: (organizationId: Auth.OrganizationID, step: OrganizationStep) => Effect.Effect<void>
+  readonly record: (
+    organizationId: Auth.OrganizationID,
+    step: OrganizationStep,
+    options?: { readonly occurrence?: string },
+  ) => Effect.Effect<void>
   readonly recordPersonal: (person: Person, step: PersonalStep) => Effect.Effect<void>
   readonly get: (person: Person) => Effect.Effect<Onboarding.Info>
   readonly dismiss: (person: Person, checklist: Onboarding.ChecklistKind) => Effect.Effect<Onboarding.Info>
@@ -30,12 +35,16 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Onboarding") {}
 
+export interface Completion {
+  readonly organizationId: Auth.OrganizationID
+  readonly userId: Auth.UserID | null
+  readonly step: Onboarding.Step
+  readonly occurrence: string | null
+  readonly recorded: ReadonlyArray<string>
+}
+
 export interface ListenerInterface {
-  readonly completed: (
-    organizationId: Auth.OrganizationID,
-    userId: Auth.UserID | null,
-    step: Onboarding.Step,
-  ) => Effect.Effect<void>
+  readonly completed: (completion: Completion) => Effect.Effect<void>
 }
 
 export class Listener extends Context.Reference<ListenerInterface>("@ren/core/Onboarding/Listener", {
@@ -62,26 +71,32 @@ export const layer = Layer.effect(
     const listener = yield* Listener
 
     const record = Effect.fn("Onboarding.record")(
-      function* (organizationId: Auth.OrganizationID, userId: Auth.UserID | null, step: Onboarding.Step) {
-        const now = new Date(yield* Clock.currentTimeMillis)
-        const recorded = yield* database.db
+      function* (
+        organizationId: Auth.OrganizationID,
+        userId: Auth.UserID | null,
+        step: Onboarding.Step,
+        occurrence: string | null,
+      ) {
+        const now = new Date(yield* Clock.currentTimeMillis).toISOString()
+        const key = occurrence ? `${step}:${occurrence}` : step
+        const [recorded] = yield* database.db
           .insert(table)
           .values({
             id: Onboarding.ID.create(),
             organization_id: organizationId,
             user_id: userId,
-            steps: { [step]: now.toISOString() },
+            steps: { [step]: now, [key]: now },
           })
           .onConflictDoUpdate({
             target: [table.organization_id, table.user_id],
-            set: { steps: sql`${table.steps} || excluded.steps`, updated_at: sql`now()` },
-            setWhere: sql`not jsonb_exists(${table.steps}, ${step})`,
+            set: { steps: sql`excluded.steps || ${table.steps}`, updated_at: sql`now()` },
+            setWhere: sql`not jsonb_exists(${table.steps}, ${key})`,
           })
-          .returning({ id: table.id })
-        return recorded.length > 0
+          .returning({ steps: table.steps })
+        return recorded ? Object.keys(recorded.steps) : null
       },
       Effect.catchCause((cause) =>
-        Effect.logWarning("An onboarding step was not recorded", cause).pipe(Effect.as(false)),
+        Effect.logWarning("An onboarding step was not recorded", cause).pipe(Effect.as(null)),
       ),
     )
 
@@ -108,17 +123,39 @@ export const layer = Layer.effect(
       } satisfies Onboarding.Info
     })
 
-    const complete = (organizationId: Auth.OrganizationID, userId: Auth.UserID | null, step: Onboarding.Step) =>
-      record(organizationId, userId, step).pipe(
-        Effect.flatMap((isNew) => (isNew ? listener.completed(organizationId, userId, step) : Effect.void)),
-        Effect.catchCause((cause) =>
-          Effect.logWarning("An onboarding step was recorded, but its listener failed", cause),
-        ),
+    const appSteps: ReadonlyArray<string> = Object.values(Onboarding.appSteps)
+
+    const notify = (completion: Completion) =>
+      listener
+        .completed(completion)
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("An onboarding step was recorded, but its listener failed", cause),
+          ),
+        )
+
+    const complete = (
+      organizationId: Auth.OrganizationID,
+      userId: Auth.UserID | null,
+      step: Onboarding.Step,
+      occurrence: string | null,
+    ): Effect.Effect<void> =>
+      Effect.flatMap(record(organizationId, userId, step, occurrence), (recorded) =>
+        recorded
+          ? Effect.andThen(
+              notify({ organizationId, userId, step, occurrence, recorded }),
+              userId &&
+                appSteps.includes(step) &&
+                recorded.filter((key) => appSteps.includes(key)).length >= Onboarding.appsNeeded
+                ? complete(organizationId, userId, Onboarding.steps.personal.appsConnected, null)
+                : Effect.void,
+            )
+          : Effect.void,
       )
 
     return Service.of({
-      record: (organizationId, step) => complete(organizationId, null, step),
-      recordPersonal: (person, step) => complete(person.organizationId, person.userId, step),
+      record: (organizationId, step, options) => complete(organizationId, null, step, options?.occurrence ?? null),
+      recordPersonal: (person, step) => complete(person.organizationId, person.userId, step, null),
       get,
       dismiss: Effect.fn("Onboarding.dismiss")(function* (person: Person, kind: Onboarding.ChecklistKind) {
         yield* database.db
