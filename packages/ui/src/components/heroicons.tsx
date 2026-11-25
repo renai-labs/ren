@@ -134,7 +134,7 @@ import {
   ChatBubbleLeftRightIcon,
 } from "@heroicons/react/20/solid"
 
-export * from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
+export * from "#tabler-icons"
 
 type Props = SVGProps<SVGSVGElement> & {
   size?: number | string

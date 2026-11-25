@@ -1,7 +1,7 @@
 import type { AgentInfo, LabelInfo, SpaceInfo, TaskInfo } from "@ren/client"
 import { IconAntennaBars5, IconCube, IconHandStop, IconProgress, IconTag, IconUserCircle } from "@tabler/icons-react"
 import { Tasks } from "@ren/client/react"
-import { IconAgent } from "../../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import { spaceOptions, type FilterProperty } from "../../components/filter-menu.js"
 import { PersonAvatar } from "../../components/person-avatar.js"
 import { cn } from "cn"

@@ -1,7 +1,7 @@
 import { Preference } from "../../lib/preference.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { IconAlertTriangle, IconArchive, IconCube, IconPlus, IconTag, IconX } from "@tabler/icons-react"
-import { IconAgent } from "../../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import {
   DropdownMenu,
   DropdownMenuContent,

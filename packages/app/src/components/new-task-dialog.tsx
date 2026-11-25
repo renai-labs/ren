@@ -46,7 +46,7 @@ import { LabelPicker } from "./label-picker.js"
 import { DueDatePicker } from "./due-date-picker.js"
 import { SpacePicker } from "./space-picker.js"
 import { useAgents } from "../lib/use-agents.js"
-import { IconAgent } from "../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 
 // oxlint-disable-next-line ren/no-comments -- The editor (tiptap) is large and every page mounts this dialog for its shortcut, so it loads when a task form first opens.
 const loadEditor = () => import("./markdown-editor.js")

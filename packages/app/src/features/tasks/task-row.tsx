@@ -1,6 +1,6 @@
 import type { Tasks } from "@ren/client/react"
 import { IconAlertTriangle, IconHandStop, IconLink, IconSubtask } from "@tabler/icons-react"
-import { IconAgent } from "../../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Button } from "@ren/ui/button"

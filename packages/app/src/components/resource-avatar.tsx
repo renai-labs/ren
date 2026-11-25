@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { IconCube, IconLock } from "@tabler/icons-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@ren/ui/avatar"
 import { cn } from "cn"
-import { IconAgent } from "../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import { ResourceIcons } from "../lib/resource-icons.js"
 
 export function ResourceAvatar(props: {

@@ -90,6 +90,7 @@
       "@shadcn/react": "0.3.1",
       "@streamdown/math": "1.0.3",
       "@streamdown/mermaid": "1.0.3",
+      "@heroicons/react": "2.2.0",
       "@tabler/icons-react": "3.49.0",
       "@tabler/icons-react-native": "3.49.0",
       "@tailwindcss/vite": "4.3.3",

@@ -23,7 +23,7 @@ import {
   IconUsers,
   IconWebhook,
 } from "@tabler/icons-react"
-import { IconAgent } from "../icons/heroicons.js"
+import { IconAgent } from "@ren/ui/heroicons"
 import { GitMark } from "../icons/brands.js"
 import {
   DropdownMenu,

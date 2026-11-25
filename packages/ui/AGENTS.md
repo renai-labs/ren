@@ -7,6 +7,7 @@ The design system: shadcn's components (style `base-nova` on Base UI, Tabler ico
 - `src/components/<name>.tsx` holds one component per file, exported as `@ren/ui/<name>`. There is no root barrel and there are no tiers.
 - `src/lib/` holds internal helpers (the code highlighter, the factory model). Only `src/lib/factory/model.ts` is exported, as `@ren/ui/factory-model`.
 - `src/hooks/` holds hooks the components share, imported as `#hooks/*`.
+- `src/components/heroicons.tsx` (`@ren/ui/heroicons`) is Ren's icon set: filled Heroicons under Tabler's names, and Tabler for the rest. The app aliases `@tabler/icons-react` to it, and the docs import their sidebar icons from it, so both draw the same icon for each page.
 - `src/styles/` holds `index.css` (the theme on shadcn's variables; it loads `fonts.css`, `font-choices.css` (the fonts a member can pick in Preferences), `tw-animate-css`, `shadcn/tailwind.css` and `factory.css`). The app imports it as `@ren/ui/styles`.
 - `components.json` configures the shadcn CLI. Its aliases point at the package's `#components/*` and `#hooks/*` imports.
 

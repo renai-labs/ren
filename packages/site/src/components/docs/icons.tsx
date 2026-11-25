@@ -1,17 +1,15 @@
 import type { ComponentType } from "react"
 import type { Root } from "fumadocs-core/page-tree"
 import {
-  IconAt,
-  IconBolt,
+  IconAgent,
+  IconApps,
   IconBook,
+  IconBolt,
   IconBracketsAngle,
   IconBrain,
-  IconBuildingCommunity,
+  IconBuilding,
   IconBuildingFactory2,
   IconChartBar,
-  IconChartColumn,
-  IconChecklist,
-  IconClock,
   IconCode,
   IconCpu,
   IconCreditCard,
@@ -21,24 +19,19 @@ import {
   IconFileCode,
   IconFileText,
   IconFolder,
-  IconFolderCode,
   IconHome,
   IconInbox,
-  IconLayoutBoard,
-  IconMailFilled,
+  IconKey,
   IconMessage,
   IconMessageChatbot,
-  IconPlugConnected,
-  IconRulerMeasure,
-  IconScript,
+  IconMessagesFilled,
   IconServer,
   IconShield,
+  IconSubtask,
   IconTerminal,
-  IconTerminal2,
-  IconTools,
   IconUsers,
-  IconVault,
-} from "@tabler/icons-react"
+  IconWebhook,
+} from "@ren/ui/heroicons"
 
 type Glyph = ComponentType<{ className?: string | undefined }>
 
@@ -69,72 +62,36 @@ function McpMark(props: { className?: string | undefined }) {
   )
 }
 
-const AGENT_POINTS = [
-  { x: 10, y: 3 },
-  { x: 16.06, y: 6.5 },
-  { x: 16.06, y: 13.5 },
-  { x: 10, y: 17 },
-  { x: 3.94, y: 13.5 },
-  { x: 3.94, y: 6.5 },
-]
-
-function AgentMark(props: { className?: string | undefined }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" {...props}>
-      <path
-        d={AGENT_POINTS.map((point) => `M10 10L${point.x} ${point.y}`).join("")}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.2}
-        strokeLinecap="round"
-      />
-      <circle cx={10} cy={10} r={2.6} />
-      {AGENT_POINTS.map((point) => (
-        <circle key={`${point.x},${point.y}`} cx={point.x} cy={point.y} r={1.8} />
-      ))}
-    </svg>
-  )
-}
-
 const ICONS: Record<string, Glyph> = {
-  Agent: AgentMark,
-  AtSign: IconAt,
-  Blueprint: IconRulerMeasure,
+  Agent: IconAgent,
+  Apps: IconApps,
   BookOpen: IconBook,
   Brain: IconBrain,
-  Building2: IconBuildingCommunity,
-  Cable: IconPlugConnected,
-  CanvasBoard: IconLayoutBoard,
+  Building: IconBuilding,
   ChartBar: IconChartBar,
+  Channels: IconMessagesFilled,
   Chatbot: IconMessageChatbot,
-  Checklist: IconChecklist,
-  Clock: IconClock,
   Code: IconCode,
   Cpu: IconCpu,
   CreditCard: IconCreditCard,
   Cube: IconCube,
-  Dashboard: IconChartColumn,
   Developer: IconBracketsAngle,
-  EnvVariable: IconTerminal2,
   Factory: IconBuildingFactory2,
   FileCode: IconFileCode,
   FileText: IconFileText,
   Folder: IconFolder,
-  FolderCode: IconFolderCode,
   Home: IconHome,
   Inbox: IconInbox,
-  MailFilled: IconMailFilled,
+  Key: IconKey,
   MessageSquare: IconMessage,
   Mobile: IconDeviceMobile,
   Monitor: IconDeviceDesktop,
-  Script: IconScript,
   Server: IconServer,
   Shield: IconShield,
-  Skill: IconBook,
+  Subtask: IconSubtask,
   Terminal: IconTerminal,
-  Tools: IconTools,
   Users: IconUsers,
-  Vault: IconVault,
+  Webhook: IconWebhook,
   Zap: IconBolt,
   Git: mark(
     "0 0 24 24",

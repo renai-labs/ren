@@ -6,7 +6,11 @@
   "type": "module",
   "imports": {
     "#components/*": "./src/components/*.tsx",
-    "#hooks/*": "./src/hooks/*.ts"
+    "#hooks/*": "./src/hooks/*.ts",
+    "#tabler-icons": {
+      "types": "@tabler/icons-react",
+      "default": "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
+    }
   },
   "license": "UNLICENSED",
   "exports": {
@@ -42,6 +46,7 @@
     "@pierre/highlights": "catalog:",
     "@pierre/trees": "catalog:",
     "@shadcn/react": "catalog:",
+    "@heroicons/react": "catalog:",
     "@tabler/icons-react": "catalog:",
     "class-variance-authority": "catalog:",
     "cmdk": "catalog:",
