@@ -336,6 +336,8 @@ import type {
   BillingCancelOutput,
   BillingPortalOutput,
   OnboardingGetOutput,
+  OnboardingCompleteInput,
+  OnboardingCompleteOutput,
   OnboardingDismissInput,
   OnboardingDismissOutput,
   ChannelInstallListInput,
@@ -2841,6 +2843,18 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<OnboardingGetOutput>(
           { method: "GET", path: `/onboarding`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          requestOptions,
+        ),
+      complete: (input: OnboardingCompleteInput, requestOptions?: RequestOptions) =>
+        request<OnboardingCompleteOutput>(
+          {
+            method: "POST",
+            path: `/onboarding/complete`,
+            body: { step: input["step"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
           requestOptions,
         ),
       dismiss: (input: OnboardingDismissInput, requestOptions?: RequestOptions) =>

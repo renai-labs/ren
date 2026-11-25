@@ -24,6 +24,7 @@ export const steps = {
     githubAppConnected: "github.app.connected",
     driveConnected: "drive.connected",
     appsConnected: "apps.connected",
+    memoryImported: "memory.imported",
   },
 } as const
 
@@ -75,6 +76,17 @@ export const Info = Schema.Struct({
   }),
   personal: Checklist.annotate({ description: "The caller’s own checklist in the organization." }),
 }).annotate({ identifier: "Onboarding.Info", description: "The caller’s onboarding checklists." })
+
+export const ReportedStep = Schema.Literals([steps.personal.memoryImported]).annotate({
+  identifier: "Onboarding.ReportedStep",
+  description: "A personal step the app marks done when the person does it. It pays no reward.",
+})
+export type ReportedStep = typeof ReportedStep.Type
+
+export interface CompleteInput extends Schema.Schema.Type<typeof CompleteInput> {}
+export const CompleteInput = Schema.Struct({ step: ReportedStep }).annotate({
+  identifier: "Onboarding.CompleteInput",
+})
 
 export interface DismissInput extends Schema.Schema.Type<typeof DismissInput> {}
 export const DismissInput = Schema.Struct({ checklist: ChecklistKind }).annotate({

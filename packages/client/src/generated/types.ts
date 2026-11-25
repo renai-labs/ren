@@ -439,6 +439,7 @@ export type OnboardingPersonalStep =
   | "github.app.connected"
   | "drive.connected"
   | "apps.connected"
+  | "memory.imported"
 
 export type ChannelInstallID = string
 
@@ -9862,6 +9863,10 @@ export type BillingCancelOutput = void
 export type BillingPortalOutput = BillingLink
 
 export type OnboardingGetOutput = OnboardingInfo
+
+export type OnboardingCompleteInput = { readonly step: { readonly step: "memory.imported" }["step"] }
+
+export type OnboardingCompleteOutput = OnboardingInfo
 
 export type OnboardingDismissInput = {
   readonly checklist: { readonly checklist: "organization" | "personal" }["checklist"]

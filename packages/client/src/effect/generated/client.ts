@@ -2088,6 +2088,11 @@ const adaptGroupBilling = (raw: RawClient["billing"]) => ({
 const EndpointOnboardingGet = (raw: RawClient["onboarding"]) => () =>
   raw["onboarding.get"]({}).pipe(Effect.mapError(mapClientError))
 
+type OnboardingCompleteRequest = Parameters<RawClient["onboarding"]["onboarding.complete"]>[0]
+type OnboardingCompleteInput = { readonly step: OnboardingCompleteRequest["payload"]["step"] }
+const EndpointOnboardingComplete = (raw: RawClient["onboarding"]) => (input: OnboardingCompleteInput) =>
+  raw["onboarding.complete"]({ payload: { step: input["step"] } }).pipe(Effect.mapError(mapClientError))
+
 type OnboardingDismissRequest = Parameters<RawClient["onboarding"]["onboarding.dismiss"]>[0]
 type OnboardingDismissInput = { readonly checklist: OnboardingDismissRequest["payload"]["checklist"] }
 const EndpointOnboardingDismiss = (raw: RawClient["onboarding"]) => (input: OnboardingDismissInput) =>
@@ -2095,6 +2100,7 @@ const EndpointOnboardingDismiss = (raw: RawClient["onboarding"]) => (input: Onbo
 
 const adaptGroupOnboarding = (raw: RawClient["onboarding"]) => ({
   get: EndpointOnboardingGet(raw),
+  complete: EndpointOnboardingComplete(raw),
   dismiss: EndpointOnboardingDismiss(raw),
 })
 
