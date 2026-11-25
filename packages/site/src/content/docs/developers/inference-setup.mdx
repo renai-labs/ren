@@ -27,7 +27,7 @@ ren inference setup claude-code
 
 It edits `~/.claude/settings.json`. When it's done, it tells you where the backup is and how to check the tool:
 
-```text
+```text title="Output"
 Set up claude-code.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: claude -p 'which model are you?'
@@ -43,7 +43,7 @@ ren inference setup codex
 
 It edits `~/.codex/config.toml`, and writes Ren's own profile to `~/.codex/ren.config.toml` and Ren's model list to `~/.codex/ren-models.json`. When it's done, it tells you where the backup is and how to check the tool:
 
-```text
+```text title="Output"
 Set up codex.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: codex --profile ren
@@ -61,7 +61,7 @@ ren inference setup opencode
 
 It edits `~/.config/opencode/opencode.jsonc`. When it's done, it tells you where the backup is and how to check the tool:
 
-```text
+```text title="Output"
 Set up opencode.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: opencode run --model ren/anthropic/claude-sonnet-5-5 'say hello'
@@ -77,7 +77,7 @@ ren inference setup pi
 
 It edits `~/.pi/agent/models.json`. When it's done, it tells you where the backup is and how to check the tool:
 
-```text
+```text title="Output"
 Set up pi.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: pi --provider ren --model anthropic/claude-sonnet-5-5 -p 'hello'
@@ -93,7 +93,7 @@ ren inference setup hermes
 
 It edits `~/.hermes/config.yaml`, and puts the key in `~/.hermes/.env`. When it's done, it tells you where the backup is and how to check the tool:
 
-```text
+```text title="Output"
 Set up hermes.
 Backed up to /Users/ada/.config/ren/inference-backups/2026-11-26T10-15-00-000Z. Undo with ren inference setup --undo.
 Check it: hermes -z 'hello'

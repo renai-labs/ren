@@ -158,6 +158,76 @@ html[data-backdrop="5"] {
   mask: var(--logo) center / contain no-repeat;
 }
 
+.docs-output {
+  margin: 12px 0 20px;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--docs-line);
+}
+
+.docs-output figcaption {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: var(--ren-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ren-color-text-secondary);
+}
+
+.docs-output pre {
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--ren-font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ren-color-text-secondary);
+}
+
+.docs-output code {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  color: inherit;
+}
+
+figure.shiki .line:is(:empty, :has(> span:only-child:empty))::before,
+.docs-output .line:is(:empty, :has(> span:only-child:empty))::before {
+  content: "\200b";
+}
+
+.docs-expand pre {
+  width: auto;
+  white-space: pre-wrap;
+}
+
+.docs-expand:has([aria-expanded="false"]) [role="region"] {
+  max-height: calc(3 * 1.7em + 28px);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 55%, transparent);
+}
+
+.docs-expand:has([aria-expanded="true"]) [role="region"] {
+  max-height: none;
+}
+
+.docs-expand figure {
+  margin-bottom: 8px;
+}
+
+.docs-expand-toggle {
+  font-size: 13px;
+  font-weight: var(--ren-font-weight-medium);
+  color: var(--ren-color-text-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docs-expand-toggle:hover {
+    color: var(--ren-color-text-primary);
+  }
+}
+
 .docs-alt {
   margin-top: 16px;
   border: 1px solid var(--docs-line);

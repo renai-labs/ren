@@ -31,7 +31,7 @@ A change usually goes like this:
 ren infra validate
 ```
 
-```text
+```text title="Output"
 The folder is valid.
 ```
 
@@ -41,7 +41,7 @@ Plan and apply validate the spec first, so you don't have to. Validate on its ow
 
 This plan adds `planner` and a line to the instructions of `implementer`:
 
-```text
+```text title="Output"
 + create agent spaces/engineering/agents/planner
 ~ update agent spaces/engineering/agents/implementer: settings
     settings.instructions:
@@ -89,13 +89,13 @@ Apply makes the changes one at a time. If one fails, the error names that change
 ren infra pull
 ```
 
-```text
+```text title="Output"
 Pulled 2 changes into /Users/ada/acme/.ren.
 ```
 
 If a resource changed both in the spec and in Ren since your last pull or apply, pull writes nothing and shows each conflict:
 
-```text
+```text title="Output"
 Pull wrote nothing. These changed in your folder and in Ren (- in Ren, + in your folder):
 ! conflict update agent spaces/engineering/agents/reviewer: settings
     settings.instructions:
@@ -126,7 +126,7 @@ description: Breaks a request into steps.
 renamedFrom: [plan]
 ```
 
-```text
+```text title="Output"
 ~ update agent spaces/engineering/agents/planner (from spaces/engineering/agents/plan): name
 ```
 
