@@ -293,7 +293,6 @@ export const Spec = Schema.Struct({
 
 export interface SpaceBindings extends Schema.Schema.Type<typeof SpaceBindings> {}
 export const SpaceBindings = Schema.Struct({
-  timezone: Schema.optionalKey(Schema.TimeZoneNamedFromString),
   channels: Schema.Record(Primitive.Slug, Channel.Target).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
   profiles: Schema.Record(Primitive.Slug, Schema.Array(AppProfile.Slug))
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))

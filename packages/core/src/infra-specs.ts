@@ -1031,17 +1031,10 @@ export const layer = Layer.effect(
           path: "ren.lock",
           message: `ren.lock is for “${input.lock.organization}”, but you are signed in to “${live.organization.slug}”.`,
         })
-      const bound = Object.entries(input.bindings.spaces)
       problems.push(
-        ...bound
-          .filter(([, bindings]) => bindings.timezone)
-          .map(([slug]) => ({
-            path: `deploy.yaml/spaces/${slug}/timezone`,
-            message: "Infra does not apply the timezone of a space yet.",
-          })),
-        ...bound
-          .filter(([slug]) => !(slug in input.spec.spaces))
-          .map(([slug]) => ({
+        ...Object.keys(input.bindings.spaces)
+          .filter((slug) => !(slug in input.spec.spaces))
+          .map((slug) => ({
             path: `deploy.yaml/spaces/${slug}`,
             message: `deploy.yaml binds space “${slug}”, which the spec does not declare.`,
           })),

@@ -228,6 +228,13 @@ export const validate = async (root: string): Promise<Validated> => {
     spaces: await entries(children(files, "spaces/"), (slug) => space(`spaces/${slug}/`)),
   }
   const deploy = await yaml("deploy.yaml")
+  problems.push(
+    ...Object.entries(fields(fields(deploy)["spaces"]))
+      .filter(([, space]) => "timezone" in fields(space))
+      .map(([slug]) =>
+        problem("deploy.yaml", ["spaces", slug, "timezone"], "A space has no time zone. Each schedule has its own."),
+      ),
+  )
   const spec = Schema.decodeUnknownResult(Infra.Spec)(input, { errors: "all" })
   const bindings = Predicate.isUndefined(deploy)
     ? undefined
