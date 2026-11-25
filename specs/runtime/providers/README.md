@@ -192,21 +192,22 @@ A table like the Console's Models page: name, id, price per 1M tokens (input, ou
 
 A model provider is an Effect plug-in in `core`. It is built like a machine provider (`core/src/machine-provider.ts`, `brain-provider.ts`): an `Effect` that gives a `ModelProvider.Provider`, and a registry layer that takes a list of them. The registry refuses two cards with the same id. Ren core uses only this interface:
 
-| Member        | Gives                                                                                                                                                                           | Replaces in Ren core                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `id`          | the plug-in's id: `ren-gateway`, `litellm-gateway`                                                                                                                              | —                                                      |
-| `baseUrl`     | where a brain calls the plug-in's models                                                                                                                                        | `Models.Gateway.baseUrl`                               |
-| `headers`     | headers a brain sends with each call                                                                                                                                            | —                                                      |
-| `cards`       | the cards it offers (below)                                                                                                                                                     | `ProviderCard.definitions`, the `ren` constant         |
-| `models`      | a card's models for an organization: `{ revision, models: Models.Info[] }`                                                                                                      | `ModelCatalog`, the Ren list rules, the seat models    |
-| `changed`     | a `Stream` of `Changed`, `{ card, organizationId? }`: a card's models changed for one organization, or for all. Named like `MachineProvider.lost`                               | the models.dev job, `POST /internal/inference/changed` |
-| `grant`       | a brain's key, a `Grant` (below)                                                                                                                                                | `Models.Gateway.key`                                   |
-| `settings`    | an organization's settings of every card: on/off, method, key status (last 4 characters, who saved it, test result), models switched off. The plug-in is their only store (P29) | Ren's settings tables                                  |
-| `configure`   | writes a card's settings for an organization: on/off, method, models switched off                                                                                               | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
-| `connect`     | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test                                                           | the `RenInference` key and connect routes              |
-| `disconnect`  | removes a key or a seat                                                                                                                                                         | the same                                               |
-| `connections` | a card's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                                                                                       | the same                                               |
-| `meters`      | the meters of a chat's model: credit, free cap, seat limits                                                                                                                     | the gateway calls in `limits.ts`                       |
+| Member          | Gives                                                                                                                                                                           | Replaces in Ren core                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `id`            | the plug-in's id: `ren-gateway`, `litellm-gateway`                                                                                                                              | —                                                      |
+| `baseUrl`       | where a brain calls the plug-in's models                                                                                                                                        | `Models.Gateway.baseUrl`                               |
+| `headers`       | headers a brain sends with each call                                                                                                                                            | —                                                      |
+| `cards`         | the cards it offers (below)                                                                                                                                                     | `ProviderCard.definitions`, the `ren` constant         |
+| `models`        | a card's models for an organization: `{ revision, models: Models.Info[] }`                                                                                                      | `ModelCatalog`, the Ren list rules, the seat models    |
+| `changed`       | a `Stream` of `Changed`, `{ card, organizationId? }`: a card's models changed for one organization, or for all. Named like `MachineProvider.lost`                               | the models.dev job, `POST /internal/inference/changed` |
+| `grant`         | a brain's key, a `Grant` (below)                                                                                                                                                | `Models.Gateway.key`                                   |
+| `settings`      | an organization's settings of every card: on/off, method, key status (last 4 characters, who saved it, test result), models switched off. The plug-in is their only store (P29) | Ren's settings tables                                  |
+| `organizations` | the organizations that have a card on, for a push after a change for every organization                                                                                         | the hash table of Ren's lists                          |
+| `configure`     | writes a card's settings for an organization: on/off, method, models switched off                                                                                               | `PUT /v1/ren-models` switches, `PUT /v1/providers/:id` |
+| `connect`       | `key`: test, then save the fields. `subscription`: the sign-in address. Answers the vendor's message on a failed test                                                           | the `RenInference` key and connect routes              |
+| `disconnect`    | removes a key or a seat                                                                                                                                                         | the same                                               |
+| `connections`   | a card's key (last 4 characters, who saved it, test result) and seats (who, plan, models)                                                                                       | the same                                               |
+| `meters`        | the meters of a chat's model: credit, free cap, seat limits                                                                                                                     | the gateway calls in `limits.ts`                       |
 
 A `Grant`:
 
@@ -315,20 +316,16 @@ Not built in this work. It shows that the contract fits a self-hosted Ren; build
 
 For each card that is on: the card's models minus the models switched off. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free.
 
-Ren core stores each card's models in `model_card`, one row per card: for every organization (a `shared` card) or for one organization (an `organization` card). It puts an organization's list together from these rows when a brain pulls, and adds each plug-in's `baseUrl` and `headers`. Every server instance reads the same rows.
+Ren core stores no list. At each pull it asks the plug-in for the organization's `settings` and each card's `models`, and adds each plug-in's `baseUrl` and `headers`. The gateway answers from LiteLLM and keeps its own copy in memory of what it wrote there.
 
-| Event                                          | Ren core reads                          | Ren core writes                                                 |
-| ---------------------------------------------- | --------------------------------------- | --------------------------------------------------------------- |
-| `changed` for a `shared` card                  | the card's models, once                 | the card's row; the hash of every organization with the card on |
-| `changed` for one organization's card          | the card's models for that organization | that row; that organization's hash                              |
-| start                                          | the cards never read                    | their rows; the hash of each organization                       |
-| a pull finds no row (new organization or card) | the card's models                       | the row                                                         |
+| Event                                        | Ren core does                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `changed` for one organization               | `pg_notify('ren_brains', 'org:<id>')`                                                             |
+| `changed` for a card and every organization  | asks the plug-in which organizations have the card on (`organizations`), then `org:<id>` for each |
+| a setting written through the Providers page | `org:<id>` for that organization                                                                  |
+| the gateway is down at a pull                | the reply has no `providers`; the brain keeps its last list (`host-api/src/ren-host-api.ts:131`)  |
 
-Rules:
-
-1. A row is written only from a read that started later than the stored one (`read_at`). A server that read earlier never puts back older models.
-2. A change reads and writes only the card it names. A change for one card never rewrites another card's row.
-3. An organization's hash names its cards and their revisions. `organization_model_list` keeps it; a row whose hash changed notifies that organization's brains (gate GR3).
+The 30 s pull stays as the backup. A push that changes nothing costs the brain one pull.
 
 ### 6.5 Other model types
 
@@ -347,7 +344,7 @@ To add a type: its model type and protocol in `schema/src/models.ts`, a price un
 
 ### 7.1 What the pull carries
 
-Ren core caches two things apart. A brain's key: the plug-in's `grant`, per workload and plug-in, until it expires (`Minted`) or a call answers 401. The organization's list: per organization and list hash. A change in models changes lists and mints no key.
+Ren core keeps one thing in memory: a brain's key, the plug-in's `grant`, per workload and plug-in, until it expires (`Minted`) or a call answers 401. It keeps no list. A change in models changes lists and mints no key.
 
 `RenHostApi` pull `providers` (`host-api/src/ren-host-api.ts:131`) becomes the organization's list (§6.4): per card the id, name, and its model provider's `baseUrl` and `headers`, and the models with their gateway names, runtime and metadata. With the egress the key is the placeholder `ren:MODELS`. The brain key comes from `models.refresh` as today (`cell/src/model-refresh.ts`).
 
@@ -395,10 +392,10 @@ Model lists rode only the 30 s pull until now: the brain fetched each provider's
 
 New rules (P26):
 
-| Change                                                                            | Written to                                                                                                       | Notify                                  |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Card on/off, method, key saved or removed, model switch                           | the model provider (`configure`, `connect`, `disconnect`), then `organization_model_list` where the hash changed | `org:<id>`                              |
-| A provider's `changed`: one organization (a seat) or all (models.dev, Ren's list) | `organization_model_list` only where the hash changed                                                            | `org:<id>` for those organizations only |
+| Change                                                                            | Written to                                                | Notify                                            |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------- |
+| Card on/off, method, key saved or removed, model switch                           | the model provider (`configure`, `connect`, `disconnect`) | `org:<id>`                                        |
+| A provider's `changed`: one organization (a seat) or all (models.dev, Ren's list) | nothing in Ren                                            | `org:<id>` for the organizations with the card on |
 
 A Ren-wide `'all'` notify wakes every running brain (`specs/runtime/hot-reload/README.md` §2.5), so a provider change never sends `'all'`. The 30 s pull stays as the backup. The core and brain polls go.
 
@@ -453,6 +450,7 @@ The `RenGateway` plug-in (§6.2) and `RenInference` call the gateway with today'
 | ------------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------- |
 | `GET /v1/providers`                                                                  | new    | `cards`: the gateway's cards (§6.1)                                                                            |
 | `GET /v1/providers/:card/models`                                                     | new    | `models`: `{ revision, models }`. A `shared` card answers the same for every organization                      |
+| `GET /v1/providers/:card/organizations`                                              | new    | `organizations`: the teams whose allowlist has the card's access group                                         |
 | `GET /v1/providers/settings`                                                         | new    | `settings`: the organization's settings of every card, read from its LiteLLM team and credentials              |
 | `PUT /v1/providers/:card {enabled, method, off}`                                     | new    | `configure`: on/off, method, and the models switched off. A switched-off model is refused with `403 model_off` |
 | `POST /v1/providers/:card/test {fields}`                                             | new    | test a key without saving; ok or the vendor's message                                                          |
@@ -484,7 +482,7 @@ Gateway → Ren core: `POST /internal/inference/changed {card, organizationId?}`
 | Package              | Work                                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schema`             | `ModelProvider.Card` and its fields; provider settings shapes (card, method, key status, model switch). Per model in `Models.Registration`: gateway name, runtime, card, method, price, free. Usage `kind` and `seat`                                                                                                                                                                                 |
-| `db`                 | Tables `model_card` and `organization_model_list`: caches built from the plug-in, never a source of settings. Triggers `pg_notify('ren_brains', 'org:<id>')` on the organization tables                                                                                                                                                                                                               |
+| `db`                 | No tables for providers or lists. Ren core sends `pg_notify('ren_brains', 'org:<id>')` itself                                                                                                                                                                                                                                                                                                         |
 | `core`               | `ModelProvider` (contract, registry, layer); the plug-in `model-provider/ren-gateway.ts`; the contract suite `test/lib/model-provider.ts`; the list job on `changed`; `Models.grant` and the pull from §6.4; remove the `/v1/catalog` poll (`core/src/ren-inference/provider.ts`); policy `provider.manage` (admins, owners) and `provider.view` (members); `limits.get`; setting `REN_DEFAULT_MODEL` |
 | `protocol`, `server` | Providers endpoints (list, update, test, set key, remove key), Ren models endpoints, `limits.get`, `POST /internal/inference/changed`; `bun run generate`                                                                                                                                                                                                                                             |
 | `cell`               | `model-providers.ts` (§7.2); `claude-agent.ts` (§7.3); remove `model-discovery.ts`; ChatGPT settings and retry codes                                                                                                                                                                                                                                                                                  |
@@ -504,7 +502,7 @@ Pending (Ren side):
 | ---- | ------------------------------------------------------------------------------------------------------ | ----------------------- |
 | GR1  | The SDK's Linux `claude` binary runs in a real brain (own E2B template) and a turn reaches the gateway | with the Claude runtime |
 | GR2  | The egress blocks `api.anthropic.com` from the brain, and a turn still works                           | with the Claude runtime |
-| GR3  | A provider change for all organizations notifies only the organizations whose list changed, under load | with the list job       |
+| GR3  | A provider change for all organizations pushes only to the organizations with the card on, under load  | with the list job       |
 
 ### 13.2 Package tests
 
