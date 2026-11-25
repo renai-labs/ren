@@ -1,6 +1,7 @@
 import { expect } from "bun:test"
 import type { App as AppSchema } from "@ren/schema/app"
 import { Effect, Schema } from "effect"
+import type { Actor } from "../src/actor.js"
 import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { AppRegistry } from "../src/app/registry.js"
@@ -12,12 +13,15 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(ProfilesFixture.layer)
 
-const definition = (app: AppSchema.Info) => ({
-  requiredCredentials: app.requiredCredentials,
-  mcps: app.mcps,
-  skills: app.skills,
-  webhooks: app.webhooks,
-  dependsOn: app.dependsOn,
+const definition = Effect.fnUntraced(function* (actor: Actor.Info, app: AppSchema.Info) {
+  const apps = yield* App.Service
+  return {
+    requiredCredentials: app.requiredCredentials,
+    mcps: app.mcps,
+    skills: yield* apps.skills(actor, app.id),
+    webhooks: app.webhooks,
+    dependsOn: app.dependsOn,
+  }
 })
 
 it.live("read access follows reach, while edits and transfers keep owner checks", () =>
@@ -39,7 +43,7 @@ it.live("read access follows reach, while edits and transfers keep owner checks"
     yield* members.create(admin, { spaceId: target, userId: admin.userId })
     yield* ProfilesFixture.profile(admin, { appId: app.id, slug: "target", kind: "shared", spaceIds: [target] })
     expect((yield* apps.get(consumer, app.id)).id).toBe(app.id)
-    const edit = { ...definition(app), name: "Changed", expectedRevision: app.revision }
+    const edit = { ...(yield* definition(owner, app)), name: "Changed", expectedRevision: app.revision }
     expect((yield* Effect.flip(apps.update(consumer, app.id, edit)))._tag).toBe("Primitive.Forbidden")
     expect((yield* Effect.flip(apps.transferOwnership(consumer, app.id, { spaceId: target })))._tag).toBe(
       "Primitive.Forbidden",
@@ -64,7 +68,7 @@ it.live("an app cannot have the name of its owner space, on create, edit or tran
       refused("Design"),
     )
     const app = yield* ProfilesFixture.app(actor, design, "design-kit", { name: "Design Kit" })
-    const edit = { ...definition(app), name: "DESIGN", expectedRevision: app.revision }
+    const edit = { ...(yield* definition(actor, app)), name: "DESIGN", expectedRevision: app.revision }
     expect(yield* Effect.flip(apps.update(actor, app.id, edit))).toMatchObject(refused("Design"))
     const kit = yield* ProfilesFixture.space(actor, "design kit")
     expect(yield* Effect.flip(apps.transferOwnership(actor, app.id, { spaceId: kit }))).toMatchObject(
@@ -123,7 +127,11 @@ it.live("an app's dependencies may have dependencies, but no deeper, counting th
     yield* add("first", ["second"])
     yield* add("fourth")
     const deeper = yield* Effect.flip(
-      apps.update(actor, third.id, { ...definition(third), dependsOn: ["fourth"], expectedRevision: third.revision }),
+      apps.update(actor, third.id, {
+        ...(yield* definition(actor, third)),
+        dependsOn: ["fourth"],
+        expectedRevision: third.revision,
+      }),
     )
     expect(deeper).toMatchObject({ _tag: "Primitive.Conflict" })
     expect(deeper.message).toContain("first -> second -> third -> fourth")
@@ -145,8 +153,9 @@ it.live("an org's own app cannot declare a managed MCP, on create or on edit", (
     )
     const app = yield* ProfilesFixture.app(actor, actor.personal, "kernel", { mcps: { kernel: mcps.kernel } })
     expect(
-      (yield* Effect.flip(apps.update(actor, app.id, { ...definition(app), mcps, expectedRevision: app.revision })))
-        ._tag,
+      (yield* Effect.flip(
+        apps.update(actor, app.id, { ...(yield* definition(actor, app)), mcps, expectedRevision: app.revision }),
+      ))._tag,
     ).toBe("Primitive.Invalid")
   }),
 )
@@ -188,14 +197,16 @@ it.live("two apps with MCP gmail or env key SHOPIFY_TOKEN cannot both get profil
     yield* Effect.forEach((yield* profiles.list(actor, { appId: other.id, page: 1, pageSize: 50 })).items, (found) =>
       profiles.delete(actor, found.id),
     )
-    const edit = { ...definition(other), mcps: { gmail: ProfilesFixture.remote("Gmail") } }
+    const edit = { ...(yield* definition(actor, other)), mcps: { gmail: ProfilesFixture.remote("Gmail") } }
     const updated = yield* apps.update(actor, other.id, { ...edit, expectedRevision: other.revision })
     expect(updated.revision).toBe(other.revision + 1)
     expect(
       (yield* Effect.flip(ProfilesFixture.profile(actor, { appId: other.id, slug: "x", kind: "shared", spaceIds: [] })))
         .message,
     ).toContain("MCP “gmail”")
-    const stale = yield* Effect.flip(apps.update(actor, first.id, { ...definition(first), expectedRevision: 0 }))
+    const stale = yield* Effect.flip(
+      apps.update(actor, first.id, { ...(yield* definition(actor, first)), expectedRevision: 0 }),
+    )
     expect(stale).toMatchObject({ _tag: "Primitive.Conflict", message: "The app changed. Reload before saving." })
   }),
 )
