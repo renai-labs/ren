@@ -117,7 +117,7 @@ describe("ChannelInstalls with GitHub", () => {
   )
 
   it.live(
-    "start sends the person to the App's install page with a one-time state; the callback stores the install",
+    "start sends the person to the App's install page with a one-time state; the callback stores the install and completes github.connected",
     () =>
       Effect.gen(function* () {
         const installs = yield* ChannelInstalls.Service
@@ -140,6 +140,11 @@ describe("ChannelInstalls with GitHub", () => {
         expect((yield* installs.list(actor, { page: 1, pageSize: 50 })).items).toMatchObject([
           { provider: "github", workspace: id, name: "acme", installedBy: { id: actor.userId, name: "Ada" } },
         ])
+        expect(
+          (yield* Effect.flatMap(Onboarding.Service, (onboarding) => onboarding.get(actor))).organization.steps.find(
+            (state) => state.step === Onboarding.steps.organization.githubConnected,
+          )?.completedAt,
+        ).not.toBeNull()
       }),
   )
 

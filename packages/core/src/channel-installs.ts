@@ -51,6 +51,11 @@ const notFound = new Primitive.NotFound({ message: "Install not found." })
 
 const failed = (reason: string): Outcome => ({ ok: false, reason })
 
+const channelSteps: Partial<Record<Channel.Provider, Onboarding.OrganizationStep>> = {
+  slack: Onboarding.steps.organization.slackConnected,
+  github: Onboarding.steps.organization.githubConnected,
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -339,8 +344,8 @@ export const layer = Layer.effect(
               Effect.fnUntraced(function* (outcome) {
                 if (outcome.ok && installer?.credential)
                   yield* people.save(row.organization_id, row.initiator_user_id, installer.credential)
-                if (outcome.ok && outcome.provider === "slack")
-                  yield* onboarding.record(row.organization_id, Onboarding.steps.organization.slackConnected)
+                const step = outcome.ok ? channelSteps[outcome.provider] : undefined
+                if (step) yield* onboarding.record(row.organization_id, step)
               }),
             ),
             Effect.catchTag("ChannelProvider.InstallFailed", (error) => Effect.succeed(failed(error.message))),
