@@ -434,6 +434,7 @@ export type OnboardingOrganizationStep =
   | "iac.applied"
 
 export type OnboardingPersonalStep =
+  | "github.starred"
   | "gmail.connected"
   | "granola.connected"
   | "github.app.connected"
@@ -9864,7 +9865,7 @@ export type BillingPortalOutput = BillingLink
 
 export type OnboardingGetOutput = OnboardingInfo
 
-export type OnboardingCompleteInput = { readonly step: { readonly step: "memory.imported" }["step"] }
+export type OnboardingCompleteInput = { readonly step: { readonly step: "github.starred" | "memory.imported" }["step"] }
 
 export type OnboardingCompleteOutput = OnboardingInfo
 
