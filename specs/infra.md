@@ -2,24 +2,25 @@
 
 A `.ren/` folder declares a whole organization. `ren infra validate`, `plan`, `apply` and `pull` are built (`packages/cli`, `core/src/infra-specs.ts`). `Infra.Spec` in `@ren/schema` (`schema/src/infra.ts`) is the one definition of the folder and is the authority for its shape.
 
-Apply works today for org settings, shared spaces, agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (created as listening; the mode, URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
+Apply works today for org settings, the organization's environment templates (`environments.yaml`, keyed by template name), shared spaces with their runtime (`brainScope`, `brain` and `hand` in `space.yaml`, naming templates by name), agents, `uses`, `factory`, custom apps, recurring schedules that start a new chat, webhooks (created as listening; the mode, URL token and signing secret stay live state), GitHub and Slack channel mappings, and the spaces listed on app profiles. The rest of this file is not built.
 
 ## 1. Parts that apply refuses
 
-`plan` reports each of these as a problem (`core/src/infra-specs.ts:74`, `:721`, `:727`, `:747`):
+`plan` reports each of these as a problem, or leaves it as it is (`core/src/infra-specs.ts`, `core/src/infra-specs/environments.ts`):
 
-| Part                                                 | Today                                                |
-| ---------------------------------------------------- | ---------------------------------------------------- |
-| `spaces/<slug>/environment.yaml`                     | "Infra does not apply environments yet."             |
-| `deploy.yaml` `spaces.<slug>.timezone`               | "Infra does not apply the timezone of a space yet."  |
-| One-time schedules and schedules that send to a chat | Not managed: apply leaves them as they are.          |
-| Linear channel mappings                              | Not managed: Ren has no Linear channel provider yet. |
+| Part                                                    | Today                                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `deploy.yaml` `spaces.<slug>.timezone`                  | "Infra does not apply the timezone of a space yet."                       |
+| A brain or hand that names a template with no image yet | A problem: apply does not wait for a build. Apply again once it is built. |
+| Archiving a template that a space outside the spec uses | A problem, as for any space whose brains or chats still run on it.        |
+| A renamed environment template                          | Archive and create: templates have no `renamedFrom`.                      |
+| One-time schedules and schedules that send to a chat    | Not managed: apply leaves them as they are.                               |
+| Linear channel mappings                                 | Not managed: Ren has no Linear channel provider yet.                      |
 
 Rules that hold for these parts:
 
-1. The spec contains no value that belongs to one deployment. `deploy.yaml` binds each slot of the spec to a real value, so two organizations can use one spec with different bindings.
-2. The environment of a space is its `environment.yaml` plus the union of the environment packages of the apps it uses. Two versions of the same package fail validation.
-3. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it. Channel mappings are the exception: a mapping has no archived state, so apply removes it the way unmapping a place in the app does, and the row is deleted.
+1. The spec contains no value that belongs to one deployment. `deploy.yaml` binds each slot of the spec to a real value, so two organizations can use one spec with different bindings. Machine providers are the exception: a template's config is specific to its provider, so the template and a space's `brain.provider` name the provider in the spec. A space that names no brain provider gets the deployment's, and `pull` omits it when it is the deployment's. A plan for a deployment that lacks a provider reports a problem.
+2. The spec wins. Apply overwrites a change that someone made in the UI; the plan shows that change first. Apply archives a row that the spec no longer declares and never hard-deletes it. Channel mappings are the exception: a mapping has no archived state, so apply removes it the way unmapping a place in the app does, and the row is deleted.
 
 ## 2. Listings and seeds
 
@@ -36,8 +37,9 @@ Not built. The registry holds listings: templates for apps and factories (a fact
 ## 3. Open
 
 1. **Installing a listing.** The command that copies a listing into a space, and what it writes.
-2. **Environment packages.** Rule 2 of section 1 merges app packages into the environment of a space. v2 provider config is specific to each provider: the Docker provider takes an `image` and has no package list. Decide: a provider gets a package capability (it builds an image), or an app states its packages and validation checks that the image has them.
-3. **Credential tiers.** A personal OAuth connection, for example a user's Gmail, is not a space value. Decide whether a binding can name a person's credential.
-4. **`pull` and bindings.** `pull` writes the spec. Decide whether it also writes `deploy.yaml` with the live channel ids and credential names. It never writes credential values.
-5. **Agents.** Visual character and voice, and the view order of agents in a space.
-6. **Read-only installs.** A rule that denies every tool that is not read-only needs a permission rule that can match the live classification of a tool.
+2. **Environment packages.** Nothing merges an app's `environment` (`Packages.Setup`) into a template. Ren runs it as setup steps on each chat's hand machine, after the machine starts from the space's template (`brain/src/hand/copies.ts`), and no check compares the packages of two apps. Provider config is specific to each provider: the Docker provider takes an `image` and has no package list. Decide: a template builds the packages of the space's apps into its image, or validation checks that the image has them.
+3. **Renaming an environment template.** A rename in the folder plans an archive and a create, which a space that still uses the template blocks. Decide whether templates get `renamedFrom` like spaces, agents and apps.
+4. **Credential tiers.** A personal OAuth connection, for example a user's Gmail, is not a space value. Decide whether a binding can name a person's credential.
+5. **`pull` and bindings.** `pull` writes the spec. Decide whether it also writes `deploy.yaml` with the live channel ids and credential names. It never writes credential values.
+6. **Agents.** Visual character and voice, and the view order of agents in a space.
+7. **Read-only installs.** A rule that denies every tool that is not read-only needs a permission rule that can match the live classification of a tool.
