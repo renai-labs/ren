@@ -23,7 +23,7 @@ Create a space when work needs different people, apps or secrets. For example, a
 <Steps>
 
 1. Select **New space** in **Spaces**, or the `+` next to **Spaces** in the sidebar.
-2. Type a name, and optionally a description and an icon.
+2. Type a name, and optionally a description.
 3. Select **Create space**. You join it as its first member. Add others on its **Members** page.
 
 </Steps>
@@ -32,13 +32,13 @@ Create a space when work needs different people, apps or secrets. For example, a
 
 **Spaces** lists the spaces of the organization: **Your spaces**, and **All spaces** for every shared space. To join one you are not in, see [Members](/docs/members/#space-members).
 
-The sidebar shows your pinned spaces. Pin up to 3 in **Sidebar spaces**, and open the others from **All spaces**.
+The sidebar shows your personal space and the spaces you pin. To pin a space, open `⋯` on it in **Spaces** and select **Pin**. You can pin up to 3.
 
 ## Overview
 
 The **Overview** page of a space shows:
 
-- **Needs you**: chats and tasks waiting for your answer or your review, and agents whose last run failed.
+- **Needs you**: tasks that wait for review, tasks whose agent's last run failed, and chats that are running now.
 - The number of chats, tasks done, pull requests merged and the cost, against the last period.
 - **Recently done**: the tasks that finished.
 
@@ -49,3 +49,11 @@ A space with a [factory](/docs/factory/) shows the factory's week instead: what 
 The space's **Settings** page changes its name, description, icon and **Default model**. New chats in the space start with that model.
 
 To archive a space, select **Archive space** in its `⋯` in the sidebar or in **Spaces**. Its members lose access.
+
+| Space               | Who can archive it      |
+| ------------------- | ----------------------- |
+| General Space       | Nobody                  |
+| A shared space      | Any member of the space |
+| Your personal space | Admins, not you         |
+
+All members of a space have the same rights in it.

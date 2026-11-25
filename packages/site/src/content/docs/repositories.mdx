@@ -5,7 +5,7 @@ description: Add the git repositories a space works in, describe what each one h
 summary: The code a space works on
 ---
 
-The **Repositories** page of a [space](/docs/spaces/) lists the git repositories its chats can read and change. Ren reads each repository's description to decide which one a request needs.
+The **Repositories** page of a [space](/docs/spaces/) lists the git repositories its chats read. Each chat gets a read-only copy of each repository. To change code, Ren clones the repository in the chat.
 
 ## Add a repository
 
@@ -13,12 +13,12 @@ The **Repositories** page of a [space](/docs/spaces/) lists the git repositories
 
 1. Open **Space → Repositories**, and select **Add repositories**.
 2. Search your GitHub repositories, or paste an address such as `https://github.com/renai-labs/ren`.
-3. Write a description of what it holds, such as "The Ren monorepo: the app, the server and the docs site." Ren uses only the description to pick a repository, so name what is in it.
+3. In the repository's `⋯`, select **Edit**, and write a description of what it holds, such as "The Ren monorepo: the app, the server and the docs site." Ren uses only the description to pick a repository.
 4. Optionally change the alias, the short name Ren uses for it, and the branch. Without a branch, Ren uses the repository's default branch.
 
 </Steps>
 
-To add a private repository, [connect GitHub](/docs/channels/github/#connect-github) for your organization and give the Ren app access to the repository. Ren checks that access when you add it. In chats, Ren uses your GitHub sign-in when you have one, and the Ren app's access otherwise.
+To add a private repository, [connect GitHub](/docs/channels/github/#connect-github) for your organization and give the Ren app access to the repository. Ren checks that access when you add it.
 
 ## Choose a repository for a chat
 
@@ -30,4 +30,19 @@ To say which repository every chat should use, write it in the space's [instruct
 
 In the repository's `⋯`, select **Edit** to change its description, alias or branch, or **Remove**. Chats in the space stop reading a removed repository.
 
-To see what Ren changed in a repository during a chat, open the chat's [Changes](/docs/chats/#changes) tab.
+To see what Ren changed in a clone during a chat, open the chat's [Changes](/docs/chats/#changes) tab.
+
+## GitHub access in chats
+
+| Space          | Ren uses             | Commits and pull requests show as |
+| -------------- | -------------------- | --------------------------------- |
+| Personal space | Your GitHub sign-in  | You                               |
+| Shared space   | The Ren app's access | `renagent[bot]`                   |
+
+Without your GitHub sign-in, your personal space also uses the Ren app's access.
+
+## Good to know
+
+- Ren refreshes the read-only copy at most once a day.
+- The copy has no git history, submodules, Git LFS files or symlinks, and holds at most 1 GB.
+- Each chat works in its own folder on the space's machine, so chats do not change each other's files.

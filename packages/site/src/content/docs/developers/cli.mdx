@@ -5,7 +5,7 @@ description: Install the Ren CLI, sign in from your terminal, and manage Ren fro
 summary: Install and sign in to the Ren CLI
 ---
 
-The Ren CLI, `ren`, manages spaces, tasks, agents, and settings from a terminal or a script. Coding agents with shell access can run it too. The CLI supports more operations than the [MCP server](/docs/developers/mcp/).
+The Ren CLI, `ren`, manages spaces, tasks, agents, and settings from a terminal or a script. Coding agents with shell access can run it too.
 
 ```sh
 curl -fsSL https://useren.ai/install | bash
@@ -78,6 +78,5 @@ In a terminal, the CLI prints tables. When you pipe it or pass `--output json`, 
 
 - The CLI cannot send chat messages yet. Send them from the web app or a channel.
 - Ren stores your sign-in in `~/.config/ren/credentials.json`. To sign out, run `ren logout`.
-- In CI, set `REN_TOKEN` instead of running `ren login`.
 - For every command and flag, run `ren --help` or `ren <command> --help`.
 - To update the CLI, run `ren upgrade`.

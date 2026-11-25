@@ -5,7 +5,7 @@ description: Mention @renagent on GitHub issues and pull requests, choose the sp
 summary: Ask Ren for work on GitHub
 ---
 
-Mention `@renagent` in an issue, a pull request, a comment or a review comment. Each issue or pull request is one chat.
+Mention `@renagent` in an issue, a pull request, a comment or a review comment. Each issue or pull request is one chat. Ren reacts 👀 when it starts.
 
 <Screenshot
   shot="channels/github-thread"
@@ -25,6 +25,17 @@ Mention `@renagent` in an issue, a pull request, a comment or a review comment. 
 </Steps>
 
 Then [link each repository to a space](/docs/channels/#link-a-place-to-a-space). To add a repository later, give the Ren app access to it on GitHub.
+
+Any member can connect GitHub. That person becomes the fallback user of private repositories that are not linked.
+
+## Mentions
+
+A mention counts in:
+
+- a new comment, or a comment that you edit to add `@renagent`,
+- the title or description of an issue or pull request, when you open, edit or reopen it.
+
+Ren ignores mentions from bots.
 
 ## Where Ren works
 
@@ -47,21 +58,21 @@ Ren matches the sender by the GitHub account they signed in to Ren with, or by t
 
 ## Review pull requests
 
-On a linked repository, turn on **Review pull requests when ready**. Ren reviews each pull request when it is opened, or when it is marked ready for review.
+On a linked repository, select `✎` and turn on **Review pull requests when ready**. Ren reviews each pull request when it is opened, or when it is marked ready for review. It does not review drafts, new pushes, or pull requests that a bot opened.
 
 ## Link pull requests to tasks
 
-Write a task's number, such as `REN-12`, or paste its link in an issue or a pull request. Ren links it to that [task](/docs/tasks/) and posts a card with the task's title and status.
+Write a task's number, such as `REN-12`, or paste its link in the title or description of an issue or a pull request, or in the branch name, such as `ren-12-fix-login`. Ren links it to that [task](/docs/tasks/) and posts a card with the task's title and status. Words such as `Fixes` and `Closes` change nothing.
 
 When a linked pull request is merged, Ren marks its open tasks as done.
 
 ## GitHub in chats
 
-Chats can use `git` and the `gh` command on GitHub when your organization connected GitHub, or when you signed in to Ren with GitHub. Ren uses the first of these tokens:
+Chats can use `git` and the `gh` command on GitHub when your organization connected GitHub, or when you signed in to Ren with GitHub.
 
-| Token                                          | Commits and pull requests show as |
-| ---------------------------------------------- | --------------------------------- |
-| Yours, when you signed in to Ren with GitHub   | You                               |
-| The Ren app's, for the repositories it can see | `renagent[bot]`                   |
+| Space          | Ren uses             | Commits and pull requests show as |
+| -------------- | -------------------- | --------------------------------- |
+| Personal space | Your GitHub sign-in  | You                               |
+| Shared space   | The Ren app's access | `renagent[bot]`                   |
 
 To have a space work on a repository, add it on the space's [Repositories](/docs/repositories/) page.

@@ -20,13 +20,13 @@ A channel links a [space](/docs/spaces/) to a place where your team already comm
 
 ## How a channel works
 
-When someone mentions Ren in a linked place, Ren starts a chat in the linked space, with that space's apps, repositories and instructions. It replies in the same thread, issue or pull request, and a reply there continues the chat.
+When someone mentions Ren in a linked place, Ren starts a chat in the linked space, with that space's apps, repositories and instructions. It replies in the same Slack thread, issue or pull request. A reply there that mentions Ren continues the chat.
 
 Each chat also shows in the app, so you can continue it there. Its header links back to the conversation.
 
 ## Link a place to a space
 
-First connect Slack or GitHub in **Settings → Channels**. Then link places in one of two ways.
+First connect Slack or GitHub in **Settings → Channels**. Any member can connect them. Then link places in one of two ways. The two ways start with a different fallback user (see [Who Ren runs as](#who-ren-runs-as)).
 
 ### From a space
 
@@ -64,7 +64,16 @@ Ren runs each message as the first of these that can work in the space. It uses 
 | 2     | The fallback user | The person in **Run unknown senders as**. Select `✎` on a linked place to change it.                        |
 | 3     | Nobody            | Ren does not run the message, and replies with the reason                                                   |
 
-Each channel's page lists where it has a fallback user by default.
+The fallback user of a new link depends on where you link it:
+
+| Linked from             | Slack channel or private repository | Public repository |
+| ----------------------- | ----------------------------------- | ----------------- |
+| **Space → Channels**    | You                                 | **Nobody**        |
+| **Settings → Channels** | **Nobody**                          | **Nobody**        |
+
+A fallback user lets anyone in the place work with that person's access. Select `✎` to check it after you link.
+
+Each channel's page lists the fallback user of places that are not linked.
 
 | Ren replies                                                      | Why                                                        | Fix                                                                |
 | ---------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
