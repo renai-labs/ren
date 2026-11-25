@@ -1,6 +1,8 @@
 id: no-css-comments
 language: css
 severity: error
+ignores:
+  - packages/app/src/components/file-preview/pdf-text-layer.css
 message: Remove the comment and make the stylesheet explain itself through names and structure.
 rule:
   kind: comment
