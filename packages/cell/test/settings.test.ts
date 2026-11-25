@@ -414,6 +414,29 @@ describe("settings in the cell", () => {
       expect(script.calls.at(0)?.body.model).toBe("stub-model")
     }),
   )
+  it.live("a card with an image model offers the image tool; a card with chat models only does not", () =>
+    Effect.gen(function* () {
+      const layers = TestSettings.layers()
+      const opened = yield* open(layers)
+      const offered = Effect.gen(function* () {
+        const script = stub.script()
+        yield* opened.turn(script)
+        return script.calls.find((call) => call.kind === "turn")?.tools ?? []
+      })
+      expect(yield* offered).not.toContain("experimental_image_generate")
+      yield* opened.pull(layers, {
+        models: opened.access.endpoints.map((endpoint) =>
+          Struct.evolve(endpoint, {
+            models: (models) => [
+              ...models,
+              { id: "gpt-image", type: "image" as const, protocol: "openai-images" as const, gateway: "ren/gpt-image" },
+            ],
+          }),
+        ),
+      })
+      expect(yield* offered).toContain("experimental_image_generate")
+    }),
+  )
   it.live("a pull during a step reaches the next step: the child and the queued message use the new config", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers({ ren: { instructions: "Parent config." } }))

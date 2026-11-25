@@ -31,9 +31,10 @@ const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.
 export const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    revision: Effect.succeed("test"),
+    forget: () => Effect.void,
     catalog: () => Effect.succeed(Models.catalog(configured)),
-    providers: Effect.succeed(Models.registrations(Models.catalog(configured))),
+    providers: () => Effect.succeed(Models.registrations(Models.catalog(configured))),
+    baseUrls: Effect.sync(() => Models.catalog(configured).endpoints.map((endpoint) => endpoint.baseUrl)),
     grant: () => Effect.succeed(configured),
   }),
 )

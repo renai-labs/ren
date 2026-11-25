@@ -1,6 +1,6 @@
 export * as LiveModel from "./live.js"
 
-import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
+import { LiteLLM } from "./litellm.js"
 import { Models } from "@ren/schema/models"
 import { Redacted, Result, Schema, Struct } from "effect"
 
@@ -151,15 +151,8 @@ export const select = async (selection: string | undefined) => {
 
 export const named = async (selected: Selected) => {
   const own = { access: access(selected), model: { endpointId: selected.providerId, modelId: selected.modelId } }
-  const response = await fetch(`${selected.baseUrl.replace(/\/v1\/?$/u, "")}/v1/catalog`, {
-    headers: { authorization: `Bearer ${Redacted.value(selected.apiKey)}` },
-  }).catch(() => undefined)
-  if (!response?.ok) return own
-  const catalog: Models.Catalog = {
-    endpoints: [
-      RenInferenceProvider.endpoint(Schema.decodeUnknownSync(Models.InferenceCatalog)(await response.json())),
-    ],
-  }
+  const catalog = await LiteLLM.listed(selected.baseUrl, Redacted.value(selected.apiKey)).catch(() => undefined)
+  if (!catalog) return own
   const model = catalog.endpoints
     .flatMap((endpoint) =>
       endpoint.models.flatMap((entry) =>

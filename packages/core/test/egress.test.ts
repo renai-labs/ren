@@ -104,8 +104,9 @@ const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
-    providers: Effect.succeed([]),
-    revision: Effect.succeed("test"),
+    providers: () => Effect.succeed([]),
+    baseUrls: Effect.succeed([]),
+    forget: () => Effect.void,
     grant: () =>
       Effect.succeed(
         Models.Access.make({

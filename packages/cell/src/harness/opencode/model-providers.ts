@@ -42,7 +42,8 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       // oxlint-disable-next-line ren/no-comments -- OpenCode calls a model with its own package before its provider's (core/src/model.ts:142).
       const own: { readonly canonical?: Provider.ID; readonly package: string } = protocols[model.protocol]
       editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
-        info.modelID = Model.ID.make(model.id)
+        // oxlint-disable-next-line ren/no-comments -- The gateway knows a model by its gateway name (`ren/<id>`, `<provider>/<model>`); the picker keeps Ren's id.
+        info.modelID = Model.ID.make(model.gateway ?? model.id)
         info.type = model.type
         info.package = own.package
         info.canonical = model.type !== "chat" ? undefined : own.canonical

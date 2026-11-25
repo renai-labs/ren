@@ -112,7 +112,7 @@ import { LinkHandler } from "./handlers/api/link.js"
 import { TaskActivityHandler } from "./handlers/api/task-activity.js"
 import { TaskCommentHandler } from "./handlers/api/task-comment.js"
 import { SyncHandler } from "./handlers/sync.js"
-import { UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
+import { InferenceHandler, UsageAuthenticationLayer, UsageHandler } from "./handlers/usage.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
@@ -292,6 +292,7 @@ export const layer = Layer.mergeAll(
     ),
     HttpApiBuilder.layer(UsageIngestApi).pipe(
       Layer.provide(UsageHandler),
+      Layer.provide(InferenceHandler),
       Layer.provide(UsageAuthenticationLayer),
       Layer.provide(Usage.layer),
     ),

@@ -140,8 +140,7 @@ export const layerProvider = Layer.effect(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Longer than the 15 minutes the egress uses its last answer while Ren is down, so a value it keeps has not expired (C37; ren-v1 INV-24).
-const renewBefore = Duration.minutes(20)
+const renewBefore = Models.renewBefore
 
 const ttlUntil = (expiresAtMillis: number, now: number) =>
   Duration.millis(Math.max(0, expiresAtMillis - Duration.toMillis(renewBefore) - now))
@@ -169,17 +168,15 @@ export const layerMinted = Layer.effect(
         workload: Workload.Info,
         organizationId: Schema.String,
         spaceId: Schema.NullOr(Space.ID),
-        revision: Schema.String,
       }),
     )
     const encodeKey = Schema.encodeSync(Key)
     const decodeKey = Schema.decodeSync(Key)
-    const keyOf = (scope: Credentials.Scope, revision = "") =>
+    const keyOf = (scope: Credentials.Scope) =>
       encodeKey({
         workload: scope.workload,
         organizationId: scope.organizationId,
         spaceId: Option.getOrNull(scope.spaceId),
-        revision,
       })
 
     const hostTokens = yield* Cache.makeWith(
@@ -229,30 +226,6 @@ export const layerMinted = Layer.effect(
       },
     )
 
-    const modelGrants = yield* Cache.makeWith(
-      (key: string) =>
-        Effect.gen(function* () {
-          const found = decodeKey(key)
-          const access =
-            found.workload.kind === "brain" && found.spaceId
-              ? yield* grants
-                  .grant(found.workload.id, Auth.OrganizationID.make(found.organizationId), found.spaceId)
-                  .pipe(Effect.retry({ schedule: Schedule.exponential(Duration.millis(500)), times: 3 }))
-              : { endpoints: [] }
-          return { access, mintedAt: yield* Clock.currentTimeMillis }
-        }),
-      {
-        capacity: 10_000,
-        timeToLive: (exit) => {
-          if (Exit.isFailure(exit)) return Duration.zero
-          const expiries = exit.value.access.endpoints.flatMap((endpoint) =>
-            endpoint.apiKey.expiresAt ? [endpoint.apiKey.expiresAt.epochMilliseconds] : [],
-          )
-          return expiries.length === 0 ? Duration.hours(1) : ttlUntil(Math.min(...expiries), exit.value.mintedAt)
-        },
-      },
-    )
-
     const DriveKey = Schema.fromJsonString(Schema.Struct({ organizationId: Auth.OrganizationID, spaceId: Space.ID }))
     const driveKeys = yield* Cache.makeWith(
       (key: string) =>
@@ -271,8 +244,13 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
-    const cachedGrant = (scope: Credentials.Scope) =>
-      Effect.flatMap(grants.revision, (revision) => Cache.get(modelGrants, keyOf(scope, revision)))
+    // oxlint-disable-next-line ren/no-comments -- Models keeps each brain's keys and each organization's list; asking it again is cheap.
+    const grantOf = (scope: Credentials.Scope) =>
+      scope.workload.kind === "brain" && Option.isSome(scope.spaceId)
+        ? grants
+            .grant(scope.workload.id, scope.organizationId, scope.spaceId.value)
+            .pipe(Effect.retry({ schedule: Schedule.exponential(Duration.millis(500)), times: 3 }))
+        : Effect.succeed(Models.Access.make({ endpoints: [] }))
 
     return Minted.of({
       candidates: Effect.fn("CredentialSource.minted.candidates")(function* (scope: Credentials.Scope) {
@@ -306,8 +284,8 @@ export const layerMinted = Layer.effect(
         })
         // oxlint-disable-next-line ren/no-comments -- A hand gets its space's drive, which its executor mounts, and none of the brain's own keys (REN, MODELS, INTEGRATIONS).
         if (scope.workload.kind !== "brain") return [...drive, ...gitHub]
-        const granted = yield* cachedGrant(scope).pipe(Effect.option)
-        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
+        const granted = yield* grantOf(scope).pipe(Effect.option)
+        const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.endpoints })
         const modelHosts = [
           ...new Set(
             endpoints.flatMap((endpoint) =>
@@ -484,12 +462,12 @@ export const layerMinted = Layer.effect(
             expiresAt: minted.expiresAt,
           } satisfies Sourced)
         }
-        const granted = yield* cachedGrant(scope).pipe(
+        const granted = yield* grantOf(scope).pipe(
           Effect.mapError(
             () => new Unavailable({ label: candidate.label, message: "Ren could not mint the model key." }),
           ),
         )
-        const endpoint = granted.access.endpoints.find((found) => candidate.id === `minted:${models}:${found.id}`)
+        const endpoint = granted.endpoints.find((found) => candidate.id === `minted:${models}:${found.id}`)
         return Option.map(Option.fromNullishOr(endpoint), (found): Sourced => ({
           value: { type: "key", value: found.apiKey.key },
           ...(found.apiKey.expiresAt && { expiresAt: found.apiKey.expiresAt }),
@@ -508,7 +486,13 @@ export const layerMinted = Layer.effect(
         }
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
         if (candidate.label === Integrations.label) return yield* Cache.invalidate(integrationTokens, keyOf(scope))
-        yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
+        if (scope.workload.kind === "brain" && Option.isSome(scope.spaceId))
+          yield* grants.forget(
+            scope.workload.id,
+            scope.organizationId,
+            scope.spaceId.value,
+            candidate.id.slice(`minted:${models}:`.length),
+          )
       }),
     })
   }),

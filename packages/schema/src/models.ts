@@ -45,6 +45,28 @@ export const Ref = Schema.Struct({ providerID: Schema.NonEmptyString, id: Schema
   identifier: "Models.Ref",
 })
 
+export const Runtime = Schema.Literals(["http", "claude"]).annotate({
+  identifier: "Models.Runtime",
+  description: "How a brain runs the model: an HTTP call from the harness, or the `claude` program.",
+})
+export type Runtime = typeof Runtime.Type
+
+export const Method = Schema.Literals(["key", "subscription"]).annotate({
+  identifier: "Models.Method",
+  description: "How a provider connects: the organization’s own key, or its members’ subscriptions.",
+})
+export type Method = typeof Method.Type
+
+const Usd = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0))
+
+export interface Price extends Schema.Schema.Type<typeof Price> {}
+export const Price = Schema.Struct({
+  input: Usd,
+  output: Usd,
+  cacheRead: Schema.optionalKey(Usd),
+  cacheWrite: Schema.optionalKey(Usd),
+}).annotate({ identifier: "Models.Price", description: "US dollars per 1M tokens, as models.dev states them." })
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
@@ -61,6 +83,12 @@ export const Info = Schema.Struct({
     Schema.Array(Modality).annotate({ description: "What the model reads. Absent means text only." }),
   ),
   protocol: ModelProtocol,
+  gateway: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The name the model gateway knows the model by. Absent: the id.",
+  }),
+  runtime: Schema.optionalKey(Runtime).annotate({ description: "Absent: `http`." }),
+  price: Schema.optionalKey(Price).annotate({ description: "Absent for a model the organization pays itself." }),
+  free: Schema.optionalKey(Schema.Boolean),
 }).annotate({ identifier: "Models.Info" })
 
 export interface Endpoint extends Schema.Schema.Type<typeof Endpoint> {}
@@ -72,6 +100,7 @@ export const Endpoint = Schema.Struct({
     Schema.makeFilter((url) => /^https?:$/u.test(URL.parse(url)?.protocol ?? "") || "an http or https URL"),
   ),
   headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  method: Schema.optionalKey(Method),
   apiKey: ApiKey,
   models: Schema.Array(Info),
 }).annotate({ identifier: "Models.Endpoint" })
@@ -103,8 +132,8 @@ export const catalog = (access: Access): Catalog => ({
 
 export interface Registration extends Schema.Schema.Type<typeof Registration> {}
 export const Registration = Schema.Struct({
-  ...Endpoint.mapFields(Struct.pick(["id", "name", "protocol", "baseUrl", "headers"])).fields,
-  catalog: Schema.Union([Schema.Literal("inference"), Endpoint.mapFields(Struct.pick(["models"]))]),
+  ...Endpoint.mapFields(Struct.pick(["id", "name", "protocol", "baseUrl", "headers", "method"])).fields,
+  catalog: Endpoint.mapFields(Struct.pick(["models"])),
 }).annotate({ identifier: "Models.Registration" })
 
 export const Providers = Schema.Array(Registration).check(uniqueIds).annotate({ identifier: "Models.Providers" })
@@ -115,12 +144,6 @@ export const registrations = (catalog: Catalog): Providers =>
     ...Struct.omit(endpoint, ["models"]),
     catalog: Struct.pick(endpoint, ["models"]),
   }))
-
-export interface InferenceCatalog extends Schema.Schema.Type<typeof InferenceCatalog> {}
-export const InferenceCatalog = Schema.Struct({
-  baseUrl: Endpoint.fields.baseUrl,
-  models: Schema.Array(Info),
-}).annotate({ identifier: "Models.InferenceCatalog" })
 
 export const lookup = (catalog: Catalog) => {
   const models = new Map(

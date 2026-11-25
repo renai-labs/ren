@@ -602,7 +602,7 @@ export const layer = Layer.effect(
                 .from(Database.Schema.agent_session)
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
-        const providers = yield* models.providers.pipe(
+        const providers = yield* models.providers(host.organizationId).pipe(
           Effect.tapError((error) =>
             Effect.logWarning("Provider registration is unavailable for a pull; the brain keeps its providers", error),
           ),

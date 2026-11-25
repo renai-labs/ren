@@ -24,6 +24,7 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { Hands } from "@ren/core/hands"
 import { ArtifactWorkerd } from "@ren/core/artifact-provider/workerd"
 import { Mailer } from "@ren/core/mailer"
+import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { RenInference } from "@ren/core/ren-inference"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Settings } from "@ren/core/settings"
@@ -104,6 +105,7 @@ const server = HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([
     ChaosModels.layer,
+    RenGateway.layerChanges,
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Hands.layer.pipe(
       Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),

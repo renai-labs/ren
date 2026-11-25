@@ -1,7 +1,8 @@
 export * as StandInInference from "./inference.js"
 
+import type { Models } from "@ren/schema/models"
 import { RenInference } from "@ren/schema/ren-inference"
-import { Option, Schema } from "effect"
+import { Option, Schema, Struct } from "effect"
 
 const Claims = Schema.Struct({
   org: Schema.String,
@@ -45,14 +46,43 @@ interface Request {
   readonly found: Key | undefined
 }
 
-// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, and the model catalog and brain keys of the stub model at `stub`.
-export const start = (stub: string) => {
+// oxlint-disable-next-line ren/no-comments -- A model of the Ren provider: its gateway name and price, unless the test gave its own.
+const asRenModel = (model: Models.Info): Models.Info =>
+  Struct.assign({ gateway: `ren/${model.id}`, price: { input: 1, output: 2 } }, model)
+
+// oxlint-disable-next-line ren/no-comments -- A stand-in for the Ren Inference Service: inference keys in memory, no connections, one provider (Ren) with the given models, and one key for every brain, for the model gateway at `stub`.
+export const start = (
+  stub: string,
+  options: { readonly models: () => ReadonlyArray<Models.Info>; readonly key?: string },
+) => {
   const keys: Key[] = []
+  // oxlint-disable-next-line ren/no-comments -- Every organization that asked for a brain key has Ren on, as in the gateway's LiteLLM teams.
+  const organizations = new Set<string>()
   const baseUrl = stub
   const notFound = () => Response.json({ error: "not found" }, { status: 404 })
   const routes: Readonly<Record<string, (input: Request) => Response | Promise<Response>>> = {
     "GET /v1/connections": () => Response.json([]),
-    "POST /v1/keys": () => Response.json({ key: "stub-key" }),
+    "POST /v1/keys": (input) => {
+      if (input.claims?.org) organizations.add(input.claims.org)
+      return Response.json({ key: options.key ?? "stub-key" })
+    },
+    "GET /v1/providers/ren/organizations": () => Response.json([...organizations]),
+    "GET /v1/providers": () =>
+      Response.json([
+        {
+          id: "ren",
+          name: "Ren",
+          mark: "ren",
+          payer: "ren",
+          protocol: "openai-chat",
+          auth: [{ _tag: "operator" }],
+          models: "shared",
+        },
+      ]),
+    "GET /v1/providers/ren/models": () => {
+      const listed = options.models().map(asRenModel)
+      return Response.json({ revision: Bun.hash(JSON.stringify(listed)).toString(16), models: listed })
+    },
     "GET /v1/inference-keys": (input) =>
       Response.json({
         baseUrl,

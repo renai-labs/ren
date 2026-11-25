@@ -11,10 +11,12 @@ import { Billing } from "../src/billing.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { EgressControl } from "../src/egress-control.js"
 import { GitHubApp } from "../src/github-app.js"
+import { ModelLists } from "../src/model-lists.js"
+import { ModelGateway } from "../src/model-gateway.js"
+import { RenGateway } from "../src/model-gateway/ren-gateway.js"
 import { Models } from "../src/models.js"
 import { PullRequest } from "../src/pull-request.js"
 import { RenInference } from "../src/ren-inference.js"
-import { RenInferenceProvider } from "../src/ren-inference/provider.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { Signer } from "../src/signer.js"
@@ -23,6 +25,7 @@ import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { TranscriptCodec } from "../src/transcript-codec.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
+import { TestModelGateway } from "./lib/model-gateway.js"
 import { Seed } from "./lib/seed.js"
 
 setDefaultTimeout(300_000)
@@ -37,20 +40,25 @@ const live = {
   organization: process.env.REN_INFERENCE_LIVE_ORG ?? "",
 }
 
-const models = Models.layer([RenInferenceProvider.make]).pipe(
+const config = ConfigProvider.layer(
+  ConfigProvider.fromUnknown({
+    REN_INFERENCE_URL: live.service,
+    REN_INFERENCE_BRAIN_URL: live.gateway,
+    REN_INFERENCE_KEYS: live.keys,
+  }),
+)
+
+const gateway = RenGateway.layerChanges.pipe(
   Layer.provideMerge(RenInference.layer),
   Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
-  Layer.provide(Testing.layer),
-  Layer.provide(
-    ConfigProvider.layer(
-      ConfigProvider.fromUnknown({
-        REN_INFERENCE_URL: live.service,
-        REN_INFERENCE_BRAIN_URL: live.gateway,
-        REN_INFERENCE_GATEWAY_KEY: live.gatewayKey,
-        REN_INFERENCE_KEYS: live.keys,
-      }),
-    ),
-  ),
+  Layer.provideMerge(Testing.layer),
+)
+
+const models = Models.layer.pipe(
+  Layer.provideMerge(ModelLists.layer),
+  Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
+  Layer.provideMerge(gateway),
+  Layer.provide(config),
   Layer.orDie,
 )
 
@@ -120,4 +128,14 @@ describe.skipIf(Object.values(live).some((value) => !value))("Ren Inference Serv
       })
     }),
   )
+})
+
+// oxlint-disable-next-line ren/no-comments -- Providers §6.1: the gateway keeps the rules of `grant` (one key per brain, also after Ren core restarts).
+describe.skipIf(Object.values(live).some((value) => !value))("RenGateway, live", () => {
+  TestModelGateway.contract("RenGateway", {
+    make: RenGateway.gateway,
+    run: (effect) =>
+      Effect.runPromise(effect.pipe(Effect.provide(gateway.pipe(Layer.provide(config), Layer.orDie)), Effect.scoped)),
+    organizationId: live.organization,
+  })
 })

@@ -16,8 +16,6 @@ import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { MemoryStore } from "./memory-store.js"
 import { ModelCatalog } from "./model-catalog.js"
-import { ModelDiscovery } from "./model-discovery.js"
-import { ModelRefresh } from "./model-refresh.js"
 import { RenAddress } from "./ren-address.js"
 
 const deletedKey = "ren:deleted"
@@ -49,7 +47,6 @@ export const layer = Layer.effect(
     const harness = yield* Harness.Service
     const credentialEnv = yield* CredentialEnv.Service
     const catalog = yield* ModelCatalog.Service
-    const keyFor = yield* ModelRefresh.Service
     const connections = yield* Effect.serviceOption(HandConnections.Service)
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void, push: Effect.void, tick: Effect.void })
@@ -132,7 +129,6 @@ export const layer = Layer.effect(
       yield* keys.save(reply.publicKeys)
       yield* credentialEnv.apply(reply.env)
       if (reply.providers) yield* catalog.register(reply.providers)
-      yield* ModelDiscovery.refresh(catalog, keyFor).pipe(Effect.provide(FetchHttpClient.layer))
       const settingsChanged = yield* settings.save(reply.layers, reply.chats)
       yield* Effect.scoped(
         Effect.gen(function* () {

@@ -1,6 +1,15 @@
+import { ModelGateway } from "@ren/schema/model-gateway"
 import { Usage } from "@ren/schema/usage"
 import { Context, type Option } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpApiMiddleware,
+  HttpApiSchema,
+  HttpApiSecurity,
+  OpenApi,
+} from "effect/http-api"
 import { ForbiddenError, InvalidRequestError, UnauthorizedError, UnavailableError } from "./errors.js"
 
 export class UsageKey extends Context.Service<UsageKey, { readonly onlySource: Option.Option<string> }>()(
@@ -40,8 +49,27 @@ const UsageGroup = HttpApiGroup.make("usage")
   .middleware(UsageAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "usage" }))
 
+const InferenceGroup = HttpApiGroup.make("inference")
+  .add(
+    HttpApiEndpoint.post("inference.changed", "/internal/inference/changed", {
+      payload: ModelGateway.Changed,
+      success: HttpApiSchema.NoContent,
+      error: [ForbiddenError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "inference.changed",
+        summary: "A provider’s models changed",
+        description:
+          "The model gateway says that a provider’s models changed: for one organization (a seat) or, without `organizationId`, for every organization (models.dev, Ren’s list). Ren tells the brains of those organizations to pull. Only the usage ingest key.",
+      }),
+    ),
+  )
+  .middleware(UsageAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "inference" }))
+
 export const UsageIngestApi = HttpApi.make("usage-ingest")
   .add(UsageGroup)
+  .add(InferenceGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Usage Ingest API",
