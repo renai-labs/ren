@@ -296,9 +296,22 @@ Not built in this work. It shows that the contract fits a self-hosted Ren; build
 
 ### 6.4 An organization's list
 
-Ren core builds it from the registry and the organization's settings. For each card that is on: the card's models minus the models switched off. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free. Ren core stores a hash per organization in `organization_model_list` and compares it to decide on a push.
+For each card that is on: the card's models minus the models switched off. Each model carries: gateway name, display name, card, method, runtime (`http` or `claude`), protocol, limits, efforts, input types, price, free.
 
-On `changed` for a card and all organizations, Ren core reads the card's models once and rebuilds the lists of the organizations that have the card on. Only organizations whose hash changed are notified (gate GR3).
+Ren core stores each card's models in `model_card`, one row per card: for every organization (a `shared` card) or for one organization (an `organization` card). It puts an organization's list together from these rows when a brain pulls, and adds each plug-in's `baseUrl` and `headers`. Every server instance reads the same rows.
+
+| Event                                          | Ren core reads                          | Ren core writes                                                 |
+| ---------------------------------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| `changed` for a `shared` card                  | the card's models, once                 | the card's row; the hash of every organization with the card on |
+| `changed` for one organization's card          | the card's models for that organization | that row; that organization's hash                              |
+| start                                          | the cards never read                    | their rows; the hash of each organization                       |
+| a pull finds no row (new organization or card) | the card's models                       | the row                                                         |
+
+Rules:
+
+1. A row is written only from a read that started later than the stored one (`read_at`). A server that read earlier never puts back older models.
+2. A change reads and writes only the card it names. A change for one card never rewrites another card's row.
+3. An organization's hash names its cards and their revisions. `organization_model_list` keeps it; a row whose hash changed notifies that organization's brains (gate GR3).
 
 ## 7. The brain
 
