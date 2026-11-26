@@ -35,6 +35,8 @@ export const plugin = Effect.gen(function* () {
     id,
     baseUrl: `${brainRoot}/v1`,
     headers: {},
+    // oxlint-disable-next-line ren/no-comments -- LiteLLM reads a virtual key from this header when Authorization carries another login.
+    keyHeader: "x-litellm-api-key",
     providers: inference.providers.pipe(Effect.mapError(unavailable)),
     models: (provider, organizationId) => inference.models(provider, organizationId).pipe(Effect.mapError(unavailable)),
     grant: (input) =>

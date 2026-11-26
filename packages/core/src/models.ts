@@ -110,6 +110,7 @@ export const layer = Layer.effect(
               ...(entry.method && { method: entry.method }),
               baseUrl: plugin.baseUrl,
               ...(Object.keys(plugin.headers).length > 0 && { headers: plugin.headers }),
+              ...(plugin.keyHeader && { keyHeader: plugin.keyHeader }),
               models: entry.models,
             },
           ],

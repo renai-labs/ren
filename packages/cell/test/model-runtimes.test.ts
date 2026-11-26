@@ -45,6 +45,7 @@ const endpoints = (): ReadonlyArray<Models.Endpoint> => [
     protocol: "openai-chat",
     baseUrl: stub.url,
     apiKey: Shared.apiKey("stub-key"),
+    keyHeader: "x-gateway-key",
     id: "ren",
     models: [
       {
@@ -118,7 +119,8 @@ it.live(
       expect({
         path: call.path,
         model: call.body.model,
-        key: call.headers.get("x-litellm-api-key"),
+        key: call.headers.get("x-gateway-key"),
+        litellm: call.headers.get("x-litellm-api-key"),
         authorization: call.authorization,
         client: call.headers.get("user-agent")?.split("/")[0],
         session: call.headers.get(Usage.headers.session),
@@ -128,6 +130,7 @@ it.live(
         path: "/v1/messages",
         model: "ren/anthropic/stub-claude",
         key: "Bearer stub-key",
+        litellm: null,
         authorization: "Bearer stub-key",
         client: "claude-cli",
         session: chat.sessionId,

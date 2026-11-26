@@ -69,7 +69,9 @@ const widen =
 // oxlint-disable-next-line ren/no-comments -- The env of one `claude` process (providers §7.3): the inference service, the chat's usage headers, no calls the turn does not need, and Ren's key as the login, which puts `claude` in subscription mode; the inference service puts the seat's login in. Behind the egress the key is `ren:MODELS`, which the egress fills in only for the inference service, so a call of `claude` to any other host is refused.
 const connectionOf = (options: Record<string, unknown>, headers: Record<string, string | undefined> = {}) => {
   const key = Predicate.isString(options.apiKey) ? options.apiKey : undefined
+  const keyHeader = Predicate.isString(options.keyHeader) ? options.keyHeader : undefined
   const own = Predicate.isObject(options.headers) ? options.headers : {}
+  const keyed: Record<string, string> = key && keyHeader ? { [keyHeader]: `Bearer ${key}` } : {}
   return {
     ...ClaudeQueryOptions.connectionEnv({
       // oxlint-disable-next-line ren/no-comments -- Ren's base URL ends in `/v1`; `claude` adds `/v1/messages` itself.
@@ -77,8 +79,12 @@ const connectionOf = (options: Record<string, unknown>, headers: Record<string, 
         ...(Predicate.isString(options.baseURL) && { baseURL: options.baseURL.replace(/\/v1\/?$/u, "") }),
       },
       headers: {
-        ...Object.fromEntries(Object.entries(own).filter((entry) => Predicate.isString(entry.at(1)))),
-        ...(key && { "x-litellm-api-key": `Bearer ${key}` }),
+        ...Object.fromEntries(
+          Object.entries(own).flatMap(([name, value]): Array<[string, string]> =>
+            Predicate.isString(value) ? [[name, value]] : [],
+          ),
+        ),
+        ...keyed,
         ...Object.fromEntries(chatHeaders.flatMap((name) => (headers[name] ? [[name, headers[name]]] : []))),
       },
     }),

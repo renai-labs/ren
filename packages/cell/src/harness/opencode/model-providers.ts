@@ -41,7 +41,12 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       provider.activation = "enabled"
       if (endpoint.name) provider.name = endpoint.name
       provider.package = protocol.package
-      provider.settings = { ...provider.settings, baseURL: endpoint.baseUrl, transport: "http" }
+      provider.settings = {
+        ...provider.settings,
+        baseURL: endpoint.baseUrl,
+        transport: "http",
+        ...(endpoint.keyHeader && { keyHeader: endpoint.keyHeader }),
+      }
       if (protocol.canonical) provider.canonical = protocol.canonical
       if (endpoint.headers) provider.headers = { ...provider.headers, ...endpoint.headers }
     })

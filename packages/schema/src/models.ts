@@ -129,6 +129,8 @@ export const Endpoint = Schema.Struct({
     Schema.makeFilter((url) => /^https?:$/u.test(URL.parse(url)?.protocol ?? "") || "an http or https URL"),
   ),
   headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  // oxlint-disable-next-line ren/no-comments -- D4: the header the endpoint reads a brain's key from (`Bearer <key>`) when a program sends its own login in Authorization, as the `claude` runtime does. The inference plugin names it.
+  keyHeader: Schema.optionalKey(Schema.NonEmptyString),
   method: Schema.optionalKey(Method),
   apiKey: ApiKey,
   models: Schema.Array(Info),

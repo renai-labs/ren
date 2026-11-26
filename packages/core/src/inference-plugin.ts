@@ -59,6 +59,8 @@ export interface Plugin {
   readonly id: string
   readonly baseUrl: string
   readonly headers: Readonly<Record<string, string>>
+  // oxlint-disable-next-line ren/no-comments -- D4: the header the gateway reads a brain's key from when a program sends its own login in Authorization (the `claude` runtime).
+  readonly keyHeader?: string
   readonly providers: Effect.Effect<ReadonlyArray<Provider>, Unavailable>
   // oxlint-disable-next-line ren/no-comments -- A shared provider's models are asked for without an organization.
   readonly models: (provider: string, organizationId?: Auth.OrganizationID) => Effect.Effect<Listed, Unavailable>
