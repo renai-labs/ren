@@ -394,10 +394,10 @@ function Subscriptions(props: {
 
 function ProviderControls(props: { provider: ProviderInfo }) {
   const { api } = RouterContext.useRouterContext()
-  const update = useMutation(api.provider.update.mutationOptions())
   const provider = props.provider
+  // oxlint-disable-next-line ren/no-comments -- F4: changes of one provider go out one after another, in click order (a mutation scope), so a quick Off and On ends On; the switch shows the last click at once.
+  const update = useMutation({ ...api.provider.update.mutationOptions(), scope: { id: `provider-${provider.id}` } })
   const failed = (error: unknown) => toast.error("Couldn’t change the provider", { description: errorMessage(error) })
-  // oxlint-disable-next-line ren/no-comments -- F4: the switch shows the change at once and takes one change at a time, so a quick Off and On ends On.
   const enabled = update.isPending ? (update.variables.enabled ?? provider.enabled) : provider.enabled
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -406,7 +406,7 @@ function ProviderControls(props: { provider: ProviderInfo }) {
         <Switch
           aria-label={`${provider.name} on`}
           checked={enabled}
-          disabled={!provider.canManage || update.isPending}
+          disabled={!provider.canManage}
           onCheckedChange={(next) => update.mutate({ id: provider.id, enabled: next }, { onError: failed })}
         />
         {enabled ? "On" : "Off"}
