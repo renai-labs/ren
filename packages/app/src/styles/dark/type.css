@@ -7,7 +7,10 @@
 /* 1. Font, weights and scale. Tailwind reads --text-* and --font-weight-* through var(), so this moves
  *    every text-sm/text-base and font-normal/medium/semibold in the app. Rem keeps the user's UI size. */
 html.dark {
-  --user-font-sans: "Inter Variable" !important;
+  /* The theme reads this as `var(--user-font-sans,) "SF Pro Variable", …`, so the value must end with a comma.
+     Without it the whole font-family is invalid and the browser falls back to a serif. */
+  /* prettier-ignore */
+  --user-font-sans: "Inter Variable", !important;
   --font-weight-normal: 450;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
