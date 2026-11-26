@@ -87,6 +87,9 @@ export const Model = Schema.Struct({
   released: Schema.optional(Schema.String).annotate({ description: "The release date, such as `2026-10-02`." }),
   price: Schema.optional(Models.Price).annotate({ description: "Absent for a model the organization pays itself." }),
   free: Schema.Boolean,
+  plans: Schema.optional(Schema.Array(Schema.String)).annotate({
+    description: "A subscription model: the organization’s plans that serve it, such as `Max`.",
+  }),
   enabled: Schema.Boolean,
 }).annotate({ identifier: "Provider.Model" })
 

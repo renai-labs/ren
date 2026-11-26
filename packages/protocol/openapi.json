@@ -12356,6 +12356,206 @@
         }
       }
     },
+    "/ren-inference/sign-in": {
+      "post": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.signIn.start",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RenInference.SignIn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.SignIn"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the vendor’s sign-in address. The member opens it in a new tab, signs in, and pastes what the vendor shows to `ren-inference.signIn.complete`. Any member connects their own subscription.",
+        "summary": "Start signing in with a subscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.SignInInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ren-inference/sign-in/{id}": {
+      "post": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.signIn.complete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Store the member’s subscription from what the vendor’s sign-in showed, such as a code or the address it ended on. Only the member who started the sign-in can finish it.",
+        "summary": "Finish signing in with a subscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.SignInCode"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/ren-inference/connections": {
       "get": {
         "tags": ["ren-inference"],
@@ -24149,6 +24349,20 @@
           "free": {
             "type": "boolean"
           },
+          "plans": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A subscription model: the organization’s plans that serve it, such as `Max`."
+          },
           "enabled": {
             "type": "boolean"
           }
@@ -25224,6 +25438,58 @@
           }
         },
         "required": ["label"],
+        "additionalProperties": false
+      },
+      "RenInference.SignIn": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "description": "Open this address in a new tab; the vendor shows what to paste back."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "After this time, start again."
+          },
+          "paste": {
+            "type": "string",
+            "description": "What to paste back after signing in, in the sign-in page’s words."
+          }
+        },
+        "required": ["id", "url", "expiresAt", "paste"],
+        "additionalProperties": false
+      },
+      "RenInference.SignInCode": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "What the vendor’s sign-in showed, such as a code or the address it ended on."
+          }
+        },
+        "required": ["provider", "code"],
+        "additionalProperties": false
+      },
+      "RenInference.SignInInput": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The provider whose subscription the member signs in with."
+          }
+        },
+        "required": ["provider"],
         "additionalProperties": false
       },
       "RenInference.Tone": {

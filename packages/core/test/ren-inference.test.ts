@@ -38,7 +38,8 @@ const service = Bun.serve({
     const token = request.headers.get("authorization")?.replace(/^Bearer /u, "") ?? ""
     const claims = await Effect.runPromise(Signature.verify(publicKeys, Claims, token))
     if (Option.isNone(claims)) return new Response(null, { status: 401 })
-    const body: unknown = request.method === "GET" || request.method === "DELETE" ? null : await request.json()
+    const text = await request.text()
+    const body: unknown = text ? JSON.parse(text) : null
     const path = new URL(request.url).pathname
     seen.push({ claims: claims.value, body, path, method: request.method })
     return (
@@ -207,6 +208,36 @@ const call = Effect.fnUntraced(function* (input: {
         : { input_tokens: 100, output_tokens: 10, cache_write_tokens: 4, cache_write_1h_tokens: 1 }),
     },
   })
+})
+
+describe("subscription sign-in (Providers §5.1)", () => {
+  it.live(
+    "a member signs in from the dialog: the address comes from the service, and their code goes to it as theirs",
+    () =>
+      Effect.gen(function* () {
+        const inference = yield* RenInference.Service
+        const org = yield* keyOrg()
+        seen.length = 0
+        replies.set("POST /v1/providers/anthropic/sign-in", () =>
+          Response.json({
+            id: "ses_1",
+            url: "https://claude.com/cai/oauth/authorize?x=1",
+            expiresAt: "2026-11-26T10:00:00Z",
+            paste: "Paste the code Claude shows after you sign in.",
+          }),
+        )
+        replies.set("POST /v1/providers/anthropic/sign-in/ses_1", () => new Response(null, { status: 204 }))
+
+        const started = yield* inference.signIn(org.ada.actor, { provider: "anthropic" })
+        yield* inference.completeSignIn(org.ada.actor, started.id, { provider: "anthropic", code: "code-1#state" })
+
+        expect(started.url).toBe("https://claude.com/cai/oauth/authorize?x=1")
+        expect(seen.map((each) => [each.method, each.path, each.body, each.claims.member])).toEqual([
+          ["POST", "/v1/providers/anthropic/sign-in", null, org.ada.memberId],
+          ["POST", "/v1/providers/anthropic/sign-in/ses_1", { code: "code-1#state" }, org.ada.memberId],
+        ])
+      }),
+  )
 })
 
 describe("inference keys", () => {

@@ -92,6 +92,9 @@ export const Info = Schema.Struct({
   released: Schema.optionalKey(Schema.String).annotate({
     description: "The release date on models.dev, such as `2026-10-02`.",
   }),
+  plans: Schema.optionalKey(Schema.Array(Schema.String)).annotate({
+    description: "A subscription model: the organization’s plans that serve it, such as `Max`.",
+  }),
   client: Schema.optionalKey(
     Schema.Struct({
       effortUpdates: Schema.optionalKey(Schema.Boolean).annotate({

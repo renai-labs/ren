@@ -24,6 +24,35 @@ export const RenInferenceGroup = HttpApiGroup.make("ren-inference")
     ),
   )
   .add(
+    HttpApiEndpoint.post("ren-inference.signIn.start", "/ren-inference/sign-in", {
+      payload: RenInference.SignInInput,
+      success: RenInference.SignIn,
+      error: errors,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "ren-inference.signIn.start",
+        summary: "Start signing in with a subscription",
+        description:
+          "Return the vendor’s sign-in address. The member opens it in a new tab, signs in, and pastes what the vendor shows to `ren-inference.signIn.complete`. Any member connects their own subscription.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("ren-inference.signIn.complete", "/ren-inference/sign-in/:id", {
+      params: Schema.Struct({ id: Schema.String }),
+      payload: RenInference.SignInCode,
+      success: HttpApiSchema.NoContent,
+      error: errors,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "ren-inference.signIn.complete",
+        summary: "Finish signing in with a subscription",
+        description:
+          "Store the member’s subscription from what the vendor’s sign-in showed, such as a code or the address it ended on. Only the member who started the sign-in can finish it.",
+      }),
+    ),
+  )
+  .add(
     HttpApiEndpoint.get("ren-inference.connection.list", "/ren-inference/connections", {
       success: Schema.Array(RenInference.Connection),
       error: errors,

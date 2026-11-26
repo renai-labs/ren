@@ -146,6 +146,8 @@ import type {
   OauthAppUpdateInput,
   OauthAppArchiveInput,
   RenInferenceConnectInput,
+  RenInferenceSignInStartInput,
+  RenInferenceSignInCompleteInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
   RenInferenceKeyUsageInput,
@@ -1578,6 +1580,25 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["ren-inference", "connect"] as const,
             mutationFn: (input: RenInferenceConnectInput) => client["ren-inference"]["connect"](input),
           }),
+      },
+      signIn: {
+        start: {
+          mutationKey: () => ["ren-inference", "signIn", "start"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "signIn", "start"] as const,
+              mutationFn: (input: RenInferenceSignInStartInput) => client["ren-inference"]["signIn"]["start"](input),
+            }),
+        },
+        complete: {
+          mutationKey: () => ["ren-inference", "signIn", "complete"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "signIn", "complete"] as const,
+              mutationFn: (input: RenInferenceSignInCompleteInput) =>
+                client["ren-inference"]["signIn"]["complete"](input),
+            }),
+        },
       },
       connection: {
         list: {

@@ -1,22 +1,20 @@
 import { useState } from "react"
-import type { InferencePluginField, ProviderTestResult } from "@ren/client"
+import type { InferencePluginField, ProviderInfo, RenInferenceSignIn } from "@ren/client"
 import { useMutation } from "@tanstack/react-query"
-import { IconCircleCheck } from "@tabler/icons-react"
+import { IconExternalLink } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@ren/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ren/ui/field"
 import { Input } from "@ren/ui/input"
 import { Spinner } from "@ren/ui/spinner"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
 import { toast } from "@ren/ui/sonner"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Platform } from "../../platform/platform.js"
 
-export interface Connecting {
-  readonly id: string
-  readonly name: string
-  readonly fields: ReadonlyArray<InferencePluginField>
-}
+export type Method = "subscription" | "key"
 
 function FieldInput(props: {
   field: InferencePluginField
@@ -52,16 +50,11 @@ function FieldInput(props: {
   )
 }
 
-export function ConnectDialog(props: {
-  provider: Connecting
-  onOpenChange: (open: boolean) => void
-  onConnected: () => void
-}) {
+function KeyForm(props: { provider: ProviderInfo; onConnected: () => void; onCancel: () => void }) {
   const { api } = RouterContext.useRouterContext()
   const [values, setValues] = useState<Readonly<Record<string, string>>>({})
   const [missing, setMissing] = useState<ReadonlyArray<string>>([])
-  const [tested, setTested] = useState<ProviderTestResult>()
-  const test = useMutation(api.provider.test.mutationOptions())
+  const [failure, setFailure] = useState<string>()
   const save = useMutation(api.provider.key.save.mutationOptions())
   const provider = props.provider
   const filled = () => {
@@ -73,79 +66,214 @@ export function ConnectDialog(props: {
     id: provider.id,
     fields: Object.fromEntries(provider.fields.map((field) => [field.name, values[field.name]?.trim() ?? ""])),
   })
-  const failure = tested && !tested.ok ? (tested.message ?? "The provider refused these details.") : undefined
+  return (
+    <form
+      className="contents"
+      aria-label={`Add a ${provider.name} key`}
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!filled()) return
+        save.mutate(input(), {
+          onSuccess: () => {
+            toast.success(`${provider.name} key saved`)
+            props.onConnected()
+          },
+          onError: (error) => setFailure(errorMessage(error)),
+        })
+      }}
+    >
+      <FieldGroup>
+        <p className="text-sm text-muted-foreground">
+          {provider.name} bills your organization per token. Ren checks the key with {provider.name}, passes it on once
+          and keeps only its last 4 characters.
+        </p>
+        {provider.fields.map((field) => (
+          <FieldInput
+            key={field.name}
+            field={field}
+            value={values[field.name] ?? ""}
+            invalid={missing.includes(field.name)}
+            disabled={save.isPending}
+            onChange={(value) => {
+              setValues((previous) => ({ ...previous, [field.name]: value }))
+              setMissing((previous) => previous.filter((name) => name !== field.name))
+              setFailure(undefined)
+            }}
+          />
+        ))}
+        {failure ? <FieldError>{failure}</FieldError> : null}
+      </FieldGroup>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? <Spinner data-icon="inline-start" /> : null}
+          {save.isPending ? "Checking the key…" : "Save key"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- Step 1: ask the inference service for the vendor's sign-in address and open it in a new tab.
+function SignInStep(props: {
+  provider: ProviderInfo
+  started: boolean
+  onStarted: (signIn: RenInferenceSignIn) => void
+  onFailed: (message: string) => void
+}) {
+  const { api } = RouterContext.useRouterContext()
+  const platform = Platform.usePlatform()
+  const start = useMutation(api["ren-inference"].signIn.start.mutationOptions())
+  const provider = props.provider
+  return (
+    <Field>
+      <FieldLabel>1. Sign in</FieldLabel>
+      <div>
+        <Button
+          type="button"
+          variant={props.started ? "outline" : "default"}
+          disabled={start.isPending}
+          onClick={() =>
+            start.mutate(
+              { provider: provider.id },
+              {
+                onSuccess: (started) => {
+                  props.onStarted(started)
+                  platform.openExternal(started.url)
+                },
+                onError: (failed) => props.onFailed(errorMessage(failed)),
+              },
+            )
+          }
+        >
+          {start.isPending ? <Spinner data-icon="inline-start" /> : <IconExternalLink data-icon="inline-start" />}
+          {props.started ? "Open the sign-in again" : (provider.signIn ?? `Sign in to ${provider.name}`)}
+        </Button>
+      </div>
+      <FieldDescription>Opens in a new tab.</FieldDescription>
+    </Field>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- Providers §5.1: open the vendor's sign-in in a new tab, then paste back what it shows. The inference service says what that is, so the app names no vendor.
+function SubscriptionForm(props: { provider: ProviderInfo; onConnected: () => void; onCancel: () => void }) {
+  const { api } = RouterContext.useRouterContext()
+  const complete = useMutation(api["ren-inference"].signIn.complete.mutationOptions())
+  const [signIn, setSignIn] = useState<RenInferenceSignIn>()
+  const [code, setCode] = useState("")
+  const [error, setError] = useState<string>()
+  const provider = props.provider
+  return (
+    <form
+      className="contents"
+      aria-label={`Connect a ${provider.name} subscription`}
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!signIn) return
+        if (!code.trim()) return setError("Paste what the sign-in showed.")
+        complete.mutate(
+          { id: signIn.id, provider: provider.id, code: code.trim() },
+          {
+            onSuccess: () => {
+              toast.success(`${provider.name} subscription connected`)
+              props.onConnected()
+            },
+            onError: (failed) => setError(errorMessage(failed)),
+          },
+        )
+      }}
+    >
+      <FieldGroup>
+        <p className="text-sm text-muted-foreground">
+          Each member signs in with their own {provider.name} plan. Chats use the plan’s limits, with no per-token bill.
+        </p>
+        <SignInStep
+          provider={provider}
+          started={signIn !== undefined}
+          onStarted={(started) => {
+            setSignIn(started)
+            setError(undefined)
+          }}
+          onFailed={setError}
+        />
+        <Field data-invalid={error ? true : undefined}>
+          <FieldLabel htmlFor="provider-sign-in-code">2. Paste it here</FieldLabel>
+          <Input
+            id="provider-sign-in-code"
+            value={code}
+            autoComplete="off"
+            disabled={!signIn || complete.isPending}
+            aria-invalid={error ? true : undefined}
+            onChange={(event) => {
+              setCode(event.currentTarget.value)
+              setError(undefined)
+            }}
+          />
+          <FieldDescription>{signIn?.paste ?? "After you sign in, paste what the sign-in shows."}</FieldDescription>
+          {error ? <FieldError>{error}</FieldError> : null}
+        </Field>
+      </FieldGroup>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!signIn || complete.isPending}>
+          {complete.isPending ? <Spinner data-icon="inline-start" /> : null}
+          Connect subscription
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- Connect a provider by a subscription or a key. Any member connects their own subscription; only admins add a key. With `choose`, an admin's first connection also becomes what chats use.
+export function ConnectDialog(props: {
+  provider: ProviderInfo
+  method?: Method
+  choose?: boolean
+  onOpenChange: (open: boolean) => void
+  onConnected: () => void
+}) {
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.provider.update.mutationOptions())
+  const provider = props.provider
+  const offered = [
+    ...(provider.methods.includes("subscription") ? (["subscription"] as const) : []),
+    ...(provider.canManage && provider.fields.length > 0 ? (["key"] as const) : []),
+  ]
+  const [method, setMethod] = useState<Method>(
+    props.method && offered.includes(props.method) ? props.method : (offered.at(0) ?? "key"),
+  )
+  const connected = () => {
+    if (props.choose && provider.canManage && provider.methods.length > 1 && provider.method !== method)
+      update.mutate({ id: provider.id, method })
+    props.onConnected()
+  }
+  const cancel = () => props.onOpenChange(false)
   return (
     <Dialog open onOpenChange={props.onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Connect {provider.name}</DialogTitle>
           <DialogDescription>
-            Ren passes these on to the provider once and keeps only the last 4 characters.
+            {offered.length > 1 ? "Choose how chats reach its models." : "Connect it to use its models in chats."}
           </DialogDescription>
         </DialogHeader>
-        <form
-          className="contents"
-          aria-label={`Connect ${provider.name}`}
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!filled()) return
-            save.mutate(input(), {
-              onSuccess: () => {
-                toast.success(`${provider.name} connected`)
-                props.onConnected()
-              },
-              onError: (error) => setTested({ ok: false, message: errorMessage(error) }),
-            })
-          }}
-        >
-          <FieldGroup>
-            {provider.fields.map((field) => (
-              <FieldInput
-                key={field.name}
-                field={field}
-                value={values[field.name] ?? ""}
-                invalid={missing.includes(field.name)}
-                disabled={test.isPending}
-                onChange={(value) => {
-                  setValues((previous) => ({ ...previous, [field.name]: value }))
-                  setMissing((previous) => previous.filter((name) => name !== field.name))
-                  setTested(undefined)
-                }}
-              />
-            ))}
-            {failure ? <FieldError>{failure}</FieldError> : null}
-            {tested?.ok ? (
-              <output className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <IconCircleCheck className="size-4" />
-                Connection works
-              </output>
-            ) : null}
-          </FieldGroup>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={test.isPending || save.isPending}
-              onClick={() => {
-                if (!filled()) return
-                test.mutate(input(), {
-                  onSuccess: setTested,
-                  onError: (error) => setTested({ ok: false, message: errorMessage(error) }),
-                })
-              }}
-            >
-              {test.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Test connection
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => props.onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={save.isPending || test.isPending}>
-              {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Save
-            </Button>
-          </DialogFooter>
-        </form>
+        {offered.length > 1 ? (
+          <Tabs value={method} onValueChange={(value) => setMethod(value === "key" ? "key" : "subscription")}>
+            <TabsList aria-label="Connect by" className="w-full">
+              <TabsTrigger value="subscription">Subscription</TabsTrigger>
+              <TabsTrigger value="key">API key</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
+        {method === "subscription" ? (
+          <SubscriptionForm provider={provider} onConnected={connected} onCancel={cancel} />
+        ) : (
+          <KeyForm provider={provider} onConnected={connected} onCancel={cancel} />
+        )}
       </DialogContent>
     </Dialog>
   )

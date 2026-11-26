@@ -53,6 +53,30 @@ export const ConnectResult = Schema.Struct({
   url: Schema.String.annotate({ description: "The sign-in page. Send the browser here." }),
 }).annotate({ identifier: "RenInference.ConnectResult" })
 
+export interface SignInInput extends Schema.Schema.Type<typeof SignInInput> {}
+export const SignInInput = Schema.Struct({
+  provider: Schema.NonEmptyString.annotate({
+    description: "The provider whose subscription the member signs in with.",
+  }),
+}).annotate({ identifier: "RenInference.SignInInput" })
+
+export interface SignIn extends Schema.Schema.Type<typeof SignIn> {}
+export const SignIn = Schema.Struct({
+  id: Schema.NonEmptyString,
+  url: Schema.String.annotate({ description: "Open this address in a new tab; the vendor shows what to paste back." }),
+  expiresAt: Schema.String.annotate({ description: "After this time, start again." }),
+  paste: Schema.String.annotate({ description: "What to paste back after signing in, in the sign-in page’s words." }),
+}).annotate({ identifier: "RenInference.SignIn" })
+
+export interface SignInCode extends Schema.Schema.Type<typeof SignInCode> {}
+export const SignInCode = Schema.Struct({
+  provider: Schema.NonEmptyString,
+  code: Schema.String.check(
+    Schema.isMinLength(1, { message: "Paste what the sign-in showed." }),
+    Schema.isMaxLength(4096),
+  ).annotate({ description: "What the vendor’s sign-in showed, such as a code or the address it ended on." }),
+}).annotate({ identifier: "RenInference.SignInCode" })
+
 export interface RenameInput extends Schema.Schema.Type<typeof RenameInput> {}
 export const RenameInput = Schema.Struct({
   label: Schema.String.check(

@@ -57,6 +57,13 @@ export interface Interface {
     actor: Actor.Info,
     input: RenInference.ConnectInput,
   ) => Effect.Effect<RenInference.ConnectResult, Failure>
+  // oxlint-disable-next-line ren/no-comments -- Providers §5.1: a member signs in with their own subscription from the Connect dialog: open the address, then paste what the vendor shows.
+  readonly signIn: (actor: Actor.Info, input: RenInference.SignInInput) => Effect.Effect<RenInference.SignIn, Failure>
+  readonly completeSignIn: (
+    actor: Actor.Info,
+    id: string,
+    input: RenInference.SignInCode,
+  ) => Effect.Effect<void, Failure>
   readonly list: (actor: Actor.Info) => Effect.Effect<ReadonlyArray<RenInference.Connection>, Failure>
   readonly rename: (
     actor: Actor.Info,
@@ -372,6 +379,26 @@ export const layer = Layer.effect(
         if (input.connectionId) yield* manageable(actor, input.connectionId)
         return yield* call(yield* personOf(actor), "POST", "/v1/connect", RenInference.ConnectResult, input)
       }),
+      signIn: Effect.fn("RenInference.signIn")(function* (actor, input) {
+        yield* forbidden(actor, RenInferencePolicy.actions.connect, Access.organization)
+        return yield* call(
+          yield* personOf(actor),
+          "POST",
+          `${providerPath(input.provider)}/sign-in`,
+          RenInference.SignIn,
+        )
+      }),
+      completeSignIn: Effect.fn("RenInference.completeSignIn")(function* (actor, id, input) {
+        yield* forbidden(actor, RenInferencePolicy.actions.connect, Access.organization)
+        yield* send(
+          yield* personOf(actor),
+          "POST",
+          `${providerPath(input.provider)}/sign-in/${encodeURIComponent(id)}`,
+          {
+            code: input.code,
+          },
+        )
+      }),
       list: Effect.fn("RenInference.list")(function* (actor) {
         return (yield* connections(actor)).map((connection) => connection.info)
       }),
@@ -547,6 +574,8 @@ export const layerNone = Layer.succeed(
   Service,
   Service.of({
     connect: () => Effect.fail(notConfigured()),
+    signIn: () => Effect.fail(notConfigured()),
+    completeSignIn: () => Effect.fail(notConfigured()),
     list: () => Effect.fail(notConfigured()),
     rename: () => Effect.fail(notConfigured()),
     remove: () => Effect.fail(notConfigured()),

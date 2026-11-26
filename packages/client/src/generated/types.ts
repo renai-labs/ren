@@ -361,6 +361,8 @@ export type OAuthAppTokenEndpointAuth = "none" | "client_secret_basic" | "client
 
 export type RenInferenceConnectResult = { url: string }
 
+export type RenInferenceSignIn = { id: string; url: string; expiresAt: string; paste: string }
+
 export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceWindow = { key: string; title: string; percent: number | null; resetsAt?: string | null }
@@ -1133,6 +1135,7 @@ export type ProviderModel = {
   released?: string | undefined
   price?: ModelsPrice | undefined
   free: boolean
+  plans?: Array<string> | undefined
   enabled: boolean
 }
 
@@ -9485,6 +9488,18 @@ export type RenInferenceConnectInput = {
 }
 
 export type RenInferenceConnectOutput = RenInferenceConnectResult
+
+export type RenInferenceSignInStartInput = { readonly provider: { readonly provider: string }["provider"] }
+
+export type RenInferenceSignInStartOutput = RenInferenceSignIn
+
+export type RenInferenceSignInCompleteInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly provider: { readonly provider: string; readonly code: string }["provider"]
+  readonly code: { readonly provider: string; readonly code: string }["code"]
+}
+
+export type RenInferenceSignInCompleteOutput = void
 
 export type RenInferenceConnectionListOutput = Array<RenInferenceConnection>
 

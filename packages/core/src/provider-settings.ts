@@ -198,6 +198,7 @@ export const layer = Layer.effect(
             released: model.released,
             price: model.price,
             free: model.free === true,
+            plans: model.plans,
             enabled: !state.off.includes(ModelLists.switchId(model)),
           })),
       } satisfies Provider.ModelList

@@ -1877,6 +1877,24 @@ const EndpointRenInferenceConnect = (raw: RawClient["ren-inference"]) => (input:
     payload: { returnUrl: input["returnUrl"], connectionId: input["connectionId"] },
   }).pipe(Effect.mapError(mapClientError))
 
+type RenInferenceSignInStartRequest = Parameters<RawClient["ren-inference"]["ren-inference.signIn.start"]>[0]
+type RenInferenceSignInStartInput = { readonly provider: RenInferenceSignInStartRequest["payload"]["provider"] }
+const EndpointRenInferenceSignInStart = (raw: RawClient["ren-inference"]) => (input: RenInferenceSignInStartInput) =>
+  raw["ren-inference.signIn.start"]({ payload: { provider: input["provider"] } }).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceSignInCompleteRequest = Parameters<RawClient["ren-inference"]["ren-inference.signIn.complete"]>[0]
+type RenInferenceSignInCompleteInput = {
+  readonly id: RenInferenceSignInCompleteRequest["params"]["id"]
+  readonly provider: RenInferenceSignInCompleteRequest["payload"]["provider"]
+  readonly code: RenInferenceSignInCompleteRequest["payload"]["code"]
+}
+const EndpointRenInferenceSignInComplete =
+  (raw: RawClient["ren-inference"]) => (input: RenInferenceSignInCompleteInput) =>
+    raw["ren-inference.signIn.complete"]({
+      params: { id: input["id"] },
+      payload: { provider: input["provider"], code: input["code"] },
+    }).pipe(Effect.mapError(mapClientError))
+
 const EndpointRenInferenceConnectionList = (raw: RawClient["ren-inference"]) => () =>
   raw["ren-inference.connection.list"]({}).pipe(Effect.mapError(mapClientError))
 
@@ -1946,6 +1964,7 @@ const EndpointRenInferenceHarnessPlan = (raw: RawClient["ren-inference"]) => (in
 
 const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   connect: EndpointRenInferenceConnect(raw),
+  signIn: { start: EndpointRenInferenceSignInStart(raw), complete: EndpointRenInferenceSignInComplete(raw) },
   connection: {
     list: EndpointRenInferenceConnectionList(raw),
     rename: EndpointRenInferenceConnectionRename(raw),

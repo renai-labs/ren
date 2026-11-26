@@ -81,7 +81,7 @@ describe("TurnProblems.of", () => {
     })
     expect(shown({ kind: "provider.auth", code: "model_off", admin: false }).actions).toEqual(["model"])
     expect(shown({ kind: "provider.rate-limit", code: "subscription_limit_reached", admin: true })).toEqual({
-      title: "All Anthropic subscriptions are at their limit.",
+      title: "All Anthropic subscriptions that serve Claude Opus 5.5 are at their limit.",
       fix: "The next resets soon. Pick another model to keep going.",
       actions: ["model"],
     })

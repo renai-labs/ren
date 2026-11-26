@@ -295,6 +295,10 @@ import type {
   OauthAppArchiveOutput,
   RenInferenceConnectInput,
   RenInferenceConnectOutput,
+  RenInferenceSignInStartInput,
+  RenInferenceSignInStartOutput,
+  RenInferenceSignInCompleteInput,
+  RenInferenceSignInCompleteOutput,
   RenInferenceConnectionListOutput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRenameOutput,
@@ -2531,6 +2535,32 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      signIn: {
+        start: (input: RenInferenceSignInStartInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceSignInStartOutput>(
+            {
+              method: "POST",
+              path: `/ren-inference/sign-in`,
+              body: { provider: input["provider"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        complete: (input: RenInferenceSignInCompleteInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceSignInCompleteOutput>(
+            {
+              method: "POST",
+              path: `/ren-inference/sign-in/${encodeURIComponent(input.id)}`,
+              body: { provider: input["provider"], code: input["code"] },
+              successStatus: 204,
+              declaredStatuses: [400, 401, 403, 404, 409, 503],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       connection: {
         list: (requestOptions?: RequestOptions) =>
           request<RenInferenceConnectionListOutput>(

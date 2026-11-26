@@ -103,7 +103,7 @@ const byCode: Readonly<Record<string, (input: Context) => Problem>> = {
   subscription_limit_reached: (input) => {
     const reset = nextReset(input)
     return {
-      title: `All ${input.provider} subscriptions are at their limit.`,
+      title: `All ${input.provider} subscriptions that serve ${input.model} are at their limit.`,
       fix: `The next resets ${reset ?? "soon"}. Pick another model to keep going.`,
       actions: ["model"],
     }

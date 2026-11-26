@@ -37,6 +37,14 @@ export const RenInferenceHandler = HttpApiBuilder.group(Api, "ren-inference", (h
       .handle("ren-inference.connect", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(inference.connect(actor, request.payload))),
       )
+      .handle("ren-inference.signIn.start", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(inference.signIn(actor, request.payload))),
+      )
+      .handle("ren-inference.signIn.complete", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) =>
+          mapFailure(inference.completeSignIn(actor, request.params.id, request.payload)),
+        ),
+      )
       .handle("ren-inference.connection.list", () =>
         Effect.flatMap(Primitive.currentActor, (actor) => mapFailure(inference.list(actor))),
       )

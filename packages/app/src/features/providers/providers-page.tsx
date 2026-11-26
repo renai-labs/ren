@@ -76,9 +76,7 @@ function ProviderCard(props: { provider: ProviderInfo; onConnect: () => void }) 
           <Badge variant={provider.enabled ? "secondary" : "outline"}>{provider.enabled ? "On" : "Off"}</Badge>
         ) : null}
         {!connected(provider) &&
-        provider.canManage &&
-        provider.method !== "subscription" &&
-        provider.fields.length > 0 ? (
+        (provider.methods.includes("subscription") || (provider.canManage && provider.fields.length > 0)) ? (
           <Button
             size="sm"
             variant="outline"
@@ -160,6 +158,7 @@ export function ProvidersPage() {
       {connecting ? (
         <ConnectDialog
           provider={connecting}
+          choose
           onOpenChange={(open) => {
             if (!open) setConnecting(undefined)
           }}

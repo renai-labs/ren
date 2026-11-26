@@ -7,7 +7,9 @@ import { Badge } from "@ren/ui/badge"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Card } from "@ren/ui/card"
 import { Loading } from "@ren/ui/loading"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@ren/ui/select"
+import { Alert, AlertDescription } from "@ren/ui/alert"
+import { Field, FieldContent, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "@ren/ui/field"
+import { RadioGroup, RadioGroupItem } from "@ren/ui/radio-group"
 import { toast } from "@ren/ui/sonner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
@@ -23,17 +25,11 @@ import { StatusBadge } from "../../components/status-badge.js"
 import { SubscriptionLimits } from "../../components/subscription-limits.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Platform } from "../../platform/platform.js"
-import { ConnectDialog } from "./connect-dialog.js"
+import { ConnectDialog, type Method } from "./connect-dialog.js"
 import { ModelTypes } from "./model-types.js"
 import { formatPerMillion } from "../../lib/format.js"
 
 const route = getRouteApi("/_authed/_shell/settings/providers/$id/")
-
-const methods = [
-  { value: "key", label: "API key" },
-  { value: "subscription", label: "Subscription" },
-] as const
 
 const filters = ["All", "On", "Free"] as const
 type Filter = (typeof filters)[number]
@@ -109,12 +105,113 @@ function ModelName(props: { model: ProviderModel }) {
   )
 }
 
+function ModelHeader(props: { subscription: boolean }) {
+  return (
+    <TableHeader>
+      <TableRow>
+        <TableHead>Model</TableHead>
+        <TableHead>Features</TableHead>
+        <TableHead className="text-right">Released</TableHead>
+        <TableHead className="text-right">Context</TableHead>
+        {props.subscription ? (
+          <TableHead>Plans</TableHead>
+        ) : (
+          <>
+            <TableHead className="text-right">Input /1M</TableHead>
+            <TableHead className="text-right">Output /1M</TableHead>
+            <TableHead className="text-right">Cache read /1M</TableHead>
+          </>
+        )}
+        <TableHead className="w-16">On</TableHead>
+      </TableRow>
+    </TableHeader>
+  )
+}
+
+function ModelRow(props: {
+  model: ProviderModel
+  subscription: boolean
+  // oxlint-disable-next-line ren/no-comments -- Absent for a member: the switch shows the state and changes nothing.
+  onSwitch?: ((enabled: boolean) => void) | undefined
+}) {
+  const model = props.model
+  return (
+    <TableRow>
+      <TableCell className="w-full max-w-0 whitespace-normal">
+        <ModelName model={model} />
+      </TableCell>
+      <TableCell>
+        <Features model={model} />
+      </TableCell>
+      <TableCell className="text-right whitespace-nowrap tabular-nums">{released(model.released)}</TableCell>
+      <TableCell className="text-right tabular-nums">{tokens(model.context)}</TableCell>
+      {props.subscription ? (
+        <TableCell className="whitespace-nowrap">{model.plans?.join(", ") ?? "–"}</TableCell>
+      ) : (
+        <>
+          <TableCell className="text-right tabular-nums">{usd(model.price?.input)}</TableCell>
+          <TableCell className="text-right tabular-nums">{usd(model.price?.output)}</TableCell>
+          <TableCell className="text-right tabular-nums">{usd(model.price?.cacheRead)}</TableCell>
+        </>
+      )}
+      <TableCell>
+        <Switch
+          aria-label={`${model.name} on`}
+          checked={model.enabled}
+          disabled={!props.onSwitch}
+          onCheckedChange={(enabled) => props.onSwitch?.(enabled)}
+        />
+      </TableCell>
+    </TableRow>
+  )
+}
+
 const emptyText = (name: string, type: string, filter: Filter) => {
   const kind = ModelTypes.labelOf(type).toLowerCase()
   return filter === "All" ? `${name} has no ${kind} models.` : `No ${kind} models match “${filter}”.`
 }
 
-function Models(props: { providerId: string; name: string }) {
+// oxlint-disable-next-line ren/no-comments -- With the subscription method the list is the models the organization's plans serve; they have no per-token price, so the table names the plans instead.
+function ModelFilters(props: {
+  filter: Filter
+  type: string
+  types: ReadonlyArray<readonly [string, string]>
+  onFilter: (filter: Filter) => void
+  onType: (type: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <Tabs
+        value={props.filter}
+        onValueChange={(value) => props.onFilter(filters.find((each) => each === value) ?? "All")}
+      >
+        <TabsList aria-label="Filter models">
+          {filters.map((each) => (
+            <TabsTrigger key={each} value={each}>
+              {each}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      {props.types.length > 1 ? (
+        <Tabs value={props.type} onValueChange={(value) => props.onType(String(value))}>
+          <TabsList aria-label="Model type">
+            {props.types.map((each) => (
+              <TabsTrigger key={each[0]} value={each[0]}>
+                {each[1]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      ) : (
+        <Badge variant="outline">{ModelTypes.labelOf(props.type)}</Badge>
+      )}
+    </div>
+  )
+}
+
+function Models(props: { providerId: string; name: string; provider: ProviderInfo | undefined }) {
+  const subscription = props.provider?.method === "subscription"
   const { api } = RouterContext.useRouterContext()
   const list = useQuery(api.provider.models.list.queryOptions({ id: props.providerId }))
   const update = useMutation(api.provider.models.update.mutationOptions())
@@ -128,77 +225,32 @@ function Models(props: { providerId: string; name: string }) {
   const failed = (error: unknown) => toast.error("Couldn’t change the models", { description: errorMessage(error) })
   return (
     <section aria-label={`${props.name} models`} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs value={filter} onValueChange={(value) => setFilter(filters.find((each) => each === value) ?? "All")}>
-          <TabsList aria-label="Filter models">
-            {filters.map((each) => (
-              <TabsTrigger key={each} value={each}>
-                {each}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        {types.length > 1 ? (
-          <Tabs value={type} onValueChange={(value) => setTypeChoice(String(value))}>
-            <TabsList aria-label="Model type">
-              {types.map((each) => (
-                <TabsTrigger key={each[0]} value={each[0]}>
-                  {each[1]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        ) : (
-          <Badge variant="outline">{ModelTypes.labelOf(type)}</Badge>
-        )}
-      </div>
+      {subscription ? (
+        <h2 className="text-sm font-medium">Models your subscriptions serve ({data.models.length})</h2>
+      ) : null}
+      <ModelFilters filter={filter} type={type} types={types} onFilter={setFilter} onType={setTypeChoice} />
       <Loading id={shapeId} loading={list.isPending} label="Loading models">
         {(list.isError || shown.length === 0) && !list.isPending ? (
           <EmptyState>{list.isError ? errorMessage(list.error) : emptyText(props.name, type, filter)}</EmptyState>
         ) : (
           <Table aria-label="Models">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Model</TableHead>
-                <TableHead>Features</TableHead>
-                <TableHead className="text-right">Released</TableHead>
-                <TableHead className="text-right">Context</TableHead>
-                <TableHead className="text-right">Input /1M</TableHead>
-                <TableHead className="text-right">Output /1M</TableHead>
-                <TableHead className="text-right">Cache read /1M</TableHead>
-                <TableHead className="w-16">On</TableHead>
-              </TableRow>
-            </TableHeader>
+            <ModelHeader subscription={subscription} />
             <TableBody>
               {shown.map((model) => (
-                <TableRow key={model.id}>
-                  <TableCell className="w-full max-w-0 whitespace-normal">
-                    <ModelName model={model} />
-                  </TableCell>
-                  <TableCell>
-                    <Features model={model} />
-                  </TableCell>
-                  <TableCell className="text-right whitespace-nowrap tabular-nums">
-                    {released(model.released)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{tokens(model.context)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{usd(model.price?.input)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{usd(model.price?.output)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{usd(model.price?.cacheRead)}</TableCell>
-                  <TableCell>
-                    <Switch
-                      aria-label={`${model.name} on`}
-                      checked={model.enabled}
-                      disabled={!data.canManage}
-                      onCheckedChange={(enabled) =>
-                        update.mutate(
-                          { id: props.providerId, models: [{ id: model.id, enabled }] },
-                          { onError: failed },
-                        )
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
+                <ModelRow
+                  key={model.id}
+                  model={model}
+                  subscription={subscription}
+                  onSwitch={
+                    data.canManage
+                      ? (enabled) =>
+                          update.mutate(
+                            { id: props.providerId, models: [{ id: model.id, enabled }] },
+                            { onError: failed },
+                          )
+                      : undefined
+                  }
+                />
               ))}
             </TableBody>
           </Table>
@@ -295,7 +347,7 @@ function SeatCard(props: {
 
 function Subscriptions(props: {
   provider: ProviderInfo
-  onSignIn: (connectionId?: string) => void
+  onSignIn: () => void
   onRename: (id: string, label: string) => Promise<unknown>
   onRemove: (connection: RenInferenceConnection) => void
 }) {
@@ -306,7 +358,7 @@ function Subscriptions(props: {
         <h2 className="text-sm font-medium">Subscriptions</h2>
         <Button size="sm" variant="outline" onClick={() => props.onSignIn()}>
           <IconPlus />
-          {provider.signIn ?? `Connect ${provider.name}`}
+          {provider.signIn ?? `Connect your ${provider.name}`}
         </Button>
       </div>
       {provider.seats.length === 0 ? (
@@ -317,7 +369,7 @@ function Subscriptions(props: {
             <SeatCard
               key={connection.id}
               connection={connection}
-              onReconnect={() => props.onSignIn(connection.id)}
+              onReconnect={props.onSignIn}
               onRename={(label) => props.onRename(connection.id, label)}
               onRemove={() => props.onRemove(connection)}
             />
@@ -336,30 +388,6 @@ function ProviderControls(props: { provider: ProviderInfo }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <ProviderMark provider={provider.name} logo={provider.logo} letter className="size-6" />
-      {provider.methods.length > 1 ? (
-        <Select
-          items={methods}
-          value={provider.method}
-          disabled={!provider.canManage}
-          onValueChange={(value) => {
-            if (value === "key" || value === "subscription")
-              update.mutate({ id: provider.id, method: value }, { onError: failed })
-          }}
-        >
-          <SelectTrigger size="sm" aria-label={`${provider.name} method`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {methods.map((method) => (
-                <SelectItem key={method.value} value={method.value}>
-                  {method.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <Switch
           aria-label={`${provider.name} on`}
@@ -373,34 +401,86 @@ function ProviderControls(props: { provider: ProviderInfo }) {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Providers P24: a provider with two methods serves chats by one. The card that is in use says so; an admin switches to the other once it is connected.
+function ChatsUse(props: { provider: ProviderInfo }) {
+  const { api } = RouterContext.useRouterContext()
+  const update = useMutation(api.provider.update.mutationOptions())
+  const provider = props.provider
+  const ready: Record<Method, boolean> = { subscription: provider.seats.length > 0, key: provider.key !== null }
+  const options = [
+    {
+      value: "subscription" as const,
+      title: "Subscriptions",
+      summary: provider.seats.length === 0 ? "None connected" : `${provider.seats.length} connected`,
+    },
+    { value: "key" as const, title: "API key", summary: provider.key ? `…${provider.key.last4}` : "Not added" },
+  ]
+  const active = provider.method === "key" ? "key" : "subscription"
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">Chats use</FieldLegend>
+      <RadioGroup
+        value={active}
+        className="grid-cols-1 sm:grid-cols-2"
+        disabled={!provider.canManage || update.isPending}
+        onValueChange={(value) => {
+          const method = value === "key" ? "key" : "subscription"
+          update.mutate(
+            { id: provider.id, method },
+            { onError: (error) => toast.error("Couldn’t change it", { description: errorMessage(error) }) },
+          )
+        }}
+      >
+        {options.map((option) => (
+          <Field
+            key={option.value}
+            orientation="horizontal"
+            className="rounded-lg border p-3"
+            data-disabled={(!ready[option.value] && option.value !== active) || undefined}
+          >
+            <RadioGroupItem
+              value={option.value}
+              id={`chats-use-${option.value}`}
+              disabled={!ready[option.value] && option.value !== active}
+            />
+            <FieldContent>
+              <FieldLabel htmlFor={`chats-use-${option.value}`}>
+                {option.title}
+                {option.value === active ? <Badge variant="secondary">In use</Badge> : null}
+              </FieldLabel>
+              <FieldDescription>{option.summary}</FieldDescription>
+            </FieldContent>
+          </Field>
+        ))}
+      </RadioGroup>
+      {ready[active] ? null : (
+        <Alert>
+          <AlertDescription>
+            Chats can’t use {provider.name} yet: {active === "key" ? "add a key" : "connect a subscription"}, or switch
+            to the other once it is connected.
+          </AlertDescription>
+        </Alert>
+      )}
+    </FieldSet>
+  )
+}
+
 function ProviderConnection(props: { provider: ProviderInfo }) {
   const { api } = RouterContext.useRouterContext()
-  const platform = Platform.usePlatform()
   const removeKey = useMutation(api.provider.key.remove.mutationOptions())
-  const connectSeat = useMutation(api["ren-inference"].connect.mutationOptions())
   const rename = useMutation(api["ren-inference"].connection.rename.mutationOptions())
   const removeSeat = useMutation(api["ren-inference"].connection.remove.mutationOptions())
-  const [connecting, setConnecting] = useState(false)
+  const [connecting, setConnecting] = useState<Method>()
   const [removing, setRemoving] = useState<{ title: string; run: () => Promise<unknown> }>()
   const provider = props.provider
   const failed = (action: string) => (error: unknown) => toast.error(action, { description: errorMessage(error) })
-  const startSignIn = (connectionId?: string) =>
-    connectSeat.mutate(
-      { returnUrl: `${platform.appUrl}/settings/providers/${provider.id}`, ...(connectionId && { connectionId }) },
-      {
-        onSuccess: (result) => {
-          platform.openExternal(result.url)
-          toast("Opened the sign-in in a new tab", { description: "Ren lists the subscription once you finish there." })
-        },
-        onError: failed("Couldn’t start the sign-in"),
-      },
-    )
   return (
     <div className="flex flex-col gap-6">
+      {provider.methods.length > 1 ? <ChatsUse provider={provider} /> : null}
       {provider.methods.includes("key") ? (
         <KeySection
           provider={provider}
-          onConnect={() => setConnecting(true)}
+          onConnect={() => setConnecting("key")}
           onRemove={() =>
             setRemoving({
               title: `Remove the ${provider.name} key?`,
@@ -412,7 +492,7 @@ function ProviderConnection(props: { provider: ProviderInfo }) {
       {provider.methods.includes("subscription") ? (
         <Subscriptions
           provider={provider}
-          onSignIn={startSignIn}
+          onSignIn={() => setConnecting("subscription")}
           onRename={(seat, label) => rename.mutateAsync({ id: seat, label }, { onError: failed("Couldn’t rename") })}
           onRemove={(connection) =>
             setRemoving({
@@ -425,10 +505,11 @@ function ProviderConnection(props: { provider: ProviderInfo }) {
       {connecting ? (
         <ConnectDialog
           provider={provider}
+          method={connecting}
           onOpenChange={(open) => {
-            if (!open) setConnecting(false)
+            if (!open) setConnecting(undefined)
           }}
-          onConnected={() => setConnecting(false)}
+          onConnected={() => setConnecting(undefined)}
         />
       ) : null}
       {removing ? (
@@ -484,7 +565,7 @@ export function ProviderPage() {
       {provider && !provider.enabled ? (
         <p className="text-sm text-muted-foreground">Off. Its models are not in your team’s pickers.</p>
       ) : null}
-      <Models providerId={id} name={name} />
+      <Models providerId={id} name={name} provider={provider} />
     </Page>
   )
 }
