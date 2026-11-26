@@ -44,9 +44,18 @@ const usd = (value: number | undefined) => (value === undefined ? "–" : format
 
 const tokens = (value: number | undefined) => {
   if (value === undefined) return "–"
-  if (value >= 1_000_000) return `${value / 1_000_000}M`
+  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`
   return `${Math.round(value / 1000)}K`
 }
+
+const resetFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+})
+
+const formatReset = (at: string) => resetFormat.format(new Date(at)).replace(",", "")
 
 // oxlint-disable-next-line ren/no-comments -- models.dev dates are `YYYY-MM-DD` or `YYYY-MM`; a month shows as a month, not as its first day.
 const released = (value: string | undefined) => {
@@ -388,17 +397,19 @@ function ProviderControls(props: { provider: ProviderInfo }) {
   const update = useMutation(api.provider.update.mutationOptions())
   const provider = props.provider
   const failed = (error: unknown) => toast.error("Couldn’t change the provider", { description: errorMessage(error) })
+  // oxlint-disable-next-line ren/no-comments -- F4: the switch shows the change at once and takes one change at a time, so a quick Off and On ends On.
+  const enabled = update.isPending ? (update.variables.enabled ?? provider.enabled) : provider.enabled
   return (
     <div className="flex flex-wrap items-center gap-3">
       <ProviderMark provider={provider.name} logo={provider.logo} letter className="size-6" />
       <label className="flex items-center gap-2 text-sm">
         <Switch
           aria-label={`${provider.name} on`}
-          checked={provider.enabled}
-          disabled={!provider.canManage}
-          onCheckedChange={(enabled) => update.mutate({ id: provider.id, enabled }, { onError: failed })}
+          checked={enabled}
+          disabled={!provider.canManage || update.isPending}
+          onCheckedChange={(next) => update.mutate({ id: provider.id, enabled: next }, { onError: failed })}
         />
-        {provider.enabled ? "On" : "Off"}
+        {enabled ? "On" : "Off"}
       </label>
     </div>
   )
@@ -409,12 +420,26 @@ function ChatsUse(props: { provider: ProviderInfo }) {
   const { api } = RouterContext.useRouterContext()
   const update = useMutation(api.provider.update.mutationOptions())
   const provider = props.provider
-  const ready: Record<Method, boolean> = { subscription: provider.seats.length > 0, key: provider.key !== null }
+  // oxlint-disable-next-line ren/no-comments -- F12: a seat that needs a new sign-in (or is blocked) cannot serve; one at its limit still counts, it serves again at its reset.
+  const usable = provider.seats.filter((seat) => seat.status.tone !== "error")
+  const resets = usable
+    .flatMap((seat) => seat.limits.flatMap((window) => (window.resetsAt ? [window.resetsAt] : [])))
+    .toSorted()
+    .at(0)
+  const full = usable.length > 0 && usable.every((seat) => seat.status.tone === "warn")
+  const ready: Record<Method, boolean> = { subscription: usable.length > 0, key: provider.key !== null }
+  const seatsSummary = () => {
+    if (provider.seats.length === 0) return "None connected"
+    if (usable.length < provider.seats.length) return `${usable.length} of ${provider.seats.length} ready`
+    if (full) return `${provider.seats.length} connected · at its limit${resets ? ` until ${formatReset(resets)}` : ""}`
+    return `${provider.seats.length} connected`
+  }
+  const signedOut = provider.seats.filter((seat) => seat.status.tone === "error").map((seat) => seat.label)
   const options = [
     {
       value: "subscription" as const,
       title: "Subscriptions",
-      summary: provider.seats.length === 0 ? "None connected" : `${provider.seats.length} connected`,
+      summary: seatsSummary(),
     },
     { value: "key" as const, title: "API key", summary: provider.key ? `…${provider.key.last4}` : "Not added" },
   ]
@@ -459,8 +484,9 @@ function ChatsUse(props: { provider: ProviderInfo }) {
       {ready[active] ? null : (
         <Alert>
           <AlertDescription>
-            Chats can’t use {provider.name} yet: {active === "key" ? "add a key" : "connect a subscription"}, or switch
-            to the other once it is connected.
+            {active === "subscription" && signedOut.length > 0
+              ? `Chats can’t use ${provider.name} now: ${signedOut.join(", ")} ${signedOut.length === 1 ? "needs" : "need"} a new sign-in.`
+              : `Chats can’t use ${provider.name} yet: ${active === "key" ? "add a key" : "connect a subscription"}, or switch to the other once it is connected.`}
           </AlertDescription>
         </Alert>
       )}
