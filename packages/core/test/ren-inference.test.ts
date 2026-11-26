@@ -7,9 +7,11 @@ import { Signature } from "@ren/schema/signature"
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { ModelLists } from "../src/model-lists.js"
+import { ModelGateway } from "../src/model-gateway.js"
+import { RenGateway } from "../src/model-gateway/ren-gateway.js"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
-import { RenInferenceProvider } from "../src/ren-inference/provider.js"
 import { Signer } from "../src/signer.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -30,23 +32,9 @@ type Seen = { claims: typeof Claims.Type; body: unknown; path: string; method: s
 const seen: Seen[] = []
 const replies = new Map<string, () => Response>()
 
-const discovery: Readonly<Record<string, unknown>> = {
-  "/v1/catalog": {
-    baseUrl: "https://llm.ren.test/v1",
-    models: [{ id: "opaque-chat", type: "chat", protocol: "openai-chat" }],
-  },
-}
-const catalogReads: Array<string | null> = []
-
 const service = Bun.serve({
   port: 0,
   fetch: async (request) => {
-    const found = discovery[new URL(request.url).pathname]
-    if (found) {
-      catalogReads.push(request.headers.get("authorization"))
-      if (request.headers.get("authorization") !== "Bearer catalog-key") return new Response(null, { status: 401 })
-      return Response.json(found)
-    }
     const token = request.headers.get("authorization")?.replace(/^Bearer /u, "") ?? ""
     const claims = await Effect.runPromise(Signature.verify(publicKeys, Claims, token))
     if (Option.isNone(claims)) return new Response(null, { status: 401 })
@@ -62,7 +50,10 @@ const service = Bun.serve({
 })
 
 const it = testEffect(
-  Models.layer([RenInferenceProvider.make]).pipe(
+  Models.layer.pipe(
+    Layer.provideMerge(ModelLists.layer),
+    Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
+    Layer.provideMerge(RenGateway.layerChanges),
     Layer.provideMerge(RenInference.layer),
     Layer.provide([Signer.layerLocal, FetchHttpClient.layer, Access.layer]),
     Layer.provideMerge(Testing.layer),
@@ -71,7 +62,6 @@ const it = testEffect(
         ConfigProvider.fromUnknown({
           REN_INFERENCE_URL: `http://127.0.0.1:${service.port}`,
           REN_INFERENCE_BRAIN_URL: "https://llm.ren.test",
-          REN_INFERENCE_GATEWAY_KEY: "catalog-key",
           REN_INFERENCE_KEYS: JSON.stringify([
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
@@ -81,30 +71,50 @@ const it = testEffect(
   ),
 )
 
-describe("RenInferenceProvider with the Ren Inference Service", () => {
+const renCard = {
+  id: "ren",
+  name: "Ren",
+  mark: "ren",
+  payer: "ren",
+  protocol: "openai-chat",
+  auth: [{ _tag: "operator" }],
+  models: "shared",
+}
+
+describe("RenGateway with the Ren Inference Service (Providers §6.2, §10)", () => {
   it.live(
-    "reads the shared catalog with the deployment key and grants the catalog's one base URL with a brain key",
+    "reads the providers and a shared provider's models Ren-wide, and grants each provider the brains' gateway URL with a brain key",
     () =>
       Effect.gen(function* () {
         const models = yield* Models.Service
         const owner = yield* Seed.owner()
         const brainId = Brain.ofSession(yield* Seed.session(owner))
         const expiresAt = new Date(Date.now() + 6 * 3600_000).toISOString()
+        const model: Models.Info = {
+          id: "vendor/model",
+          type: "chat",
+          protocol: "openai-chat",
+          gateway: "ren/vendor/model",
+        }
+        replies.set("/v1/providers", () => Response.json([renCard]))
+        replies.set("/v1/providers/ren/models", () => Response.json({ revision: "r1", models: [model] }))
         replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
         seen.length = 0
 
         const granted = yield* models.grant(brainId, owner.organizationId, owner.spaceId)
-        const catalog = yield* models.catalog(owner.organizationId)
 
-        expect(granted.endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([
-          ["ren", "https://llm.ren.test/v1"],
-        ])
-        expect(granted.endpoints[0]?.models).toEqual([])
-        expect(catalog.endpoints[0]?.models.map((model) => model.id)).toEqual(["opaque-chat"])
-        expect(catalogReads.at(-1)).toBe("Bearer catalog-key")
-        expect(granted.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))).toEqual(["key-brain"])
-        expect(granted.endpoints[0]?.apiKey.expiresAt?.epochMilliseconds).toBe(Date.parse(expiresAt))
+        expect(yield* models.baseUrls).toEqual(["https://llm.ren.test/v1"])
+        expect(
+          granted.endpoints.map((endpoint) => [
+            endpoint.id,
+            endpoint.baseUrl,
+            Redacted.value(endpoint.apiKey.key),
+            endpoint.models,
+          ]),
+        ).toEqual([["ren", "https://llm.ren.test/v1", "key-brain", [model]]])
         expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
+          ["/v1/providers", null, { org: "ren" }],
+          ["/v1/providers/ren/models", null, { org: "ren" }],
           ["/v1/keys", { brainId, spaceId: owner.spaceId }, { org: owner.organizationId }],
         ])
       }),

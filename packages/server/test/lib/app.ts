@@ -1,5 +1,6 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainProvider } from "@ren/core/brain-provider"
+import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { MachineNetwork } from "@ren/core/machine-network"
 import { Bundles } from "@ren/core/bundles"
@@ -154,6 +155,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([
     Models.layerNone,
+    RenGateway.layerChanges,
     Hands.layer.pipe(
       Layer.provide([SandboxEgress.layerNone, MachineNetwork.layerNone, Bundles.layer, DurableRunner.layerMemory]),
     ),

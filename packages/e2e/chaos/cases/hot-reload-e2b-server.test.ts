@@ -19,7 +19,9 @@ import { Envelope } from "@ren/core/envelope"
 import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { RenInference } from "@ren/core/ren-inference"
-import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
+import { ModelLists } from "@ren/core/model-lists"
+import { ModelGateway } from "@ren/core/model-gateway"
+import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/machine-provider/e2b"
 import { SessionRunner } from "@ren/core/session/runner"
@@ -39,6 +41,7 @@ import path from "node:path"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
 import { Wait } from "../lib/wait.js"
+import { StandInInference } from "../../script/inference.js"
 import { Drives } from "@ren/core/drives"
 
 // oxlint-disable-next-line ren/no-comments -- The E2B brain reaches the real Ren server and LiteLLM through public tunnels to these local ports.
@@ -49,6 +52,17 @@ const template = process.env.CHAOS_E2B_TEMPLATE ?? ""
 const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
 const small = "anthropic/claude-haiku-5-5"
+
+// oxlint-disable-next-line ren/no-comments -- The stand-in gateway's Ren card lists the one small model the LiteLLM key may call, under the name LiteLLM knows.
+const smallModel: Models.Info = {
+  id: small,
+  name: "Small",
+  type: "chat",
+  protocol: "openai-chat",
+  gateway: small,
+  input: ["text"],
+}
+
 // oxlint-disable-next-line ren/no-comments -- The egress's tunnel port and its public TCP address (for example an ngrok TCP tunnel to that port); E2B sends all sandbox traffic there.
 const egressPort = Number(process.env.CHAOS_EGRESS_PORT ?? 4222)
 const egressPublic = process.env.CHAOS_EGRESS_PUBLIC ?? ""
@@ -128,14 +142,17 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     const key = await LiteLLM.generate({ duration: "2h", models: [small] })
     cleanups.push(() => LiteLLM.remove(key))
     const brainKey = await Effect.runPromise(Signature.generate("e2b-server"))
+    const inferenceKey = await Effect.runPromise(Signature.generate("e2b-inference"))
+    const inference = StandInInference.start(litellmTunnel, { models: () => [smallModel], key })
+    cleanups.push(() => inference.stop())
     const shared = {
       BRAIN_KEYS: encoded(brainKey.privateKey),
       ENVIRONMENT_KEYS: encoded(TestHand.keys.privateKey),
       REN_URL: renTunnel,
       E2B_TEMPLATE: template,
-      REN_INFERENCE_GATEWAY_URL: process.env.CHAOS_INFERENCE_URL ?? "",
+      REN_INFERENCE_URL: inference.url,
+      REN_INFERENCE_KEYS: encoded(inferenceKey.privateKey),
       REN_INFERENCE_BRAIN_URL: litellmTunnel,
-      REN_INFERENCE_GATEWAY_KEY: key,
       ENVELOPE_KEYS: JSON.stringify([
         { id: "local:e2b", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
       ]),
@@ -221,7 +238,14 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
             Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
             Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
             Layer.provide(Settings.layer),
-            Layer.provide(Models.layer([RenInferenceProvider.make]).pipe(Layer.provide(RenInference.layerNone))),
+            Layer.provide(
+              Models.layer.pipe(
+                Layer.provideMerge(ModelLists.layer),
+                Layer.provideMerge(ModelGateway.layer([RenGateway.gateway])),
+                Layer.provide(RenGateway.layerChanges),
+                Layer.provide(RenInference.layer.pipe(Layer.provide([Signer.layerLocal, Access.layer]))),
+              ),
+            ),
             Layer.provide(
               Hands.layer
                 .pipe(

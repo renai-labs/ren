@@ -5,19 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Hand } from "@ren/schema/hand"
 import { Space } from "@ren/schema/space"
-import {
-  ConfigProvider,
-  DateTime,
-  Deferred,
-  Duration,
-  Effect,
-  Fiber,
-  Layer,
-  Option,
-  Redacted,
-  Ref,
-  Schema,
-} from "effect"
+import { ConfigProvider, DateTime, Duration, Effect, Fiber, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Access } from "../src/access.js"
@@ -39,24 +27,19 @@ const encodeKey = (generated: typeof key) =>
     { id: generated.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(generated.privateKey.key) },
   ])
 
-const grants = Ref.makeUnsafe(0)
 const failuresLeft = Ref.makeUnsafe(0)
-const latch = Ref.makeUnsafe(Option.none<Effect.Effect<void>>())
-const revision = Ref.makeUnsafe("file-1")
 
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
-    providers: Effect.succeed([]),
-    revision: Ref.get(revision),
+    providers: () => Effect.succeed([]),
+    baseUrls: Effect.succeed([]),
+    forget: () => Effect.void,
     grant: () =>
       Effect.gen(function* () {
-        const wait = yield* Ref.get(latch)
-        if (Option.isSome(wait)) yield* wait.value
         if ((yield* Ref.getAndUpdate(failuresLeft, (left) => Math.max(0, left - 1))) > 0)
           return yield* new Models.Unavailable({ cause: new Error("upstream 503") })
-        const count = yield* Ref.updateAndGet(grants, (value) => value + 1)
         return Models.Access.make({
           endpoints: [
             {
@@ -64,7 +47,7 @@ const models = Layer.succeed(
               protocol: "anthropic-messages",
               baseUrl: "https://api.anthropic.com/v1",
               apiKey: {
-                key: Redacted.make(`sk-ant-${count}`),
+                key: Redacted.make("sk-ant"),
                 expiresAt: DateTime.addDuration(yield* DateTime.now, Duration.hours(6)),
               },
               models: [],
@@ -127,47 +110,14 @@ describe("CredentialSource.layerMinted", () => {
     }),
   )
 
-  it.effect("two mints of MODELS for one brain at once make one upstream mint; a 5xx is retried", () =>
+  it.effect("a 5xx from the model provider is retried before the egress hears an error", () =>
     Effect.gen(function* () {
-      yield* Ref.set(grants, 0)
       yield* Ref.set(failuresLeft, 1)
-      const gate = yield* Deferred.make<void>()
-      yield* Ref.set(latch, Option.some(Deferred.await(gate)))
-      const first = yield* Effect.forkChild(modelKey)
-      const second = yield* Effect.forkChild(modelKey)
-      yield* Effect.yieldNow
-      yield* Ref.set(latch, Option.none())
-      yield* Deferred.succeed(gate, undefined)
+      const fiber = yield* Effect.forkChild(modelKey)
       yield* TestClock.adjust(Duration.seconds(5))
-      expect(yield* Fiber.join(first)).toEqual(Option.some("sk-ant-1"))
-      expect(yield* Fiber.join(second)).toEqual(Option.some("sk-ant-1"))
-      expect(yield* Ref.get(grants)).toBe(1)
+      expect(yield* Fiber.join(fiber)).toEqual(Option.some("sk-ant"))
+      expect(yield* Ref.get(failuresLeft)).toBe(0)
     }),
-  )
-
-  it.effect("the old key is used until 20 minutes before its expiry, longer than the egress keeps an answer", () =>
-    Effect.gen(function* () {
-      yield* Ref.set(grants, 0)
-      yield* Ref.set(failuresLeft, 0)
-      expect(yield* modelKey).toEqual(Option.some("sk-ant-1"))
-      yield* TestClock.adjust(Duration.minutes(5 * 60 + 39))
-      expect(yield* modelKey).toEqual(Option.some("sk-ant-1"))
-      yield* TestClock.adjust(Duration.minutes(2))
-      expect(yield* modelKey).toEqual(Option.some("sk-ant-2"))
-    }),
-  )
-
-  it.effect(
-    "a changed model list (a new key or host in the grant) reaches the next request, not after the old key's lifetime",
-    () =>
-      Effect.gen(function* () {
-        yield* Ref.set(grants, 0)
-        yield* Ref.set(failuresLeft, 0)
-        const before = yield* modelKey
-        yield* Ref.set(revision, "file-2")
-        const after = yield* modelKey
-        expect([before, after]).toEqual([Option.some("sk-ant-1"), Option.some("sk-ant-2")])
-      }),
   )
 
   it.effect(

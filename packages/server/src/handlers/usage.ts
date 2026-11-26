@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto"
+import { RenGateway } from "@ren/core/model-gateway/ren-gateway"
 import { Usage } from "@ren/core/usage"
 import { ForbiddenError, UnauthorizedError, UnavailableError } from "@ren/protocol/errors"
 import { UsageAuthentication, UsageIngestApi, UsageKey } from "@ren/protocol/usage-ingest"
-import { Config, Effect, Layer, Option, Redacted } from "effect"
+import { Config, Effect, Layer, Option, PubSub, Redacted } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 const digest = (key: Redacted.Redacted) => new Bun.CryptoHasher("sha256").update(Redacted.value(key)).digest()
@@ -28,6 +29,21 @@ export const UsageAuthenticationLayer = Layer.effect(
           : Effect.fail(new UnauthorizedError({ message: "Unknown usage key." }))
       },
     })
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- Providers §10: only the gateway's usage key, never the integrations key, says a provider's models changed.
+export const InferenceHandler = HttpApiBuilder.group(UsageIngestApi, "inference", (handlers) =>
+  Effect.gen(function* () {
+    const changes = yield* RenGateway.Changes
+    return handlers.handle("inference.changed", (request) =>
+      Effect.gen(function* () {
+        const key = yield* UsageKey
+        if (Option.isSome(key.onlySource))
+          return yield* new ForbiddenError({ message: "This key cannot report model changes." })
+        yield* PubSub.publish(changes, request.payload)
+      }),
+    )
   }),
 )
 

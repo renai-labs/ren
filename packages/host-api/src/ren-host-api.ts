@@ -130,7 +130,7 @@ export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
   providers: Schema.optionalKey(Models.Providers).annotate({
     description:
-      "Registered providers without keys. The brain discovers each provider’s catalog and gets its key from `models.refresh`. Omitted when registration is unavailable; the brain keeps its last providers.",
+      "The organization’s model list: one entry per provider that is on and connected, with its models and the gateway’s address, without keys. The brain gets its key from `models.refresh`. Omitted when the list is unavailable; the brain keeps its last providers.",
   }),
   apps: Schema.optionalKey(PullApps).annotate({
     description: "The resolved app catalog. Omitted when unsupported or unavailable.",
@@ -163,7 +163,7 @@ const PullGroup = HttpApiGroup.make("pull")
         identifier: "pull",
         summary: "Pull a brain’s settings, env vars and app catalog",
         description:
-          "Send the state of the brain’s chats. The reply sends each settings layer, env vars, app catalog and provider registrations. The brain applies changes and discovers provider catalogs directly.",
+          "Send the state of the brain’s chats. The reply sends each settings layer, env vars, app catalog and the organization’s model list. The brain applies the changes.",
       }),
     ),
   )

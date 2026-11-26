@@ -24,9 +24,10 @@ export const source: { access: Models.Access } = { access: access({ stub: lastin
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
-    revision: Effect.succeed("test"),
+    forget: () => Effect.void,
     catalog: () => Effect.sync(() => Models.catalog(source.access)),
-    providers: Effect.sync(() => Models.registrations(Models.catalog(source.access))),
+    providers: () => Effect.sync(() => Models.registrations(Models.catalog(source.access))),
+    baseUrls: Effect.sync(() => Models.catalog(source.access).endpoints.map((endpoint) => endpoint.baseUrl)),
     grant: () => Effect.sync(() => source.access),
   }),
 )

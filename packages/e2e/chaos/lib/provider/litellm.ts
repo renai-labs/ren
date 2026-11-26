@@ -1,24 +1,34 @@
 export * as LiteLLM from "./litellm.js"
 
 import { Schema } from "effect"
-import { RenInferenceProvider } from "@ren/core/ren-inference/provider"
 import { Models } from "@ren/schema/models"
 
 const Generated = Schema.Struct({ key: Schema.String })
 
 export const url = (process.env.CHAOS_LITELLM_ADMIN_URL ?? "").replace(/\/$/, "")
 
-export const catalog = async (key: string): Promise<Models.Catalog> => {
-  const response = await fetch(`${process.env.CHAOS_INFERENCE_URL?.replace(/\/$/u, "")}/v1/catalog`, {
-    headers: { authorization: `Bearer ${key}` },
-  })
-  if (!response.ok) throw new Error(`Inference discovery answered ${response.status}`)
+const Listed = Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) })
+
+// oxlint-disable-next-line ren/no-comments -- The models a gateway key may call, as one Ren endpoint: the gateway's OpenAI-compatible model list.
+export const listed = async (baseUrl: string, key: string): Promise<Models.Catalog> => {
+  const root = baseUrl.replace(/\/v1\/?$/u, "").replace(/\/$/u, "")
+  const response = await fetch(`${root}/v1/models`, { headers: { authorization: `Bearer ${key}` } })
+  if (!response.ok) throw new Error(`The gateway's model list answered ${response.status}`)
+  const found = Schema.decodeUnknownSync(Listed)(await response.json())
   return {
     endpoints: [
-      RenInferenceProvider.endpoint(Schema.decodeUnknownSync(Models.InferenceCatalog)(await response.json())),
+      {
+        id: "ren",
+        name: "Ren",
+        protocol: "openai-chat",
+        baseUrl: `${root}/v1`,
+        models: found.data.map((model) => ({ id: model.id, type: "chat" as const, protocol: "openai-chat" as const })),
+      },
     ],
-  } satisfies Models.Catalog
+  }
 }
+
+export const catalog = (key: string) => listed(process.env.CHAOS_INFERENCE_URL ?? "", key)
 
 const call = (method: string, route: string, body?: unknown) =>
   fetch(`${url}${route}`, {

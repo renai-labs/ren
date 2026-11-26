@@ -1,5 +1,5 @@
 import { PgClient } from "@effect/sql-pg"
-import { Shared } from "@ren/cell/testing"
+import { Shared, StubModel } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed, TestDrives } from "@ren/core/testing"
@@ -26,7 +26,10 @@ await admin.unsafe(`CREATE DATABASE "${name}"`)
 
 const ModelEntries = Schema.Array(Models.Info)
 
-const ScriptedTool = Schema.Struct({ name: Schema.String, input: Schema.Unknown })
+const ScriptedTool = Schema.Struct({
+  name: Schema.String,
+  input: Schema.Unknown,
+})
 
 const Script = Schema.Struct({
   reply: Schema.optionalKey(Schema.String),
@@ -48,6 +51,11 @@ const stubRoute = (request: Request) => {
   return new Response(null, { status: 204 })
 }
 
+// oxlint-disable-next-line ren/no-comments -- Ren's models in the e2e stack: the stub's models, which the stand-in gateway serves as the Ren provider. A list sent to /models changes them, and the gateway tells Ren, as the real one does.
+let listed: ReadonlyArray<Models.Info> = StubModel.defaultModels
+
+const usageKey = `ren_usage_${crypto.randomUUID().replaceAll("-", "")}`
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
@@ -55,7 +63,13 @@ const mailbox = Bun.serve({
   hostname: "127.0.0.1",
   fetch: async (request) => {
     if (request.method === "POST" && new URL(request.url).pathname === "/models") {
-      Shared.stub().modelInfo.set(Schema.decodeUnknownSync(ModelEntries)(await request.json()))
+      listed = Schema.decodeUnknownSync(ModelEntries)(await request.json())
+      Shared.stub().modelInfo.set(listed)
+      await fetch(`${serverURL}/internal/inference/changed`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${usageKey}`, "content-type": "application/json" },
+        body: JSON.stringify({ provider: "ren" }),
+      })
       return new Response(null, { status: 204 })
     }
     const stubbed = stubRoute(request)
@@ -72,7 +86,7 @@ const mailbox = Bun.serve({
   },
 })
 
-const inference = StandInInference.start(Shared.stub().root)
+const inference = StandInInference.start(Shared.stub().root, { models: () => listed })
 
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
@@ -195,7 +209,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
       },
     ]),
     REN_INFERENCE_GATEWAY_URL: Shared.stub().root,
-    REN_INFERENCE_GATEWAY_KEY: "stub-key",
+    USAGE_INGEST_KEY: usageKey,
     ENVELOPE_KEYS: JSON.stringify([
       {
         id: "local:e2e",

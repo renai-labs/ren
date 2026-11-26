@@ -1,141 +1,129 @@
 import { describe, expect } from "bun:test"
-import { Shared } from "@ren/cell/testing"
+import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
-import { ConfigProvider, DateTime, Duration, Effect, Layer, Redacted, Struct } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { Duration, Effect, Fiber, Layer, Redacted } from "effect"
+import { TestClock } from "effect/testing"
+import { ModelLists } from "../src/model-lists.js"
+import { ModelGateway } from "../src/model-gateway.js"
 import { Models } from "../src/models.js"
-import { RenInference } from "../src/ren-inference.js"
-import { RenInferenceProvider } from "../src/ren-inference/provider.js"
 import { testEffect } from "./lib/effect.js"
+import { TestModelGateway } from "./lib/model-gateway.js"
+import { Seed } from "./lib/seed.js"
 
-const stub = Shared.stub()
+const it = testEffect(Testing.layer)
 
-const it = testEffect(Layer.empty)
-
-const provider = (id: string, baseUrl: string): Models.Provider => ({
-  id,
-  registration: { id, protocol: "openai-chat", baseUrl, catalog: { models: [] } },
-  endpoint: Effect.succeed({ id, protocol: "openai-chat", baseUrl, models: [] }),
-  key: () => Effect.succeed({ key: Redacted.make(`key-${id}`) }),
-})
-
-const gateway = Models.layer([RenInferenceProvider.make]).pipe(
-  Layer.provide([FetchHttpClient.layer, RenInference.layerNone]),
-  Layer.provide(
-    ConfigProvider.layer(
-      ConfigProvider.fromUnknown({
-        REN_INFERENCE_GATEWAY_URL: stub.root,
-        REN_INFERENCE_BRAIN_URL: "http://gateway.brains.invalid",
-        REN_INFERENCE_GATEWAY_KEY: "sk-ren",
-      }),
-    ),
-  ),
-)
-
-describe("Models.layer", () => {
-  it.live("a catalog outage does not block provider registration or the brain's discovery key", () =>
-    Effect.gen(function* () {
-      const models = yield* Models.Service
-      expect((yield* models.providers).map((provider) => provider.id)).toEqual(["first"])
-      expect(
-        (yield* models.grant(Brain.ID.create(), Auth.OrganizationID.create(), Space.ID.create())).endpoints.map(
-          (endpoint) => Redacted.value(endpoint.apiKey.key),
-        ),
-      ).toEqual(["key-first"])
-      expect((yield* Effect.flip(models.catalog(Auth.OrganizationID.create())))._tag).toBe("Models.Unavailable")
-    }).pipe(
-      Effect.provide(
-        Models.layer([
-          Effect.succeed({
-            ...provider("first", "https://first.test/v1"),
-            endpoint: Effect.fail(new Models.Unavailable({ cause: new Error("catalog is down") })),
-          }),
-        ]),
-      ),
-    ),
-  )
-  it.live("each provider's endpoint gets that provider's own key", () =>
-    Effect.gen(function* () {
-      const models = yield* Models.Service
-      const granted = yield* models.grant(Brain.ID.create(), Auth.OrganizationID.create(), Space.ID.create())
-      expect(granted.endpoints.map((endpoint) => [endpoint.id, Redacted.value(endpoint.apiKey.key)])).toEqual([
-        ["first", "key-first"],
-        ["second", "key-second"],
-      ])
-    }).pipe(
-      Effect.provide(
-        Models.layer([
-          Effect.succeed(provider("first", "https://first.test/v1")),
-          Effect.succeed(provider("second", "https://second.test/v1")),
-        ]),
-      ),
-    ),
+// oxlint-disable-next-line ren/no-comments -- Models over one test gateway and the real lists, in the test database.
+const withGateway = (test: { readonly gateway: ModelGateway.Gateway }) =>
+  Models.layer.pipe(
+    Layer.provideMerge(ModelLists.layer),
+    Layer.provideMerge(ModelGateway.layer([Effect.succeed(test.gateway)])),
   )
 
-  it.live("two providers with one id do not start", () =>
-    Effect.gen(function* () {
-      const exit = yield* Layer.build(
-        Models.layer([
-          Effect.succeed(provider("same", "https://first.test/v1")),
-          Effect.succeed(provider("same", "https://second.test/v1")),
-        ]),
-      ).pipe(Effect.scoped, Effect.exit)
-      expect(exit._tag).toBe("Failure")
-    }),
-  )
-})
+const brainIn = (organizationId: Auth.OrganizationID) => [Brain.ID.create(), organizationId, Space.ID.create()] as const
 
-describe("RenInferenceProvider (HR28)", () => {
-  it.live("Ren registers one endpoint with its name, models and the brains' base URL, and Ren's key", () =>
+const keyOf = (access: Models.Access) => access.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))
+
+describe("Models.layer (Providers §6.1, §7.1)", () => {
+  it.effect("a pull carries each provider that needs no connection, at its gateway's address, without a key", () =>
     Effect.gen(function* () {
-      const models = yield* Effect.provide(Models.Service, gateway)
-      const organizationId = Auth.OrganizationID.create()
-      const catalog = yield* models.catalog(organizationId)
-      expect(catalog.endpoints.map((endpoint) => Struct.omit(endpoint, ["models"]))).toEqual([
-        {
-          id: "ren",
-          name: "Ren",
-          protocol: "openai-chat",
-          baseUrl: "http://gateway.brains.invalid/v1",
-        },
-      ])
-      expect(catalog.endpoints[0]?.models.map((model) => model.id)).toContain("stub/stub-model")
-      expect(stub.modelInfo.reads.at(-1)).toBe("Bearer sk-ren")
-      const granted = yield* models.grant(Brain.ID.create(), organizationId, Space.ID.create())
-      const now = yield* DateTime.now
-      expect(Models.catalog(granted).endpoints.map((endpoint) => [endpoint.id, endpoint.baseUrl])).toEqual([
-        ["ren", "http://gateway.brains.invalid/v1"],
-      ])
-      expect(yield* models.providers).toEqual([
-        {
-          id: "ren",
-          name: "Ren",
-          protocol: "openai-chat",
-          baseUrl: "http://gateway.brains.invalid/v1",
-          catalog: "inference",
-        },
-      ])
-      const apiKey = granted.endpoints[0]?.apiKey
-      expect(apiKey && Redacted.value(apiKey.key)).toBe("sk-ren")
-      expect(Object.keys(apiKey ?? {}).toSorted()).toEqual(["expiresAt", "key"])
-      expect(DateTime.toEpochMillis(apiKey?.expiresAt ?? now) - DateTime.toEpochMillis(now)).toBeWithin(
-        Duration.toMillis(RenInferenceProvider.keyLifetime) - 1000,
-        Duration.toMillis(RenInferenceProvider.keyLifetime) + 1,
+      const test = yield* TestModelGateway.make({
+        providers: [
+          TestModelGateway.provider("ren", { name: "Ren" }),
+          TestModelGateway.provider("groq", { auth: [{ _tag: "key", fields: [] }] }),
+        ],
+      })
+      yield* test.setModels("ren", { revision: "1", models: [TestModelGateway.model("vendor/model")] })
+      const organizationId = yield* Seed.organization()
+      const providers = yield* Models.Service.use((models) => models.providers(organizationId)).pipe(
+        Effect.provide(withGateway(test)),
       )
+      expect(providers).toEqual([
+        {
+          id: "ren",
+          name: "Ren",
+          protocol: "openai-chat",
+          baseUrl: "https://models.test/v1",
+          catalog: { models: [TestModelGateway.model("vendor/model")] },
+        },
+      ])
     }),
   )
 
-  it.live("the gateway down at boot makes the catalog unavailable until it answers", () =>
+  it.effect("a minted key is kept until 20 minutes before it expires, then the gateway is asked again", () =>
     Effect.gen(function* () {
-      stub.modelInfo.down(true)
-      yield* Effect.addFinalizer(() => Effect.sync(() => stub.modelInfo.down(false)))
-      const models = yield* Effect.provide(Models.Service, gateway)
-      const organizationId = Auth.OrganizationID.create()
-      expect((yield* Effect.flip(models.catalog(organizationId)))._tag).toBe("Models.Unavailable")
-      stub.modelInfo.down(false)
-      expect((yield* models.catalog(organizationId)).endpoints.map((endpoint) => endpoint.id)).toEqual(["ren"])
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const organizationId = yield* Seed.organization()
+      const brain = brainIn(organizationId)
+      yield* Effect.gen(function* () {
+        const models = yield* Models.Service
+        const first = keyOf(yield* models.grant(...brain))
+        yield* TestClock.adjust(Duration.minutes(5 * 60 + 39))
+        expect(keyOf(yield* models.grant(...brain))).toEqual(first)
+        expect((yield* test.calls).grants).toBe(1)
+        yield* TestClock.adjust(Duration.minutes(2))
+        yield* models.grant(...brain)
+        expect((yield* test.calls).grants).toBe(2)
+      }).pipe(Effect.provide(withGateway(test)))
     }),
+  )
+
+  it.effect("a fixed key is kept until a call answers 401, then the gateway is asked again", () =>
+    Effect.gen(function* () {
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")], fixed: true })
+      const organizationId = yield* Seed.organization()
+      const brain = brainIn(organizationId)
+      yield* Effect.gen(function* () {
+        const models = yield* Models.Service
+        yield* models.grant(...brain)
+        yield* TestClock.adjust(Duration.days(30))
+        yield* models.grant(...brain)
+        expect((yield* test.calls).grants).toBe(1)
+        yield* models.forget(...brain, "ren")
+        yield* models.grant(...brain)
+        expect((yield* test.calls).grants).toBe(2)
+      }).pipe(Effect.provide(withGateway(test)))
+    }),
+  )
+
+  it.effect("two grants for one brain at once ask the gateway once", () =>
+    Effect.gen(function* () {
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const organizationId = yield* Seed.organization()
+      const brain = brainIn(organizationId)
+      yield* Effect.gen(function* () {
+        const models = yield* Models.Service
+        const first = yield* Effect.forkChild(models.grant(...brain))
+        const second = yield* Effect.forkChild(models.grant(...brain))
+        expect(keyOf(yield* Fiber.join(first))).toEqual(keyOf(yield* Fiber.join(second)))
+        expect((yield* test.calls).grants).toBe(1)
+      }).pipe(Effect.provide(withGateway(test)))
+    }),
+  )
+
+  it.effect("a change in a provider's models changes the list and mints no key", () =>
+    Effect.gen(function* () {
+      const test = yield* TestModelGateway.make({ providers: [TestModelGateway.provider("ren")] })
+      const organizationId = yield* Seed.organization()
+      const brain = brainIn(organizationId)
+      yield* Effect.gen(function* () {
+        const models = yield* Models.Service
+        yield* models.grant(...brain)
+        yield* test.setModels("ren", { revision: "2", models: [TestModelGateway.model("vendor/new")] })
+        const after = yield* models.grant(...brain)
+        expect(after.endpoints.flatMap((endpoint) => endpoint.models.map((each) => each.id))).toEqual(["vendor/new"])
+        expect((yield* test.calls).grants).toBe(1)
+      }).pipe(Effect.provide(withGateway(test)))
+    }),
+  )
+
+  it.effect("a Ren without model gateways has no models", () =>
+    Effect.gen(function* () {
+      const organizationId = yield* Seed.organization()
+      const models = yield* Models.Service
+      expect(yield* models.providers(organizationId)).toEqual([])
+      expect(yield* models.grant(...brainIn(organizationId))).toEqual({ endpoints: [] })
+    }).pipe(Effect.provide(Models.layerNone)),
   )
 })

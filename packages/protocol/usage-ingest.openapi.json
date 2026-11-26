@@ -81,6 +81,55 @@
           "required": true
         }
       }
+    },
+    "/internal/inference/changed": {
+      "post": {
+        "tags": ["inference"],
+        "operationId": "inference.changed",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "The model gateway says that a provider’s models changed: for one organization (a seat) or, without `organizationId`, for every organization (models.dev, Ren’s list). Ren tells the brains of those organizations to pull. Only the usage ingest key.",
+        "summary": "A provider’s models changed",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelGateway.Changed"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -132,6 +181,22 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
+      },
+      "ModelGateway.Changed": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["provider"],
+        "additionalProperties": false,
+        "description": "A provider’s models changed: for one organization, or for every organization without `organizationId`."
       },
       "Space.ID": {
         "type": "string",
@@ -470,6 +535,9 @@
   "tags": [
     {
       "name": "usage"
+    },
+    {
+      "name": "inference"
     }
   ]
 }

@@ -2,6 +2,7 @@ export * as BrainPush from "./brain-push.js"
 
 import { PgClient } from "@effect/sql-pg"
 import { Database } from "@ren/db/database"
+import { Postgres } from "@ren/db/postgres"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
@@ -9,7 +10,7 @@ import { Duration, Effect, Layer, Queue, Schedule } from "effect"
 import { BrainHost } from "./brain-host.js"
 import { Hands } from "./hands.js"
 
-export const channel = "ren_brains"
+export const channel = Postgres.brainsChannel
 
 // oxlint-disable-next-line ren/no-comments -- HR12: a push storm reaches at most this many brains at a time.
 const parallel = 16

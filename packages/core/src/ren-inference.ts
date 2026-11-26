@@ -3,6 +3,7 @@ export * as RenInference from "./ren-inference.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
+import { ModelGateway } from "@ren/schema/model-gateway"
 import { Models } from "@ren/schema/models"
 import type { Usage } from "@ren/schema/usage"
 import { RenInference } from "@ren/schema/ren-inference"
@@ -59,11 +60,20 @@ export interface Interface {
     actor: Actor.Info,
     input: RenInference.HarnessPlanInput,
   ) => Effect.Effect<RenInference.HarnessPlan, Failure>
+  readonly providers: Effect.Effect<ReadonlyArray<ModelGateway.Provider>, Failure>
+  readonly models: (
+    provider: string,
+    organizationId?: Auth.OrganizationID,
+  ) => Effect.Effect<ModelGateway.Listed, Failure>
+  readonly organizations: (provider: string) => Effect.Effect<ReadonlyArray<Auth.OrganizationID>, Failure>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
 
 const tokenLifetimeSeconds = 5 * 60
+
+// oxlint-disable-next-line ren/no-comments -- A call about all of Ren, not one organization, names this organization.
+const renOrganization = "ren"
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
@@ -113,7 +123,7 @@ export const layer = Layer.effect(
 
     const send = (
       claims: { readonly org: string; readonly sub?: string; readonly member?: string },
-      method: "GET" | "POST" | "PATCH" | "DELETE",
+      method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
       path: string,
       body?: object,
     ) =>
@@ -408,6 +418,26 @@ export const layer = Layer.effect(
       harnessPlan: Effect.fn("RenInference.harnessPlan")(function* (actor, input) {
         return yield* call(yield* personOf(actor), "POST", "/v1/harness-plans", RenInference.HarnessPlan, input)
       }),
+      providers: Effect.gen(function* () {
+        return yield* call({ org: renOrganization }, "GET", "/v1/providers", Schema.Array(ModelGateway.Provider))
+      }).pipe(Effect.withSpan("RenInference.providers")),
+      models: Effect.fn("RenInference.models")(function* (provider, organizationId) {
+        return yield* call(
+          { org: organizationId ?? renOrganization },
+          "GET",
+          `/v1/providers/${encodeURIComponent(provider)}/models`,
+          ModelGateway.Listed,
+        )
+      }),
+      // oxlint-disable-next-line ren/no-comments -- Providers §6.4, §10: the organizations whose LiteLLM team allows the provider.
+      organizations: Effect.fn("RenInference.organizations")(function* (provider) {
+        return yield* call(
+          { org: renOrganization },
+          "GET",
+          `/v1/providers/${encodeURIComponent(provider)}/organizations`,
+          Schema.Array(Auth.OrganizationID),
+        )
+      }),
     })
   }),
 )
@@ -429,6 +459,9 @@ export const layerNone = Layer.succeed(
     keySecret: () => Effect.fail(notConfigured()),
     keyUsage: () => Effect.succeed([]),
     harnessPlan: () => Effect.fail(notConfigured()),
+    providers: Effect.fail(notConfigured()),
+    models: () => Effect.fail(notConfigured()),
+    organizations: () => Effect.fail(notConfigured()),
   }),
 )
 
