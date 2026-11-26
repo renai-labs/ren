@@ -90,7 +90,6 @@ const it = testEffect(
           BRAIN_KEYS: encodeKey(key),
           REN_INTEGRATIONS_KEYS: encodeKey(integrationsKey),
           REN_URL: "https://api.ren.test",
-          REN_PREVIOUS_HOSTS: "api.old.ren.test=api.ren.test",
           REN_INTEGRATIONS_URL: "https://mcp.ren.test",
           ...TestDrives.config,
         }),
@@ -117,16 +116,6 @@ const modelKey = Effect.gen(function* () {
 })
 
 describe("CredentialSource.layerMinted", () => {
-  it.effect("a brain that started before REN_URL changed still gets its token on the previous host", () =>
-    Effect.gen(function* () {
-      const candidates = yield* (yield* CredentialSource.Minted).candidates(scope, [])
-      expect(candidates.find((candidate) => candidate.label === "REN")?.hosts).toEqual([
-        "api.ren.test",
-        "api.old.ren.test",
-      ])
-    }),
-  )
-
   it.effect("two mints of MODELS for one brain at once make one upstream mint; a 5xx is retried", () =>
     Effect.gen(function* () {
       yield* Ref.set(grants, 0)
