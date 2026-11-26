@@ -213,11 +213,8 @@ How OpenCode does it (for reference): `@opencode/core/voice` lists a fixed set o
 
 ## 8. Phase 5: bring your own key
 
-- [ ] B0. Before enabling direct connections that share old vendor IDs, write known legacy settings references in their canonical gateway form. Do not use compatibility aliases to choose the payer after a new connection is added.
-- [ ] B1. `schema`: an endpoint's payer: Ren or the customer.
-- [ ] B2. `db`: a table of an organization's providers and models. Each key is a `credential` row with `hosts` and `inject`; the brain never holds it.
-- [ ] B3. `core`: add the organization's endpoints to the brain's grant. The egress injects the customer's key. Usage rows have payer `customer`.
-- [ ] B4. The provider list comes from models.dev, every type. It needs U2.
+B0–B4 (own keys, payer, the provider list from models.dev) moved to [`providers/README.md`](providers/README.md). Own keys go through the model gateway, not the egress. B5–B7 follow that spec.
+
 - [ ] B5. Voice with a customer key for `openai`, `xai` or `google`.
 - [ ] B6. `app`: "connect a key" and "pick a provider" on the providers page; a default model per type in the organization, space and agent settings.
 - [ ] B7. A fal provider for `@opencode/ai`.
