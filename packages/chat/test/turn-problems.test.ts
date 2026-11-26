@@ -129,6 +129,22 @@ describe("TurnProblems.of", () => {
     })
   })
 
+  // oxlint-disable-next-line ren/no-comments -- A turn the brain stops before any answer has no assistant message; the card names the chat's model.
+  test("a turn that failed before any answer names the chat's model and provider", () => {
+    const problem = TurnProblems.of({
+      code: "model_unavailable",
+      assistants: [],
+      model: { id: "llama", providerID: "groq" },
+      modelNames: new Map([["llama", "Llama"]]),
+      providerNames: new Map([["groq", "Groq"]]),
+      admin: true,
+    })
+    expect([problem.title, problem.fix]).toEqual([
+      "Llama isn’t available anymore.",
+      "Check Groq in Providers, or pick another model.",
+    ])
+  })
+
   test("a vendor's own error is named by its code, and an error with no code gets the plain card", () => {
     expect(refused({ code: "rate_limited", admin: true }).title).toBe("Anthropic is getting too many requests.")
     expect(refused({ code: "context_too_long", admin: true }).actions).toEqual(["new", "model"])

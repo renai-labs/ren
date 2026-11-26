@@ -85,6 +85,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         detail={chat.detail}
         foldMessages={chat.foldMessages}
         modelNames={chat.modelNames}
+        model={chat.model}
         providerNames={
           new Map(chat.models.flatMap((each) => (each.providerName ? [[each.providerID, each.providerName]] : [])))
         }

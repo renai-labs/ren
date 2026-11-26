@@ -2,6 +2,7 @@ export * as TurnProblems from "./turn-problems.js"
 
 import type { SessionError } from "@ren/schema/session/error"
 import type { SessionMessage } from "@ren/schema/session/message"
+import type { SessionModel } from "@ren/schema/session/model"
 import { DateTime } from "effect"
 
 export type Action = "try" | "continue" | "model" | "billing" | "providers" | "new" | "stop"
@@ -185,18 +186,20 @@ export function of(input: {
   readonly code?: SessionError.Code | undefined
   readonly resetsAt?: string | undefined
   readonly assistants: ReadonlyArray<SessionMessage.Assistant>
+  // oxlint-disable-next-line ren/no-comments -- The chat's model, for a turn that failed before any answer.
+  readonly model?: SessionModel.Ref | undefined
   readonly modelNames: ReadonlyMap<string, string>
   readonly providerNames?: ReadonlyMap<string, string> | undefined
   readonly admin: boolean
   readonly timeZone?: string | undefined
 }): Problem {
-  const last = input.assistants.at(-1)
-  const provider = providerLabel(last?.model.providerID ?? "the model provider", input.providerNames)
+  const last = input.assistants.at(-1)?.model ?? input.model
+  const provider = providerLabel(last?.providerID ?? "the model provider", input.providerNames)
   const context: Context = {
     resetsAt: input.resetsAt,
     timeZone: input.timeZone,
     provider,
-    model: last ? (input.modelNames.get(last.model.id) ?? last.model.id) : "This model",
+    model: last ? (input.modelNames.get(last.id) ?? last.id) : "This model",
     midTurn: input.assistants.some((message) => message.content.some((content) => content.type === "tool")),
     admin: input.admin,
     elsewhere: `pick a model from ${provider === "The model provider" ? "another provider" : `a provider other than ${provider}`}`,

@@ -30,6 +30,7 @@ import { AppConnectCard } from "./app-connect.js"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
+import type { SessionModel } from "@ren/schema/session/model"
 import { Bubble, BubbleContent } from "@ren/ui/bubble"
 import { Button } from "@ren/ui/button"
 import { Kbd, KbdGroup } from "@ren/ui/kbd"
@@ -103,6 +104,7 @@ export interface TranscriptProps {
   readonly foldMessages?: boolean | undefined
   readonly modelNames?: ReadonlyMap<string, string> | undefined
   readonly providerNames?: ReadonlyMap<string, string> | undefined
+  readonly model?: SessionModel.Ref | undefined
   readonly empty?: string | undefined
   readonly admin?: boolean | undefined
   readonly onTryAgain?: ((text: string) => void) | undefined
@@ -146,6 +148,7 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
         code: row.code,
         resetsAt: row.resetsAt,
         assistants: props.context.turns.get(row.userMessageID) ?? [],
+        model: props.context.model,
         modelNames: props.context.modelNames,
         providerNames: props.context.providerNames,
         admin: props.context.admin,
@@ -238,6 +241,7 @@ interface Context {
   readonly handlers: (userMessageID: string) => TurnProblems.Handlers
   readonly modelNames: ReadonlyMap<string, string>
   readonly providerNames: ReadonlyMap<string, string>
+  readonly model: SessionModel.Ref | undefined
   readonly byId: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   readonly activeMessageID: string | undefined
@@ -683,6 +687,7 @@ function contextOf(props: TranscriptProps, byId: ReadonlyMap<string, SessionMess
     },
     modelNames: props.modelNames ?? new Map(),
     providerNames: props.providerNames ?? new Map(),
+    model: props.model,
     byId,
     turns: Projection.assistantMessagesByParent(props.messages),
     activeMessageID: props.activeMessageID,
