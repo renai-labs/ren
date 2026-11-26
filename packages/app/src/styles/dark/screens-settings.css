@@ -1,0 +1,384 @@
+/* Screens-settings.
+ *
+ * Every page under /settings, in the Apps grid the shell draws ([data-page-width="grid"]). This file only reaches
+ * inside that frame: the rhythm between sections, Linear's outset surfaces, and each screen's own leftovers.
+ *
+ * Scope: the settings shell is the one that renders the settings search ([data-sidebar-part="settings-search"]),
+ * so `--settings` rules never touch Apps or a space's pages. Per-screen rules key on a data-screen hook in TSX.
+ *
+ * Linear's settings measure (settings-profile.png, settings-members.png, linear-settings-110pct.png):
+ * - the title, section headings, row titles, table names and the pill row all start on one vertical line;
+ *   the surfaces around them (cards, table rows and group bars) bleed 16px past it on both sides;
+ * - 48px between one section's card and the next heading, 16px from a heading to its card.
+ */
+html.dark {
+  --settings-outset: 16px;
+  --settings-section-gap: 44px;
+  --settings-heading-gap: 14px;
+}
+
+/* ───────────────────────── 1. The frame inside the grid ───────────────────────── */
+
+html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
+  & [data-slot="page-body"] > div:first-child {
+    gap: var(--settings-section-gap);
+  }
+
+  & [data-slot="page-section"] {
+    gap: var(--settings-heading-gap);
+  }
+
+  /* Surfaces bleed past the text line, so row titles sit under the page title. */
+  & [data-slot="page-body"] > div:first-child > :is([data-slot="settings-card"], [data-slot="item-group"]),
+  & [data-slot="page-section"] > :is([data-slot="settings-card"], [data-slot="item-group"]),
+  &
+    [data-slot="page-body"]
+    :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
+      [data-slot="dialog-content"] *,
+      [data-slot="sheet-content"] *,
+      [data-slot="card"] *,
+      [data-slot="item-group"] *
+    ) {
+    width: auto;
+    max-width: none;
+    margin-inline: calc(var(--settings-outset) * -1);
+  }
+
+  /* A card's row title sits 2px further in than a table's first cell (the card and row borders), so cards
+     bleed 2px more and both land on the title's line. */
+  & [data-slot="page-body"] > div:first-child > :is([data-slot="settings-card"], [data-slot="item-group"]),
+  & [data-slot="page-section"] > :is([data-slot="settings-card"], [data-slot="item-group"]) {
+    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  }
+
+  /* Instructions (General): the read view is a settings card too, on the same outset as the others. */
+  & [data-slot="page-section"] > [class~="group/instructions"] {
+    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+    padding: 14px 18px;
+    border-color: var(--d-edge-faint);
+    border-radius: var(--d-r-card);
+    background-color: var(--d-card);
+    box-shadow: var(--d-contact);
+    font-size: var(--d-small);
+    color: var(--d-text-2);
+  }
+}
+
+/* ───────────────────────── 2. Preferences ───────────────────────── */
+
+/* Theme and interface layout: a settings row like the others. The title on the left, small preview tiles
+   (radio cards) on the right, captions under them, instead of a block of page-wide previews. */
+html.dark [data-slot="item-group"] > div:has(> [role="radiogroup"]) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+  padding: 14px 16px 12px;
+
+  & > span:first-child {
+    font-size: var(--d-small);
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--d-text);
+  }
+
+  & > [role="radiogroup"] {
+    display: flex;
+    gap: 10px;
+  }
+
+  & [role="radio"]:not(#d) {
+    width: 108px;
+    height: auto;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font-size: var(--d-mini);
+    font-weight: 450;
+    color: var(--d-text-3);
+  }
+
+  & [role="radio"]:not(#d)[aria-checked="true"] {
+    font-weight: 500;
+    color: var(--d-text);
+  }
+
+  & [role="radio"] > span:first-child {
+    height: 64px;
+    border-radius: var(--d-r);
+  }
+
+  /* The previews are drawn for 128px; at 64px their insets halve. */
+  & [role="radio"] > span:first-child > span {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  & [role="radio"] > span:first-child > span > span {
+    gap: 4px;
+  }
+
+  & [role="radio"]:not(#d):focus-visible {
+    outline: 0;
+  }
+
+  & [role="radio"]:focus-visible > span:first-child {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="item-group"] > div:has(> [role="radiogroup"]) [role="radio"]:not(#d):hover {
+    color: var(--d-text-2);
+  }
+
+  html.dark
+    [data-slot="item-group"]
+    > div:has(> [role="radiogroup"])
+    [role="radio"][aria-checked="false"]:hover
+    > span:first-child {
+    border-color: var(--d-line-menu);
+  }
+}
+
+/* Timeline detail: the level and what it means read as the row's description, under its title, not as a
+   second line of text pushed against the right edge. */
+html.dark [data-slot="item"]:has(> div > [data-slot="timeline-detail-level"]) {
+  gap: 14px;
+  padding: 12px 16px 10px;
+
+  & > div:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  & [data-slot="timeline-detail-level"] {
+    font-size: var(--d-mini);
+    line-height: 1.45;
+    color: var(--data-description);
+  }
+
+  & [data-slot="timeline-detail-level"] > span {
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+}
+
+/* Leaving and deleting: Linear's "Leave workspace" is red text in the row, no pill around it. */
+html.dark [data-slot="item-actions"] > button[data-tone="danger"]:not(#d) {
+  height: var(--d-ctl);
+  padding-inline: 10px;
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--c-danger);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="item-actions"] > button[data-tone="danger"]:not(#d):hover {
+    background-color: var(--c-danger-tint);
+  }
+}
+
+/* ───────────────────────── 3. Members ───────────────────────── */
+
+/* The role is Linear's role badge: a tinted 3px-radius label, the accent for owners and admins, neutral for
+   members. Where it can be changed, the badge is the select's trigger, with a small chevron. */
+html.dark [data-slot="role-badge"]:not(.contents),
+html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d) {
+  display: inline-flex;
+  width: auto;
+  height: 22px;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: var(--d-selected);
+  box-shadow: none;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d) {
+  padding-inline-end: 3px;
+}
+
+html.dark [data-slot="role-badge"]:is([data-role="owner"], [data-role="admin"]):not(.contents),
+html.dark
+  [data-slot="role-badge"]:is([data-role="owner"], [data-role="admin"])
+  > [data-slot="select-trigger"][data-size]:not(#d) {
+  background-color: var(--d-accent-tint);
+  color: var(--d-accent-text);
+}
+
+html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d) > svg {
+  width: 12px;
+  height: 12px;
+  color: currentColor;
+  opacity: 0.6;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d):hover {
+    border-color: var(--d-edge);
+  }
+
+  html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d):hover > svg {
+    opacity: 1;
+  }
+}
+
+html.dark
+  [data-slot="role-badge"]
+  > [data-slot="select-trigger"][data-size]:not(#d):is([aria-expanded="true"], [data-popup-open]) {
+  border-color: var(--d-edge);
+}
+
+html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not(#d):focus-visible {
+  border-color: var(--d-accent);
+}
+
+/* ───────────────────────── 4. Usage ───────────────────────── */
+
+/* The stat strip, the chart and the three breakdowns are cards on the same outset as every settings card,
+   their text 16px in, so labels sit on the title's line. */
+html.dark [data-page-width="grid"] [data-screen="usage"] {
+  gap: 16px;
+
+  & [data-slot="card"] {
+    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  }
+
+  & > :first-child:is([data-slot="card"], :has(> [data-slot="card"])) [data-slot="card"] > div,
+  & > [data-slot="card"]:first-child > div {
+    padding: 14px 16px;
+  }
+
+  & > div:has(> [data-slot="card"]) > [data-slot="card"] {
+    padding-inline: 16px;
+  }
+
+  /* The three breakdowns sit side by side; only the outer ones bleed. */
+  & > div:last-child:has(> [data-slot="card"] + [data-slot="card"]) {
+    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  }
+
+  & > div:last-child > [data-slot="card"] {
+    margin-inline: 0;
+    padding-inline: 4px;
+  }
+
+  & h2 {
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text);
+  }
+
+  & [data-slot="stat-value"] {
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Credits in the pill row: a 32px ghost pill that leads to Billing. */
+html.dark [data-slot="usage-credits"] {
+  height: var(--d-ctl-lg);
+  padding-inline: 12px 10px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-small);
+  font-weight: 450;
+  transition: background-color 100ms ease-out;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="usage-credits"]:hover {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="usage-credits"]:focus-visible {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: 2px;
+}
+
+/* ───────────────────────── 5. Billing & plans ───────────────────────── */
+
+/* The notice and the billing content are one block: 16px apart, not a section's 44px. */
+html.dark:has([data-sidebar-part="settings-search"])
+  [data-page-width="grid"]
+  [data-slot="page-body"]
+  > div:first-child:has(> [data-screen="billing"]) {
+  gap: 16px;
+}
+
+html.dark
+  [data-page-width="grid"]
+  [data-slot="page-body"]
+  > div:first-child:has(> [data-screen="billing"])
+  > [data-slot="alert"] {
+  width: auto;
+  margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  padding: 12px 16px;
+}
+
+/* The notice's action sits on the notice's middle line, not on its top edge. */
+html.dark [data-slot="page-body"] [data-slot="alert"] > [data-slot="alert-action"] {
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+}
+
+html.dark [data-page-width="grid"] [data-screen="billing"] {
+  gap: 16px;
+
+  /* Plan and credits, and the plan cards: cards on the settings outset. */
+  & > div:has(> [data-slot="card"]) {
+    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  }
+
+  & [data-slot="card"] [data-slot="card-title"] {
+    font-size: 1.25rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  & > [data-slot="page-section-title"] {
+    margin-top: 28px;
+  }
+}
+
+/* ───────────────────────── 6. Empty states ───────────────────────── */
+
+/* One empty state on every settings page: quiet text under the pill row, in the 96px a table's empty row
+   takes, not a box and not centred in the leftover height of the window. */
+html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
+  & [data-slot="page-body"] [data-slot="empty"] {
+    flex: none;
+    min-height: 96px;
+    justify-content: center;
+    padding: 20px 0;
+  }
+
+  & [data-slot="settings-empty"] {
+    display: flex;
+    min-height: 96px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+    font-size: var(--d-small);
+    color: var(--d-text-3);
+  }
+}

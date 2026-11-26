@@ -7,6 +7,7 @@ import {
   IconAdjustmentsHorizontal,
   IconArrowLeft,
   IconBrain,
+  IconChevronLeft,
   IconChartBar,
   IconCpu,
   IconMessagesFilled,
@@ -33,6 +34,7 @@ import { Footer, Header, Section, sidebarMenu, sidebarRow } from "./sidebar-part
 import { canAdministerOptions } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Keyboard } from "../platform/keyboard.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 export const settingsSections = [
   {
@@ -98,6 +100,7 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
   const section = useLocation({ select: (location) => location.pathname.split("/").at(2) })
   const [query, setQuery] = useState("")
   const search = useRef<HTMLInputElement>(null)
+  const deep = DarkUi.useDarkUi()
   Keyboard.useKeyDown((event) => {
     const target = event.target
     const typing = target instanceof HTMLElement && target.closest("input, textarea, [contenteditable=true]")
@@ -117,13 +120,18 @@ export function SettingsSidebar(props: { onSearch: () => void }) {
         <Header onSearch={props.onSearch} />
         <SidebarMenu className={cn(sidebarMenu, "px-0.5")}>
           <SidebarMenuItem>
-            <SidebarMenuButton className={sidebarRow} tooltip="Back to app" render={<Link to="/" />}>
-              <IconArrowLeft />
+            <SidebarMenuButton
+              className={sidebarRow}
+              tooltip="Back to app"
+              data-sidebar-part="back"
+              render={<Link to="/" />}
+            >
+              {deep ? <IconChevronLeft /> : <IconArrowLeft />}
               <span>Back to app</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="relative mx-0.5 mt-2 group-data-[collapsible=icon]:hidden">
+        <div data-sidebar-part="settings-search" className="relative mx-0.5 mt-2 group-data-[collapsible=icon]:hidden">
           <IconSearch className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <SidebarInput
             ref={search}

@@ -13,13 +13,15 @@ import { toast } from "@ren/ui/sonner"
 import { Tabs } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
 import { MermaidDiagram } from "../../components/mermaid-diagram.js"
-import { PageActions, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
+import { PageActions, PageTabs, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
 import { FactorySample } from "../../components/route-skeleton.js"
 import { Drafts } from "../../lib/drafts.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { FactorySpec } from "./factory-spec.js"
 import { spaceAgentsOptions, useSpace } from "./use-space.js"
+import { SpaceFrame } from "./space-frame.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 export type FactoryView = "flow" | "spec"
 
@@ -168,30 +170,51 @@ function FactoryCard(props: {
   onView: (view: FactoryView) => void
 }) {
   const draft = useFactoryDraft(props.space, props.agents)
+  const deep = DarkUi.useDarkUi()
+  const tabs = (
+    <Tabs value={props.view} onValueChange={(value: string) => props.onView(value === "spec" ? "spec" : "flow")}>
+      <PageTabsList>
+        <PageTabsTrigger value="flow">Flow</PageTabsTrigger>
+        <PageTabsTrigger value="spec">spec.yaml</PageTabsTrigger>
+      </PageTabsList>
+    </Tabs>
+  )
+  const status = (
+    <>
+      {props.view === "flow" ? <FlowStatus state={draft.state} /> : null}
+      {props.view === "spec" && props.space.canUpdate ? (
+        <SpecActions state={draft.state} onDiscard={draft.discard} onSave={draft.save} />
+      ) : null}
+    </>
+  )
+  const view =
+    props.view === "flow" ? (
+      <FactoryFlow declaration={draft.declaration} />
+    ) : (
+      <SpecEditor
+        text={draft.text}
+        problems={draft.problems}
+        onChange={props.space.canUpdate ? draft.change : undefined}
+        onSave={draft.save}
+      />
+    )
+  if (deep)
+    return (
+      <>
+        <PageTabs>{tabs}</PageTabs>
+        <SpaceFrame.Tools>{status}</SpaceFrame.Tools>
+        <div data-slot="factory-canvas" data-view={props.view} className="flex min-h-120 flex-1 flex-col contain-size">
+          {view}
+        </div>
+      </>
+    )
   return (
     <Card className="mt-4 min-h-120 flex-1 gap-0 py-0 contain-size has-[textarea:focus-visible]:ring-ring">
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">
-        <Tabs value={props.view} onValueChange={(value: string) => props.onView(value === "spec" ? "spec" : "flow")}>
-          <PageTabsList>
-            <PageTabsTrigger value="flow">Flow</PageTabsTrigger>
-            <PageTabsTrigger value="spec">spec.yaml</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-        {props.view === "flow" ? <FlowStatus state={draft.state} /> : null}
-        {props.view === "spec" && props.space.canUpdate ? (
-          <SpecActions state={draft.state} onDiscard={draft.discard} onSave={draft.save} />
-        ) : null}
+        {tabs}
+        {status}
       </div>
-      {props.view === "flow" ? (
-        <FactoryFlow declaration={draft.declaration} />
-      ) : (
-        <SpecEditor
-          text={draft.text}
-          problems={draft.problems}
-          onChange={props.space.canUpdate ? draft.change : undefined}
-          onSave={draft.save}
-        />
-      )}
+      {view}
     </Card>
   )
 }

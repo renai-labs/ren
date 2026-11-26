@@ -24,7 +24,8 @@ import { Tabs, TabsContent } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { formatDate } from "@ren/ui/time"
-import { Page, PageTabsList, PageTabsTrigger, Row, Rows, Section } from "../../components/page.js"
+import { Page, PageTabs, PageTabsList, PageTabsTrigger, Row, Rows, Section } from "../../components/page.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
@@ -70,6 +71,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
     refetchInterval: Webhooks.refreshEvery,
   })
   const webhook = props.webhook
+  const deep = DarkUi.useDarkUi()
   const live = webhook.mode === "live"
   const name = webhook.preset ? `${webhook.preset.appName} · ${webhook.name}` : webhook.name
   const save = () => {
@@ -105,10 +107,42 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
       },
     )
   }
+  const status = (
+    <>
+      <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span aria-hidden>Debug</span>
+        <Switch
+          checked={live}
+          disabled={!live && !Webhooks.canGoLive(webhook)}
+          onCheckedChange={(checked) => void actions.setLive(webhook, { live: checked })}
+          aria-label={`Make ${name} live`}
+        />
+        <span aria-hidden>Live</span>
+      </span>
+      <Button onClick={save} disabled={!form.state.changed || update.isPending}>
+        {update.isPending ? <Spinner data-icon="inline-start" /> : null}
+        Save
+      </Button>
+    </>
+  )
+  const tabs = (
+    <PageTabsList>
+      <PageTabsTrigger value="setup">Setup</PageTabsTrigger>
+      <PageTabsTrigger value="requests" count={total.data}>
+        Requests
+      </PageTabsTrigger>
+    </PageTabsList>
+  )
   return (
     <Page
       title={name}
-      description={webhook.modeReason ? Webhooks.modeReasons[webhook.modeReason] : undefined}
+      description={
+        webhook.modeReason
+          ? Webhooks.modeReasons[webhook.modeReason]
+          : deep
+            ? "Runs an agent each time another app sends a request."
+            : undefined
+      }
       back={
         <Link
           to="/spaces/$spaceId/automations"
@@ -124,24 +158,8 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           Back to webhooks
         </Link>
       }
-      aside={
-        <>
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span aria-hidden>Debug</span>
-            <Switch
-              checked={live}
-              disabled={!live && !Webhooks.canGoLive(webhook)}
-              onCheckedChange={(checked) => void actions.setLive(webhook, { live: checked })}
-              aria-label={`Make ${name} live`}
-            />
-            <span aria-hidden>Live</span>
-          </span>
-          <Button onClick={save} disabled={!form.state.changed || update.isPending}>
-            {update.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Save
-          </Button>
-        </>
-      }
+      aside={deep ? undefined : status}
+      actions={deep ? status : undefined}
     >
       <Tabs
         value={search.tab ?? "setup"}
@@ -154,12 +172,7 @@ function WebhookView(props: { webhook: WebhookInfo; spaceId: string }) {
           })
         }
       >
-        <PageTabsList>
-          <PageTabsTrigger value="setup">Setup</PageTabsTrigger>
-          <PageTabsTrigger value="requests" count={total.data}>
-            Requests
-          </PageTabsTrigger>
-        </PageTabsList>
+        {deep ? <PageTabs>{tabs}</PageTabs> : tabs}
         <TabsContent value="setup" className="pt-6">
           <WebhookSetup webhook={webhook} spaceId={props.spaceId} />
         </TabsContent>

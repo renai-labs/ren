@@ -33,6 +33,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Machines } from "../../lib/machines.js"
 import { ConfigFields } from "./config-fields.js"
 import { type Draft, EnvironmentForm } from "./environment-form.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const refreshEvery = 5000
 
@@ -339,6 +340,7 @@ function ShutdownSpacesDialog(props: {
 
 export function EnvironmentsSettingsPage() {
   const { api, client } = RouterContext.useRouterContext()
+  const deep = DarkUi.useDarkUi()
   const providers = useQuery(api.environmentProvider.list.queryOptions())
   const templates = useQuery({
     ...Machines.options(client),
@@ -369,6 +371,7 @@ export function EnvironmentsSettingsPage() {
   return (
     <Page
       title="Machines"
+      description={deep ? "Where your agents run their tools and code." : undefined}
       actions={
         <>
           <ToolbarSearch label="Search machines" value={query} onChange={setQuery} />

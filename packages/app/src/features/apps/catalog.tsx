@@ -7,10 +7,12 @@ import { LoadMore } from "../../components/load-more.js"
 import { needsAttention, type CatalogApp } from "../../lib/apps.js"
 import { Search } from "@ren/schema/search"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 export function CatalogAppRow(props: { app: CatalogApp; onAdd: (app: CatalogApp) => void }) {
   const navigate = useNavigate()
   const profiles = useAppProfiles([props.app.id]).of(props.app.id)
+  const deep = DarkUi.useDarkUi()
   return (
     <AppRow
       name={props.app.name}
@@ -19,15 +21,28 @@ export function CatalogAppRow(props: { app: CatalogApp; onAdd: (app: CatalogApp)
       attention={needsAttention(profiles)}
       onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: props.app.id } })}
       action={
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-10 text-muted-foreground [&_svg:not([class*='size-'])]:size-6"
-          aria-label={`Add ${props.app.name} to a space`}
-          onClick={() => props.onAdd(props.app)}
-        >
-          <IconPlus />
-        </Button>
+        deep ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            data-app-add=""
+            aria-label={`Add ${props.app.name} to a space`}
+            onClick={() => props.onAdd(props.app)}
+          >
+            <IconPlus data-icon="inline-start" />
+            Add
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 text-muted-foreground [&_svg:not([class*='size-'])]:size-6"
+            aria-label={`Add ${props.app.name} to a space`}
+            onClick={() => props.onAdd(props.app)}
+          >
+            <IconPlus />
+          </Button>
+        )
       }
     />
   )

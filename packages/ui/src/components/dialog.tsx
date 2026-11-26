@@ -7,6 +7,16 @@ import { cn } from "cn"
 import { Button } from "#components/button"
 import { IconX } from "@tabler/icons-react"
 
+const dialogWidths: Record<string, string> = {
+  none: "fill",
+  xs: "confirm",
+  sm: "confirm",
+  "2xl": "wide",
+  "3xl": "wide",
+  "4xl": "wide",
+  "5xl": "full",
+}
+
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
@@ -51,6 +61,15 @@ function DialogContent({
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-width={
+          typeof className !== "string"
+            ? "form"
+            : /(^|\s)max-w-none(\s|$)/.test(className)
+              ? "fill"
+              : (dialogWidths[/(?:^|\s)sm:max-w-(\S+)/.exec(className)?.[1] ?? ""] ??
+                (className.includes("sm:max-w-[") ? "fit" : "form"))
+        }
+        data-flush={typeof className === "string" && /(^|\s)p-0(\s|$)/.test(className) ? "" : undefined}
         className={cn(
           // oxlint-disable-next-line ren/require-companion-class -- Base UI focuses the dialog when it opens; its controls show their own focus rings
           "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-1/2 gap-3 overflow-y-auto overscroll-contain rounded-xl bg-background p-4 text-sm text-foreground shadow-dialog duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
@@ -62,6 +81,7 @@ function DialogContent({
         {showCloseButton ? (
           <DialogPrimitive.Close
             data-slot="dialog-close"
+            data-close="icon"
             render={<Button variant="ghost" className="absolute top-3 right-3 text-muted-foreground" size="icon-sm" />}
           >
             <IconX />

@@ -31,6 +31,7 @@ import { useFind } from "./use-find.js"
 import type { Session } from "@ren/schema/session"
 import { useAgents } from "../../lib/use-agents.js"
 import { useRunningAgent } from "./chat-view.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/sessions/$sessionId/")
 
@@ -94,7 +95,7 @@ function ChatThread(props: { chat: Chat; dock?: ReactNode }) {
         quote={chat.quote}
         empty={chat.child ? "This subagent hasn’t posted anything. It may have stopped before it started." : undefined}
       />
-      <div className="px-6 pb-4">
+      <div data-slot="chat-dock" className="px-6 pb-4">
         <ChatComposer chat={chat} dock={props.dock} onComposer={keys.composer} onDock={keys.dock} />
       </div>
     </>
@@ -130,6 +131,7 @@ function ChatComposer(props: {
   return (
     <div
       ref={column}
+      data-slot="chat-column"
       className="mx-auto flex w-full max-w-[calc(var(--container-chat)-(--spacing(12)))] flex-col gap-2"
     >
       {chat.backgroundActivity === "off" || chat.child ? null : (
@@ -215,8 +217,16 @@ function ChatHeader(props: {
 }) {
   const chat = props.chat
   const agent = useCustomAgentName(chat.root)
+  const deep = DarkUi.useDarkUi()
+  const actions = (
+    <ChatActions
+      sessionId={chat.child ?? chat.root}
+      archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
+      onRename={chat.child || !chat.canRename ? undefined : () => props.onRenamingChange(true)}
+    />
+  )
   return (
-    <Breadcrumb.Header>
+    <header data-slot="page-bar" className="mx-8 flex min-h-12 shrink-0 items-center gap-1 pt-2 max-md:pl-6">
       {chat.child ? (
         <div className="mr-auto flex min-w-0 items-center">
           <Breadcrumb.Root
@@ -229,6 +239,7 @@ function ChatHeader(props: {
           >
             <span className="block truncate">{chat.childTitle ?? "Subagent"}</span>
           </Breadcrumb.Root>
+          {deep ? actions : null}
         </div>
       ) : (
         <div className="mr-auto flex min-w-0 items-center gap-2 max-md:max-w-full max-md:flex-1">
@@ -262,6 +273,7 @@ function ChatHeader(props: {
               onCommit={chat.rename}
             />
           </Breadcrumb.Root>
+          {deep ? actions : null}
           {agent ? (
             <Badge variant="outline" className="shrink-0 max-md:hidden">
               <IconGhostFilled />
@@ -275,12 +287,9 @@ function ChatHeader(props: {
         usage={chat.contextUsage}
         onCompact={chat.child || !chat.canCompact ? undefined : chat.compact}
       />
-      <ChatActions
-        sessionId={chat.child ?? chat.root}
-        archive={chat.child ? undefined : { title: chat.title, onArchive: chat.archive }}
-        onRename={chat.child || !chat.canRename ? undefined : () => props.onRenamingChange(true)}
-      />
+      {deep ? null : actions}
       <Button
+        data-chat-part="panel-toggle"
         variant="ghost"
         size="icon"
         aria-label={props.panel ? "Close panel" : "Open panel"}
@@ -290,7 +299,7 @@ function ChatHeader(props: {
       >
         <IconLayoutSidebarRight stroke={2.25} />
       </Button>
-    </Breadcrumb.Header>
+    </header>
   )
 }
 
@@ -351,9 +360,10 @@ export function ChatPage() {
         layout.current = node
         sizePanel(node, width)
       }}
+      data-slot="chat-page"
       className="@container flex min-h-0 flex-1"
     >
-      <div className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
+      <div data-slot="chat-main" className={panel && maximized ? "hidden" : "relative flex min-w-0 flex-1 flex-col"}>
         <ChatHeader
           chat={chat}
           panel={panel}
@@ -362,7 +372,10 @@ export function ChatPage() {
           onTogglePanel={() => workspace.setOpen(!panel)}
         />
         {chat.failed ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          <div
+            data-slot="chat-failed"
+            className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground"
+          >
             Ren couldn’t open this chat.
             <Button variant="outline" onClick={chat.reopen}>
               Try again
@@ -377,6 +390,8 @@ export function ChatPage() {
       </div>
       <div
         inert={!panel}
+        data-slot="chat-panel"
+        data-open={panel}
         className={cn(
           "shrink-0 overflow-hidden transition-[width] duration-200 ease-linear in-data-resizing:transition-none motion-reduce:transition-none",
           panelWidth({ open: panel, maximized }),

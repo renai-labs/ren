@@ -28,10 +28,14 @@ const dateColumn = "flex w-16 shrink-0 items-center justify-end gap-1 text-xs ta
 
 function DueDate(props: { status: Task["status"]; dueAt: string | null }) {
   const now = useNow()
-  if (!props.dueAt) return <span aria-hidden className={dateColumn} />
+  if (!props.dueAt) return <span aria-hidden data-slot="task-date" className={dateColumn} />
   const overdue = TaskActions.overdue(props, now)
   return (
-    <span className={cn(dateColumn, overdue ? "text-destructive" : "text-muted-foreground")}>
+    <span
+      data-slot="task-date"
+      data-overdue={overdue || undefined}
+      className={cn(dateColumn, overdue ? "text-destructive" : "text-muted-foreground")}
+    >
       {overdue ? <IconAlertTriangle className="size-3.5" /> : null}
       <span className="sr-only">{overdue ? "Overdue, due" : "Due"}</span>
       {formatShortDate(props.dueAt)}
@@ -62,6 +66,7 @@ export function SubtaskProgress(props: { done: number; total: number; className?
   return (
     <Badge
       variant="outline"
+      data-chip="progress"
       className={cn("h-6 gap-1.5 rounded-full bg-muted tabular-nums @max-md/tasks:hidden", props.className)}
     >
       <ProgressRing done={props.done} total={props.total} />
@@ -75,7 +80,10 @@ function TaskMeta(props: { task: Task; spaceName: string; show: (property: strin
   const task = props.task
   const show = props.show
   return (
-    <span className="ml-auto flex items-center justify-end gap-1 [&_[data-slot=badge]]:shrink-0 [&_[data-slot=badge]]:bg-transparent [&_[data-slot=badge]]:text-muted-foreground">
+    <span
+      data-slot="task-meta"
+      className="ml-auto flex items-center justify-end gap-1 [&_[data-slot=badge]]:shrink-0 [&_[data-slot=badge]]:bg-transparent [&_[data-slot=badge]]:text-muted-foreground"
+    >
       {task.subtasks && task.subtasks.total > 0 ? (
         <SubtaskProgress done={task.subtasks.done} total={task.subtasks.total} />
       ) : null}
@@ -126,10 +134,14 @@ function TaskDates(props: { task: Task; show: (property: string) => boolean }) {
     <>
       {props.show("due") ? <DueDate status={task.status} dueAt={task.dueAt} /> : null}
       {props.show("created") ? (
-        <span className={cn(dateColumn, "text-muted-foreground")}>{formatShortDate(task.createdAt)}</span>
+        <span data-slot="task-date" className={cn(dateColumn, "text-muted-foreground")}>
+          {formatShortDate(task.createdAt)}
+        </span>
       ) : null}
       {props.show("updated") ? (
-        <span className={cn(dateColumn, "text-muted-foreground")}>{formatShortDate(task.updatedAt)}</span>
+        <span data-slot="task-date" className={cn(dateColumn, "text-muted-foreground")}>
+          {formatShortDate(task.updatedAt)}
+        </span>
       ) : null}
     </>
   )
@@ -144,7 +156,7 @@ const branchPaths: Record<Tasks.Branch, string> = {
 
 function TreeBranch(props: { branch: Tasks.Branch }) {
   return (
-    <span aria-hidden className="relative w-6 shrink-0 self-stretch">
+    <span aria-hidden data-slot="task-branch" data-branch={props.branch} className="relative w-6 shrink-0 self-stretch">
       <svg viewBox="0 0 24 44" preserveAspectRatio="none" className="absolute inset-0 size-full opacity-30">
         <path
           d={branchPaths[props.branch]}
@@ -167,7 +179,7 @@ function RowAssignees(props: {
 }) {
   const task = props.task
   return (
-    <span className="flex shrink-0 items-center gap-1">
+    <span data-slot="task-assignees" className="flex shrink-0 items-center gap-1">
       <TaskAgentPicker
         value={task.agentId}
         spaceId={task.spaceId}
@@ -234,6 +246,7 @@ export function TaskRow(props: {
       items={actions}
       render={
         <div
+          data-slot="task-row"
           data-selected={props.selected || undefined}
           className="group/row relative flex h-11 items-center gap-2 rounded-lg px-2 text-sm [contain-intrinsic-size:auto_--spacing(11)] [content-visibility:auto] hover:bg-muted data-selected:bg-muted"
         />
@@ -260,6 +273,7 @@ export function TaskRow(props: {
         </PriorityMenu>
       ) : null}
       <span
+        data-slot="task-id"
         className="ml-2 min-w-14 shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums @max-lg/tasks:hidden"
         // oxlint-disable-next-line react/forbid-dom-props -- the ID column fits the longest identifier in the list
         style={{ width: `${props.idWidth}ch` }}
@@ -284,7 +298,10 @@ export function TaskRow(props: {
         {task.title}
       </TaskLink>
       {props.parent ? (
-        <span className="flex max-w-60 min-w-0 items-center gap-1 text-xs text-muted-foreground @max-sm/tasks:hidden">
+        <span
+          data-slot="task-parent"
+          className="flex max-w-60 min-w-0 items-center gap-1 text-xs text-muted-foreground @max-sm/tasks:hidden"
+        >
           <IconSubtask className="size-3.5 shrink-0" />
           <span className="sr-only">Sub-task of</span>
           <span className="truncate">

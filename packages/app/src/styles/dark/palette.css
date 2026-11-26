@@ -1,0 +1,78 @@
+/*
+ * Palette.
+ * Linear's dark ramp as measured in the app (LCH hue 272, chroma 0.4–2.4), mapped onto Ren's shadcn roles.
+ *
+ *   role                    before       now        measured against
+ *   page (behind sidebar)   #101010      #09090a
+ *   panel                   #151515      #121213
+ *   card                    #1f1f1f      #1a1a1b
+ *   popover                 #1f1f1f      #28292b
+ *   text, primary           #f1f1f1      #ffffff    19.0:1 on panel
+ *   text, content           #f1f1f1      #e3e4e6    14.7:1 on panel
+ *   text, muted             #a3a3a3      #959597    6.3:1 panel, 5.8:1 card, 4.9:1 popover
+ *   nav text (75%)          ≈#979797     ≈#939496   6.5:1 on page
+ */
+html.dark {
+  --background: #121213;
+  --foreground: #ffffff;
+  --card: #1a1a1b;
+  --card-foreground: #ffffff;
+  --popover: #28292b;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #09090a;
+  --secondary: rgb(255 255 255 / 0.09);
+  --secondary-foreground: #ffffff;
+  --muted: rgb(255 255 255 / 0.045);
+  --muted-foreground: #959597;
+  --accent: rgb(255 255 255 / 0.075);
+  --accent-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.07);
+  --input: rgb(255 255 255 / 0.1);
+
+  --sidebar: #09090a;
+  --sidebar-foreground: #c1c2c5;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #09090a;
+  --sidebar-accent: rgb(255 255 255 / 0.105);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.07);
+
+  --overlay-shadow: 0 0 0 1px #3f4044;
+  --dialog-shadow: 0 0 0 1px #3f4044;
+
+  --avatar-from: #a9aaad;
+  --avatar-to: #4f5053;
+
+  --ink-content: #e3e4e6;
+  --ink-raised: #1c1d1f;
+
+  scrollbar-color: #57585a transparent;
+}
+
+html.dark ::selection {
+  background-color: rgb(148 149 151 / 0.36);
+}
+
+/* Long-form text sits one step under the UI's pure white, as Linear's editor text does. */
+html.dark [data-slot="markdown"],
+html.dark [data-slot="message-content"],
+html.dark [data-slot="input-group-control"],
+html.dark [data-slot="textarea"] {
+  color: var(--ink-content);
+}
+
+html.dark [data-slot="markdown"] :is(h1, h2, h3, h4, strong) {
+  color: var(--foreground);
+}
+
+/* A dialog is raised above the panel; the popover step is kept for menus. */
+html.dark [data-slot="dialog-content"],
+html.dark [data-slot="sheet-content"] {
+  background-color: var(--ink-raised);
+}
+
+html.dark [data-slot="dialog-overlay"],
+html.dark [data-slot="sheet-overlay"] {
+  background-color: rgb(0 0 0 / 0.55);
+}

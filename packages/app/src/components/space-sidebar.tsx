@@ -7,6 +7,7 @@ import {
   IconArrowLeft,
   IconBrain,
   IconBuildingFactory2,
+  IconChevronLeft,
   IconChartBar,
   IconChartPie,
   IconMessagesFilled,
@@ -50,6 +51,7 @@ import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { SpaceAvatar } from "./resource-avatar.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 const spaceGroups = [
   {
@@ -118,6 +120,7 @@ function SpaceSwitcher(props: {
               "font-medium text-sidebar-accent-foreground [&>svg:first-child]:text-sidebar-accent-foreground",
             )}
             tooltip={props.space?.name ?? "Switch space"}
+            data-sidebar-part="space-switcher"
             aria-label={`Switch space (current: ${props.space?.name ?? "Space"})`}
           />
         }
@@ -207,6 +210,7 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
     spaceGroups.flatMap((group): ReadonlyArray<SpaceItem> => group.items).find((item) => item.value === value) ??
     spaceGroups[0].items[0]
   const open = Preference.usePreference(SidebarPreferences.spaceGroups)
+  const deep = DarkUi.useDarkUi()
   const setPreference = Preference.useSetPreference()
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -214,8 +218,13 @@ export function SpaceSidebar(props: { spaceId: string; onSearch: () => void }) {
         <Header onSearch={props.onSearch} />
         <SidebarMenu className={cn(sidebarMenu, "px-0.5")}>
           <SidebarMenuItem>
-            <SidebarMenuButton className={sidebarRow} tooltip="All spaces" render={<Link to="/spaces" />}>
-              <IconArrowLeft />
+            <SidebarMenuButton
+              className={sidebarRow}
+              tooltip="All spaces"
+              data-sidebar-part="back"
+              render={<Link to="/spaces" />}
+            >
+              {deep ? <IconChevronLeft /> : <IconArrowLeft />}
               <span>All spaces</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

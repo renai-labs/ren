@@ -39,7 +39,11 @@ export function ConfirmDialog(props: {
   }
   return (
     <Dialog open={props.open} onOpenChange={(open) => (pending ? undefined : props.onOpenChange(open))}>
-      <DialogContent finalFocus={props.finalFocus ?? true}>
+      <DialogContent
+        finalFocus={props.finalFocus ?? true}
+        data-dialog="confirm"
+        data-tone={props.confirmation.tone ?? "destructive"}
+      >
         <DialogHeader>
           <DialogTitle>{props.confirmation.title}</DialogTitle>
           <DialogDescription>{props.confirmation.description}</DialogDescription>

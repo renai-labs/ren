@@ -36,6 +36,7 @@ import { canCopy, ownerLabel } from "../../lib/apps.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
+import { SpaceFrame } from "./space-frame.js"
 
 export function SpaceCredentialsTab() {
   const { api, client } = RouterContext.useRouterContext()
@@ -66,8 +67,10 @@ export function SpaceCredentialsTab() {
   const stale = keys.isPlaceholderData
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search secrets" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         {elsewhere.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button />}>

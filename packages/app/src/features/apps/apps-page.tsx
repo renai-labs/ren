@@ -277,39 +277,43 @@ function AppsHome() {
   const needle = Debounce.useValue(query.trim(), 250)
   const sheet = useAddSheet()
   return (
-    <Page
-      title="Apps"
-      width="wide"
-      description="Apps give Ren new tools. Add one to a space and every chat there can use it."
-      actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
-      tabs={
-        <Tabs
-          value={tab}
-          onValueChange={(value: string) =>
-            void navigate({
-              search: value === "managed" || value === "organization" || value === "installed" ? { tab: value } : {},
-              replace: true,
-            })
-          }
-        >
-          <PageTabsList>
-            <PageTabsTrigger value="all">All</PageTabsTrigger>
-            <PageTabsTrigger value="managed">Managed</PageTabsTrigger>
-            <PageTabsTrigger value="organization">Organization</PageTabsTrigger>
-            <PageTabsTrigger value="installed">Installed</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-      }
-    >
-      {tab === "all" && needle ? <AppResults title="All apps" query={query} needle={needle} onAdd={sheet.add} /> : null}
-      {tab === "all" && !needle ? <FeaturedApps onAdd={sheet.add} /> : null}
-      {tab === "managed" ? <ManagedApps query={query} onAdd={sheet.add} /> : null}
-      {tab === "organization" ? <OrganizationApps query={query} onAdd={sheet.add} /> : null}
-      {tab === "installed" ? (
-        <OwnApps connected title="Installed" empty="No apps installed yet" query={query} onAdd={sheet.add} />
-      ) : null}
-      {sheet.dialog}
-    </Page>
+    <div data-screen="apps" className="contents">
+      <Page
+        title="Apps"
+        width="wide"
+        description="Apps give Ren new tools. Add one to a space and every chat there can use it."
+        actions={<ToolbarSearch label="Search apps" value={query} onChange={setQuery} />}
+        tabs={
+          <Tabs
+            value={tab}
+            onValueChange={(value: string) =>
+              void navigate({
+                search: value === "managed" || value === "organization" || value === "installed" ? { tab: value } : {},
+                replace: true,
+              })
+            }
+          >
+            <PageTabsList>
+              <PageTabsTrigger value="all">All</PageTabsTrigger>
+              <PageTabsTrigger value="managed">Managed</PageTabsTrigger>
+              <PageTabsTrigger value="organization">Organization</PageTabsTrigger>
+              <PageTabsTrigger value="installed">Installed</PageTabsTrigger>
+            </PageTabsList>
+          </Tabs>
+        }
+      >
+        {tab === "all" && needle ? (
+          <AppResults title="All apps" query={query} needle={needle} onAdd={sheet.add} />
+        ) : null}
+        {tab === "all" && !needle ? <FeaturedApps onAdd={sheet.add} /> : null}
+        {tab === "managed" ? <ManagedApps query={query} onAdd={sheet.add} /> : null}
+        {tab === "organization" ? <OrganizationApps query={query} onAdd={sheet.add} /> : null}
+        {tab === "installed" ? (
+          <OwnApps connected title="Installed" empty="No apps installed yet" query={query} onAdd={sheet.add} />
+        ) : null}
+        {sheet.dialog}
+      </Page>
+    </div>
   )
 }
 

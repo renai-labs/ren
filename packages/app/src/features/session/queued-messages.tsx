@@ -12,7 +12,7 @@ export function QueuedMessages(props: {
   const count = props.items.length
   if (count === 0) return null
   return (
-    <div className="relative -mb-5 rounded-xl border bg-muted/40 px-1.5 pt-1.5 pb-4.5">
+    <div data-slot="queued-messages" className="relative -mb-5 rounded-xl border bg-muted/40 px-1.5 pt-1.5 pb-4.5">
       {count > 3 ? (
         <div className="px-2 pt-0.5 pb-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase tabular-nums">
           {count} queued
@@ -28,6 +28,7 @@ export function QueuedMessages(props: {
         {props.items.map((item) => (
           <li
             key={item.id}
+            data-slot="queued-message"
             className="group/queued flex h-8 shrink-0 items-center gap-2 rounded-md pr-1 pl-2 text-sm hover:bg-muted/60"
           >
             <span dir="auto" className="min-w-0 flex-1 truncate">

@@ -31,6 +31,7 @@ import { AppearancePreferences } from "../../lib/appearance-preferences.js"
 import { TimelineDetailSetting } from "./timeline-detail-setting.js"
 import { TypographySection } from "./typography-section.js"
 import { LayoutSetting } from "./layout-setting.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const resettable = [
   AppearancePreferences.theme,
@@ -58,6 +59,7 @@ const notificationRows = [
 
 export function PreferencesPage() {
   const { api, auth, platform, queryClient } = RouterContext.useRouterContext()
+  const deep = DarkUi.useDarkUi()
   const me = useMe()
   const notifications = Preference.usePreference(ChatPreferences.notifications)
   const [permission, setPermission] = useState(() => platform.notificationPermission?.())
@@ -127,6 +129,7 @@ export function PreferencesPage() {
   return (
     <Page
       title="Preferences"
+      description={deep ? "Your profile, and how Ren looks and works for you." : undefined}
       actions={
         <Button
           variant="outline"
@@ -245,8 +248,8 @@ export function PreferencesPage() {
               <TimeZonePicker
                 automatic
                 value={timeZone}
-                variant="ghost"
-                className="gap-2 text-muted-foreground"
+                variant={deep ? "outline" : "ghost"}
+                className={deep ? "gap-2" : "gap-2 text-muted-foreground"}
                 onChange={(value) => setPreference(TimeZone.chosen, value || null)}
               />
             </Row>,
@@ -266,7 +269,7 @@ export function PreferencesPage() {
         <Rows>
           {[
             <Row key="leave" title={organization.name}>
-              <Button variant="outline" size="sm" onClick={() => setLeaving(true)}>
+              <Button variant="outline" size="sm" data-tone="danger" onClick={() => setLeaving(true)}>
                 Leave organization
               </Button>
             </Row>,
@@ -288,7 +291,7 @@ export function PreferencesPage() {
         <Rows>
           {[
             <Row key="delete" title="Delete account" description="Ren deletes your account and its data within 7 days.">
-              <Button variant="outline" size="sm" onClick={() => setDeleting(true)}>
+              <Button variant="outline" size="sm" data-tone="danger" onClick={() => setDeleting(true)}>
                 Delete my account
               </Button>
             </Row>,

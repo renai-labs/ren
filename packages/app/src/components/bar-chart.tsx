@@ -103,7 +103,7 @@ export function BarChart(props: {
     event.currentTarget.querySelectorAll("button")[next]?.focus()
   }
   return (
-    <figure className={cn("flex flex-col gap-2", props.className)}>
+    <figure data-slot="bar-chart" className={cn("flex flex-col gap-2", props.className)}>
       <figcaption className="sr-only">{props.label}</figcaption>
       <div className="flex h-40 gap-3">
         <div
@@ -130,6 +130,7 @@ export function BarChart(props: {
                       tabIndex={index === current ? 0 : -1}
                       aria-label={describe(bar, props.series, props.format)}
                       onFocus={() => setChosen(index)}
+                      data-slot="bar-chart-bar"
                       className="min-w-0 flex-1 rounded-sm px-px outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
                     />
                   }
@@ -157,7 +158,7 @@ export function BarChart(props: {
 
 export function ChartLegend(props: { series: ReadonlyArray<BarSeries>; totals?: ReadonlyArray<string> | undefined }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+    <ul data-slot="chart-legend" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
       {props.series.map((series, index) => (
         <li key={series.label} className="flex items-center gap-1.5">
           <span className={cn("size-2 rounded-sm", series.swatch)} />

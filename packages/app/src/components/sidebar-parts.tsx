@@ -15,6 +15,7 @@ import {
   IconCalendarEvent,
   IconCalendarMonth,
   IconCalendarWeek,
+  IconCaretDownFilled,
   IconChevronRight,
   IconCircle,
   IconCube,
@@ -83,6 +84,7 @@ import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 export const sidebarRow =
   "h-8 gap-1 rounded-md p-1 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground data-active:hover:bg-sidebar-accent data-active:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:[&_svg]:size-5 group-data-[collapsible=icon]:[&>svg]:m-0 [&>svg]:mx-1.25 [&>svg]:my-0.75 [&_svg]:size-4.5"
@@ -119,7 +121,10 @@ function SearchButton(props: { onSearch: () => void }) {
 
 export function Header(props: { onSearch?: (() => void) | undefined }) {
   return (
-    <div className="mt-1 mb-3.5 flex items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0.5">
+    <div
+      data-sidebar-part="brand"
+      className="mt-1 mb-3.5 flex items-center px-1 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1 group-data-[collapsible=icon]:px-0.5"
+    >
       <span
         aria-hidden
         className="flex size-8 shrink-0 items-center justify-center text-sidebar-foreground group-data-[collapsible=icon]:size-9"
@@ -130,7 +135,7 @@ export function Header(props: { onSearch?: (() => void) | undefined }) {
         Ren
       </span>
       {props.onSearch ? (
-        <span className="group-data-[collapsible=icon]:hidden">
+        <span data-sidebar-part="search" className="group-data-[collapsible=icon]:hidden">
           <SearchButton onSearch={props.onSearch} />
         </span>
       ) : null}
@@ -175,9 +180,13 @@ export function Section(props: {
   closed?: ReactNode
   children: ReactNode
 }) {
+  const deep = DarkUi.useDarkUi()
   return (
     <SidebarGroup className={cn("px-0.5 pt-5 pb-0 group-data-[collapsible=icon]:pt-3", props.className)}>
-      <div className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25 group-data-[collapsible=icon]:hidden">
+      <div
+        data-sidebar-part="section-head"
+        className="group/section flex h-6 shrink-0 items-center pr-1 pb-1 pl-2.25 group-data-[collapsible=icon]:hidden"
+      >
         {props.onToggle ? (
           <Button
             variant="ghost"
@@ -187,13 +196,24 @@ export function Section(props: {
             className="h-auto justify-start gap-1 rounded-md p-0 text-sm font-bold text-sidebar-foreground/80 hover:bg-transparent active:not-aria-[haspopup]:scale-100 aria-expanded:bg-transparent aria-expanded:text-sidebar-foreground/80"
           >
             {props.label}
-            <IconChevronRight
-              aria-hidden
-              className={cn(
-                "size-3.5 opacity-0 transition-[transform,opacity] duration-150 ease-out group-focus-within/section:opacity-100 group-hover/section:opacity-100 motion-reduce:transition-none",
-                props.open && "rotate-90",
-              )}
-            />
+            {deep ? (
+              <IconCaretDownFilled
+                aria-hidden
+                data-sidebar-part="caret"
+                className={cn(
+                  "transition-transform duration-150 ease-out motion-reduce:transition-none",
+                  !props.open && "-rotate-90",
+                )}
+              />
+            ) : (
+              <IconChevronRight
+                aria-hidden
+                className={cn(
+                  "size-3.5 opacity-0 transition-[transform,opacity] duration-150 ease-out group-focus-within/section:opacity-100 group-hover/section:opacity-100 motion-reduce:transition-none",
+                  props.open && "rotate-90",
+                )}
+              />
+            )}
           </Button>
         ) : null}
         {!props.onToggle ? <span className="text-sm font-bold text-sidebar-foreground/80">{props.label}</span> : null}
@@ -516,6 +536,7 @@ function UserRow() {
           render={
             <SidebarMenuButton
               size="lg"
+              data-sidebar-part="account"
               className="group/user h-10 min-w-0 flex-1 gap-1.5 rounded-md py-1.5 pr-2 pl-1.5 group-data-[collapsible=icon]:justify-center hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent"
               tooltip={`${userName} · ${me.organization.name}`}
               aria-label={`Switch organization (current: ${me.organization.name})`}
@@ -572,7 +593,7 @@ function UserRow() {
 function HelpAndSettings() {
   const platform = Platform.usePlatform()
   return (
-    <div className="flex shrink-0 group-data-[collapsible=icon]:hidden">
+    <div data-sidebar-part="help-settings" className="flex shrink-0 group-data-[collapsible=icon]:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" className={iconButton} aria-label="Help" />}>
           <IconHelpCircle />
@@ -607,7 +628,7 @@ function HelpAndSettings() {
 
 export function Footer() {
   return (
-    <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
+    <SidebarFooter data-sidebar-part="footer" className="gap-1 px-0.5 pt-2 pb-0">
       <SidebarMenu className={sidebarMenu}>
         <NavRow
           to="/settings/preferences"

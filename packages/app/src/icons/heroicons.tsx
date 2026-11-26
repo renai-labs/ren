@@ -1,5 +1,7 @@
 /* oxlint-disable react/only-export-components, eslint/no-restricted-imports, react/forbid-component-props -- stands in for @tabler/icons-react (aliased in vite.config.ts): filled Heroicons under Tabler's names, Tabler for the rest; the one place that imports Heroicons and maps Tabler's color prop to style */
-import { useId, type ComponentType, type SVGProps } from "react"
+import { useId, useSyncExternalStore, type ComponentType, type SVGProps } from "react"
+import * as SolidSet from "@heroicons/react/20/solid"
+import * as OutlineSet from "@heroicons/react/24/outline"
 import {
   AdjustmentsHorizontalIcon,
   ArchiveBoxIcon,
@@ -135,6 +137,11 @@ import {
 } from "@heroicons/react/20/solid"
 
 export * from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
+import {
+  IconBrain as TablerBrain,
+  IconMessages as TablerMessages,
+  IconMessagesFilled as TablerMessagesFilled,
+} from "@tabler/icons-react/dist/esm/tabler-icons-react.mjs"
 
 type Props = SVGProps<SVGSVGElement> & {
   size?: number | string
@@ -144,9 +151,54 @@ type Props = SVGProps<SVGSVGElement> & {
   "data-weight"?: "heavy"
 }
 
-const wrap = (Hero: ComponentType<SVGProps<SVGSVGElement>>, weight = 0) => {
+type HeroComponent = ComponentType<SVGProps<SVGSVGElement>>
+
+const outlineSet: Record<string, HeroComponent | undefined> = OutlineSet
+
+const glyphs = /^(?:Chevron|Check|XMark|Plus|Minus|Arrow|Ellipsis|Bars)/u
+
+const outlineTwins = new Map<unknown, HeroComponent>(
+  Object.entries(SolidSet).flatMap(([name, icon]) => {
+    const twin = glyphs.test(name) ? undefined : outlineSet[name]
+    return twin ? [[icon, twin] as const] : []
+  }),
+)
+
+const iconStyleListeners = new Set<() => void>()
+
+let observingIconStyle = false
+
+function subscribeIconStyle(listener: () => void) {
+  if (!observingIconStyle) {
+    observingIconStyle = true
+    new MutationObserver(() => iconStyleListeners.forEach((notify) => notify())).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+  }
+  iconStyleListeners.add(listener)
+  return () => {
+    iconStyleListeners.delete(listener)
+  }
+}
+
+const outlineIcons = () => document.documentElement.classList.contains("dark")
+
+const wrap = (Hero: HeroComponent, weight = 0) => {
   function HeroIcon({ size, stroke, color, className, ...rest }: Props) {
+    const Outline = useSyncExternalStore(subscribeIconStyle, outlineIcons) ? outlineTwins.get(Hero) : undefined
     const extra = (rest["data-weight"] === "heavy" ? weight : 0) + Math.max(0, Number(stroke ?? 2) - 2) * 1.2
+    if (Outline)
+      return (
+        <Outline
+          width={size ?? 20}
+          height={size ?? 20}
+          className={["tabler-icon", className].filter(Boolean).join(" ")}
+          style={color ? { color } : undefined}
+          data-outline=""
+          {...rest}
+        />
+      )
     return (
       <Hero
         width={size ?? 20}
@@ -273,7 +325,15 @@ export const IconAt = wrap(AtSymbolIcon)
 export const IconAtom = wrap(BeakerIcon)
 export const IconBan = wrap(NoSymbolIcon)
 export const IconBook = wrap(BookOpenIcon)
-export const IconBrain = wrap(BrainIcon)
+const swap = (Filled: ComponentType<Props>, Outline: ComponentType<Props>) =>
+  function SwapIcon(props: Props) {
+    if (useSyncExternalStore(subscribeIconStyle, outlineIcons))
+      return <Outline size={props.size ?? 20} stroke={1.5} data-outline="" {...props} />
+    return <Filled {...props} />
+  }
+
+export const IconBrain = swap(wrap(BrainIcon), TablerBrain)
+export const IconMessagesFilled = swap(TablerMessagesFilled, TablerMessages)
 export const IconBrowser = wrap(WindowIcon)
 export const IconBuilding = wrap(BuildingOffice2Icon)
 export const IconBuildingFactory2 = wrap(WrenchScrewdriverIcon)

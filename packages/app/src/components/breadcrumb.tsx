@@ -53,7 +53,10 @@ export function Editable(props: Omit<ComponentProps<typeof EditableText>, "showI
 
 export function Header(props: { children: ReactNode; className?: string }) {
   return (
-    <header className={cn("mx-8 flex min-h-12 shrink-0 items-center gap-1 pt-2 max-md:pl-6", props.className)}>
+    <header
+      data-slot="page-bar"
+      className={cn("mx-8 flex min-h-12 shrink-0 items-center gap-1 pt-2 max-md:pl-6", props.className)}
+    >
       {props.children}
     </header>
   )

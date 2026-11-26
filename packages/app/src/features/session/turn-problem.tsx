@@ -67,6 +67,8 @@ function Shell(props: {
 }) {
   return (
     <Alert
+      data-chat-part="turn-problem"
+      data-waiting={props.waiting || undefined}
       className={cn(
         "animate-in gap-x-3 rounded-none border-0 bg-transparent px-0 py-1 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none",
         props.waiting ? "*:[svg]:text-muted-foreground" : "*:[svg]:text-destructive",

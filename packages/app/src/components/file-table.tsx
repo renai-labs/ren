@@ -9,7 +9,7 @@ export const rowLink =
 
 export function FileTable(props: { columns: ReadonlyArray<Column>; children: ReactNode }) {
   return (
-    <Table className="table-fixed">
+    <Table data-file-table="" className="table-fixed">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="h-12 px-3">Name</TableHead>
@@ -35,11 +35,13 @@ export function FileRow(props: {
   className?: string | undefined
 }) {
   return (
-    <TableRow className={cn("relative cursor-pointer", props.className)}>
+    <TableRow data-file-row="" className={cn("relative cursor-pointer", props.className)}>
       <TableCell className="h-12 px-3">
-        <span className="flex min-w-0 items-center gap-4">
+        <span data-file-name="" className="flex min-w-0 items-center gap-4">
           {props.media === undefined ? null : (
-            <span className="flex w-6 shrink-0 justify-center text-muted-foreground [&_svg]:size-5">{props.media}</span>
+            <span data-file-media="" className="flex w-6 shrink-0 justify-center text-muted-foreground [&_svg]:size-5">
+              {props.media}
+            </span>
           )}
           {props.name}
           {props.badge}

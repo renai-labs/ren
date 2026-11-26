@@ -13,7 +13,7 @@ const tones: Record<StatusTone, string> = {
 
 export function StatusBadge(props: { tone: StatusTone; className?: string; children: ReactNode }) {
   return (
-    <Badge variant="secondary" className={cn("h-6", tones[props.tone], props.className)}>
+    <Badge variant="secondary" data-tone={props.tone} className={cn("h-6", tones[props.tone], props.className)}>
       {props.children}
     </Badge>
   )

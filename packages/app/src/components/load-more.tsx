@@ -3,7 +3,7 @@ import { Spinner } from "@ren/ui/spinner"
 export function LoadMore(props: { more: boolean; loading?: boolean | undefined; onMore: () => void }) {
   if (props.loading)
     return (
-      <div className="flex justify-center py-2 text-muted-foreground">
+      <div data-slot="load-more" className="flex justify-center py-2 text-muted-foreground">
         <Spinner />
       </div>
     )

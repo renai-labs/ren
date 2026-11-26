@@ -97,6 +97,7 @@ function AddMenu(props: {
       <DropdownMenuTrigger
         render={
           <InputGroupButton
+            data-composer-part="add"
             variant="secondary"
             size="icon-sm"
             className="rounded-full [&_svg]:transition-transform data-popup-open:[&_svg]:rotate-45"
@@ -194,7 +195,12 @@ function AppsStrip(props: {
   if (apps.length === 0)
     return (
       <>
-        <InputGroupButton size="sm" className="-ml-1 font-normal text-muted-foreground" onClick={() => setAdding(true)}>
+        <InputGroupButton
+          data-composer-part="apps"
+          size="sm"
+          className="-ml-1 font-normal text-muted-foreground"
+          onClick={() => setAdding(true)}
+        >
           <IconLayoutGridAdd />
           Add Apps
         </InputGroupButton>
@@ -207,6 +213,7 @@ function AppsStrip(props: {
         <PopoverTrigger
           render={
             <InputGroupButton
+              data-composer-part="apps"
               size="sm"
               className="-ml-1 font-normal text-muted-foreground data-popup-open:text-foreground"
               aria-label={`Apps: ${apps.map((each) => each.app.name).join(", ")}${expired ? `, ${expired} ${statusLabel.expired.toLowerCase()}` : ""}`}
@@ -406,7 +413,10 @@ function PromptInputStatus(props: {
 }) {
   if (props.boot._tag === "Waiting")
     return (
-      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+      <div
+        data-composer-part="status"
+        className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+      >
         <IconLoader2 className="size-3.5 animate-spin" />
         <RetryCountdown retryAt={props.boot.retryAt} />
         <Button variant="outline" size="sm" onClick={props.onRetryNow}>
@@ -416,7 +426,7 @@ function PromptInputStatus(props: {
     )
   if (props.boot._tag === "Failed")
     return (
-      <div className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+      <div data-composer-part="status" className="absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
         <span className="mr-auto min-w-0 text-sm text-muted-foreground">Couldn’t start this chat</span>
         <Popover>
           <PopoverTrigger render={<Button variant="ghost" size="sm" />}>Details</PopoverTrigger>
@@ -434,7 +444,10 @@ function PromptInputStatus(props: {
     )
   if (props.boot._tag === "Stopped")
     return (
-      <div className="pointer-events-none absolute inset-x-4 top-3 flex min-w-0 items-center gap-2">
+      <div
+        data-composer-part="status"
+        className="pointer-events-none absolute inset-x-4 top-3 flex min-w-0 items-center gap-2"
+      >
         <span className="mr-auto min-w-0 text-sm text-muted-foreground">
           This space was shut down. Send a message or retry to start it again.
         </span>
@@ -444,7 +457,10 @@ function PromptInputStatus(props: {
       </div>
     )
   return (
-    <span className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+    <span
+      data-composer-part="status"
+      className="pointer-events-none absolute inset-x-4 top-4 flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+    >
       <IconLoader2 className="size-3.5 animate-spin" />
       Reconnecting…
     </span>
@@ -456,6 +472,7 @@ function ShellPrefix(props: { active: boolean }) {
   return (
     <span
       aria-hidden
+      data-composer-part="shell-prefix"
       className="pointer-events-none absolute top-4 left-4 font-mono leading-relaxed text-muted-foreground"
     >
       $
@@ -647,6 +664,8 @@ function SendButton(props: Send & { split?: boolean }) {
   const variant = state.filled ? "default" : "secondary"
   return (
     <InputGroupButton
+      data-composer-part="send"
+      data-filled={state.filled}
       variant={props.split ? "ghost" : variant}
       size="icon-sm"
       className={cn(
@@ -756,7 +775,7 @@ function ComposerToolbar(props: {
   const [appsOpen, setAppsOpen] = useControlled({ value: props.apps?.open, onChange: props.apps?.onOpenChange })
   const [adding, setAdding] = useState(false)
   return (
-    <InputGroupAddon align="block-end" className="px-3 pt-0 pb-3">
+    <InputGroupAddon align="block-end" data-composer-part="toolbar" className="px-3 pt-0 pb-3">
       {shell ? null : (
         <AddMenu
           onAttach={props.onAttach}
@@ -1011,7 +1030,13 @@ export function PromptInput(props: {
   const attachments =
     Composer.files(draft).length + uploads.uploads.length + Composer.quotes(draft).length + draft.pasted.length > 0
   return (
-    <div ref={root} className="relative flex flex-col gap-2">
+    <div
+      ref={root}
+      data-slot="composer"
+      data-placement={props.placement}
+      data-blank={blank}
+      className="relative flex flex-col gap-2"
+    >
       {suggest ? <SuggestionMenu suggest={suggest} anchor={root} below={home} onChoose={choose} /> : null}
       <DropOverlay
         title="Drop files to attach"
@@ -1028,7 +1053,9 @@ export function PromptInput(props: {
           event.target.value = ""
         }}
       />
-      <div className="flex flex-wrap items-center gap-1 empty:hidden">{props.header}</div>
+      <div data-composer-part="header" className="flex flex-wrap items-center gap-1 empty:hidden">
+        {props.header}
+      </div>
       {repositories && props.spaceId ? (
         <RepositoriesDialog spaceId={props.spaceId} onClose={() => setRepositories(false)} />
       ) : null}
@@ -1049,7 +1076,7 @@ export function PromptInput(props: {
         }}
       >
         {attachments ? (
-          <InputGroupAddon align="block-start" className="px-3 pt-3">
+          <InputGroupAddon align="block-start" data-composer-part="attachments" className="px-3 pt-3">
             <ImageSet>
               <AttachmentGroup className="w-full py-0">
                 <UploadChips

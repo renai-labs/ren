@@ -1,0 +1,84 @@
+/*
+ * Linear's system, measured in the app (dark, 100% zoom, font size "Small"), as shared tokens.
+ * Every file after this one reads these; none of them writes a raw colour or size that has a token here.
+ * Loads after type.css, palette.css and edges.css, which stay the base layer.
+ */
+html.dark {
+  /* Surfaces, darkest first. */
+  --d-page: #09090a;
+  --d-panel: #121213;
+  --d-raised: #161617;
+  --d-card: #1a1a1b;
+  --d-control: #1b1c1d;
+  --d-control-hover: #232325;
+  --d-control-active: #29292b;
+  --d-chip: #2a2b2d;
+  --d-menu: #28292b;
+  --d-hover: rgb(255 255 255 / 0.04);
+  --d-selected: rgb(255 255 255 / 0.07);
+
+  /* Text. 3 is the lowest step that still passes 4.5:1 on every surface above (4.9:1 on --d-menu). */
+  --d-text: #ffffff;
+  --d-text-2: #e3e4e6;
+  --d-text-3: #959597;
+  --d-text-4: #5c5d5f;
+
+  /* Lines. Real borders only: a box-shadow ring smears at fractional zoom. */
+  --d-line: #1c1d1f;
+  --d-line-2: #232426;
+  --d-line-3: #28282b;
+  --d-line-menu: #3f4044;
+  --d-edge: rgb(255 255 255 / 0.091);
+  --d-edge-faint: rgb(255 255 255 / 0.048);
+  --d-contact: 0 0.5px 1px 1px rgb(0 0 0 / 0.3);
+  --d-shadow-menu: 0 3px 8px rgb(0 0 0 / 0.125), 0 2px 5px rgb(0 0 0 / 0.125), 0 1px 1px rgb(0 0 0 / 0.125);
+  --d-shadow-dialog:
+    0 4px 40px rgb(0 0 0 / 0.1), 0 3px 20px rgb(0 0 0 / 0.125), 0 3px 12px rgb(0 0 0 / 0.125),
+    0 2px 8px rgb(0 0 0 / 0.125), 0 1px 1px rgb(0 0 0 / 0.125);
+
+  /* Accent: the one filled colour. white on #6975e2 measures 4.01:1, so it carries
+     labels at 500 weight and icons, never body text). */
+  --d-accent: #6975e2;
+  --d-accent-hover: #7682ea;
+  --d-accent-fg: #ffffff;
+  --d-accent-tint: rgb(105 117 226 / 0.2);
+  --d-accent-text: #b4bcff;
+
+  /* Type, in rem of the 15px root set below. Weights: 450 text, 500 labels, 600 titles. */
+  --d-micro: 0.6875rem;
+  --d-mini: 0.75rem;
+  --d-small: 0.8125rem;
+  --d-regular: 0.9375rem;
+  --d-large: 1.125rem;
+  --d-title: 1.5rem;
+
+  /* Geometry, in px: Linear keeps these fixed whatever the font size. */
+  --d-header: 44px;
+  --d-ctl-sm: 24px;
+  --d-ctl: 28px;
+  --d-ctl-lg: 32px;
+  --d-row: 28px;
+  --d-list-row: 36px;
+  --d-gutter: 8px;
+  --d-sidebar: 244px;
+  --d-r-sm: 6px;
+  --d-r: 8px;
+  --d-r-card: 10px;
+  --d-r-panel: 12px;
+  --d-r-dialog: 20px;
+  --d-r-pill: 9999px;
+
+  /* Ren's shadcn roles, re-pointed. */
+  --primary: var(--d-accent);
+  --primary-foreground: var(--d-accent-fg);
+  --ring: var(--d-accent);
+  --sidebar-ring: var(--d-accent);
+  --sidebar-primary: var(--d-accent);
+  --sidebar-primary-foreground: var(--d-accent-fg);
+}
+
+/* Linear at "Small" is a 15px root, the scale these sizes were measured at. An explicit size in
+   Preferences (Small, Large, Larger) is set inline on <html> and still wins. */
+html.dark:not([style*="font-size"]) {
+  font-size: 15px;
+}

@@ -21,6 +21,7 @@ import { useCanAdminister } from "../../lib/use-organization.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 type ProviderConnection = RenInferenceConnection
 
@@ -95,6 +96,7 @@ function SubscriptionList(props: {
 export function ProvidersPage() {
   const { api } = RouterContext.useRouterContext()
   const platform = Platform.usePlatform()
+  const deep = DarkUi.useDarkUi()
   const isAdmin = useCanAdminister()
   const list = useQuery({ ...api["ren-inference"].connection.list.queryOptions(), retry: false })
   const connections = list.data ?? []
@@ -125,24 +127,26 @@ export function ProvidersPage() {
   }
   const rows = connections.filter((each) => each.providerName === tab)
   const product = providers.find((provider) => provider.name === tab)?.product ?? tab
+  const pageActions = (
+    <>
+      <Link to="/settings/providers/keys" className={buttonVariants({ variant: "outline" })}>
+        <IconKey />
+        Inference keys
+      </Link>
+      {isAdmin && !unavailable ? (
+        <Button onClick={() => connect(tab)}>
+          <IconPlus />
+          Connect {product}
+        </Button>
+      ) : null}
+    </>
+  )
   return (
     <Page
       title="Providers"
       description="Subscriptions your agents run on."
-      aside={
-        <>
-          <Link to="/settings/providers/keys" className={buttonVariants({ variant: "outline" })}>
-            <IconKey />
-            Inference keys
-          </Link>
-          {isAdmin && !unavailable ? (
-            <Button onClick={() => connect(tab)}>
-              <IconPlus />
-              Connect {product}
-            </Button>
-          ) : null}
-        </>
-      }
+      aside={deep ? undefined : pageActions}
+      actions={deep ? pageActions : undefined}
       tabs={
         <Tabs value={tab} onValueChange={setTab}>
           <PageTabsList aria-label="Providers">

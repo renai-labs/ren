@@ -37,7 +37,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { ReadMore } from "../../components/read-more.js"
 import { errorMessage } from "../../lib/errors.js"
-import { AccountList, AppSections } from "../../components/app-list.js"
+import { AccountList, AppFacts, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
@@ -49,6 +49,7 @@ import { fromRegistry, isBundle, listsSpace, statusOf, type CatalogApp, type Sta
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ShareRequest } from "./share-request.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/apps/$appId/")
 
@@ -359,30 +360,36 @@ function OwnerMenu(props: { app: CatalogApp }) {
 
 function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
   const isReduced = ReducedMotion.useReduced()
+  const deep = DarkUi.useDarkUi()
   const prompts = props.app.listing?.examplePrompts ?? []
   if (prompts.length === 0) return null
   const start = props.onStart
   return (
     <section
       aria-label="Example prompts"
+      data-slot="app-prompts"
       className="relative isolate grid min-h-64 overflow-hidden rounded-2xl bg-muted px-4 py-12 sm:min-h-80 sm:px-12"
     >
-      <Suspense fallback={null}>
-        <MeshGradient
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 size-full"
-          width="100%"
-          height="100%"
-          colors={promptColors}
-          distortion={0.34}
-          swirl={0.22}
-          grainMixer={0.01}
-          grainOverlay={0.035}
-          speed={isReduced ? 0 : 0.06}
-          scale={1.2}
-          rotation={18}
-        />
-      </Suspense>
+      {deep ? (
+        <h2 data-slot="app-prompts-title">Try it</h2>
+      ) : (
+        <Suspense fallback={null}>
+          <MeshGradient
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 size-full"
+            width="100%"
+            height="100%"
+            colors={promptColors}
+            distortion={0.34}
+            swirl={0.22}
+            grainMixer={0.01}
+            grainOverlay={0.035}
+            speed={isReduced ? 0 : 0.06}
+            scale={1.2}
+            rotation={18}
+          />
+        </Suspense>
+      )}
       <ul className="m-auto flex w-full max-w-xl flex-col gap-3">
         {prompts.map((prompt) => {
           const body = (
@@ -428,20 +435,21 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const detailsShape = useShapeId("app-details")
   const first = uses.find(works)?.space
   const body = app.listing?.body
+  const deep = DarkUi.useDarkUi()
+  const actions = (
+    <>
+      <OwnerActions app={app} uses={uses} />
+      <OpenInChat app={app} uses={uses} onStart={(spaceId) => start(spaceId)} onProfile={setEditing} />
+    </>
+  )
   return (
-    <AppDetailFrame name={app.name}>
+    <AppDetailFrame
+      name={app.name}
+      actions={deep ? actions : undefined}
+      aside={deep && !props.loading ? <AppFacts app={app} /> : undefined}
+    >
       <Loading id={headerShape} loading={false} label="Loading app">
-        <AppHeader
-          name={app.name}
-          description={app.description}
-          icon={app.icon}
-          actions={
-            <>
-              <OwnerActions app={app} uses={uses} />
-              <OpenInChat app={app} uses={uses} onStart={(spaceId) => start(spaceId)} onProfile={setEditing} />
-            </>
-          }
-        />
+        <AppHeader name={app.name} description={app.description} icon={app.icon} actions={deep ? null : actions} />
       </Loading>
       <Loading id={detailsShape} loading={props.loading} label="Loading app details">
         {props.loading ? (
@@ -453,7 +461,7 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
               <ReadMore className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</ReadMore>
             ) : null}
             <AppAccounts app={app} onProfile={setEditing} />
-            <AppSections app={app} />
+            <AppSections app={app} facts={!deep} />
           </div>
         )}
       </Loading>

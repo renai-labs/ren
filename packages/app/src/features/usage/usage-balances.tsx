@@ -31,7 +31,7 @@ function Credits(props: { billing: BillingSummary }) {
   const granted = props.billing.grantedMicroUsd > 0
   const depleted = granted && props.billing.availableMicroUsd <= 0
   return (
-    <Link to="/settings/billing" className={item}>
+    <Link to="/settings/billing" data-slot="usage-credits" className={item}>
       <span className="text-muted-foreground">Credits</span>
       <span className={cn("font-medium tabular-nums", depleted && "text-destructive")}>
         {money(props.billing.availableMicroUsd)}

@@ -9,10 +9,11 @@ export function GroupHeader(props: {
   count: number
   title?: ReactNode | undefined
   action?: ReactNode | undefined
+  tone?: string | undefined
 }) {
   return (
-    <div className="sticky top-0 z-20 bg-background">
-      <div className="flex h-9 items-center gap-2 rounded-lg bg-muted pr-2 pl-1 text-sm">
+    <div data-slot="group-header" data-tone={props.tone} className="sticky top-0 z-20 bg-background">
+      <div data-slot="group-bar" className="flex h-9 items-center gap-2 rounded-lg bg-muted pr-2 pl-1 text-sm">
         <CollapsibleTrigger
           render={
             <Button
@@ -26,8 +27,12 @@ export function GroupHeader(props: {
           <IconChevronDown className="size-3.5" />
         </CollapsibleTrigger>
         <props.icon className="size-4 text-muted-foreground" />
-        <h2 className="min-w-0 truncate font-medium">{props.title ?? props.label}</h2>
-        <span className="text-xs text-muted-foreground tabular-nums">{props.count}</span>
+        <h2 data-slot="group-label" className="min-w-0 truncate font-medium">
+          {props.title ?? props.label}
+        </h2>
+        <span data-slot="group-count" className="text-xs text-muted-foreground tabular-nums">
+          {props.count}
+        </span>
         {props.action ? <span className="ml-auto flex">{props.action}</span> : null}
       </div>
     </div>

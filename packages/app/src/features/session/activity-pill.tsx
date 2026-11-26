@@ -290,6 +290,7 @@ export function ActivityPill(props: {
         <DropdownMenuTrigger
           render={
             <Button
+              data-chat-part="activity-pill"
               variant="outline"
               size="sm"
               aria-label={Family.summary(items)}

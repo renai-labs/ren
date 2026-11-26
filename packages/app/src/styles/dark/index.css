@@ -1,0 +1,18 @@
+/*
+ * The dark desktop interface: Linear's anatomy on Ren's screens. Every rule in these files starts with
+ * `html.dark`, so light mode keeps the previous look, and the structure that goes with them renders behind
+ * `DarkUi.useDarkUi()` (src/lib/dark-ui.ts). Order matters: later files refine earlier ones.
+ */
+@import "./type.css";
+@import "./palette.css";
+@import "./edges.css";
+@import "./tokens.css";
+@import "./shell.css";
+@import "./controls.css";
+@import "./overlays.css";
+@import "./data.css";
+@import "./chat.css";
+@import "./screens-settings.css";
+@import "./screens-spaces.css";
+@import "./screens-library.css";
+@import "./overrides.css";

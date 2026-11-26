@@ -10,6 +10,7 @@ import { OverviewAttention } from "./overview-attention.js"
 import { OverviewRecent } from "./overview-recent.js"
 import { OverviewSummary } from "./overview-summary.js"
 import { useSpace } from "./use-space.js"
+import { SpaceFrame } from "./space-frame.js"
 
 export function SpaceOverviewTab(props: { period: Insights.Period; onPeriod: (period: Insights.Period) => void }) {
   const space = useSpace()
@@ -25,8 +26,10 @@ export function SpaceOverviewTab(props: { period: Insights.Period; onPeriod: (pe
         >
           See usage
         </Link>
-        <PeriodSelect value={props.period} options={Insights.periods} onChange={props.onPeriod} />
       </PageActions>
+      <SpaceFrame.Tools>
+        <PeriodSelect value={props.period} options={Insights.periods} onChange={props.onPeriod} />
+      </SpaceFrame.Tools>
       <OverviewSummary spaceId={space.id} period={props.period} />
       <OverviewActivity spaceId={space.id} period={props.period} />
       <div className="grid items-start gap-8 lg:grid-cols-2">

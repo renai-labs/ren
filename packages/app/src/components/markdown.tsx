@@ -246,7 +246,11 @@ function MarkdownTable({ node: _node, className, children, ...props }: Component
         </table>
       </section>
       {copy ? (
-        <div className={cn("mt-1 flex justify-end", streaming && "invisible")} inert={streaming}>
+        <div
+          data-slot="markdown-table-actions"
+          className={cn("mt-1 flex justify-end", streaming && "invisible")}
+          inert={streaming}
+        >
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

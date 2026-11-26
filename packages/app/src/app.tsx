@@ -10,6 +10,7 @@ import { ChatPreferences } from "./lib/chat-preferences.js"
 import { Preference } from "./lib/preference.js"
 import type { Runtime } from "./lib/runtime.js"
 import { Platform } from "./platform/platform.js"
+import "./styles/dark/index.css"
 
 export function App(props: { runtime: ReturnType<typeof Runtime.make> }) {
   return (

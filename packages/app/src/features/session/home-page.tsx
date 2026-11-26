@@ -23,6 +23,7 @@ import { Artifacts } from "../../lib/artifacts.js"
 import { useMentionSuggestions } from "./use-composer-suggestions.js"
 import { ComposerMotion } from "../../lib/composer-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/")
 
@@ -33,6 +34,7 @@ export function HomePage(props: {
 }) {
   const { api, platform } = RouterContext.useRouterContext()
   const me = useMe()
+  const deep = DarkUi.useDarkUi()
   const navigate = useNavigate()
   const router = useRouter()
   const spaces = useSpaces().joined
@@ -127,9 +129,9 @@ export function HomePage(props: {
       if (router.state.location.pathname.endsWith(sessionId)) void navigate({ to: "/", search })
     })
   }
-  return (
+  const body = (
     <div className="relative flex flex-1 flex-col items-center justify-center px-6 pt-4">
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+      <div data-slot="chat-home-mark" className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <Logomark
           outline
           className="h-[min(40vh,--spacing(84))] w-auto shrink-0 -translate-y-1/4 mask-b-from-25% mask-b-to-72% text-foreground/10"
@@ -184,6 +186,15 @@ export function HomePage(props: {
           />
         </div>
       </div>
+    </div>
+  )
+  if (!deep) return body
+  return (
+    <div data-slot="chat-home" className="relative flex min-h-0 flex-1 flex-col">
+      <header data-slot="page-bar" className="flex shrink-0 items-center gap-1">
+        <h1 data-slot="page-title">New chat</h1>
+      </header>
+      {body}
     </div>
   )
 }

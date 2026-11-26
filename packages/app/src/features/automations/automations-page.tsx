@@ -3,6 +3,8 @@ import { Page } from "../../components/page.js"
 import { AutomationEditor, type EditorTab } from "./automation-editor.js"
 import { AutomationsList, NewAutomationButton } from "./automations-list.js"
 import type { Automations } from "../../lib/automations.js"
+import { DarkUi } from "../../lib/dark-ui.js"
+import { SpaceFrame } from "../spaces/space-frame.js"
 
 const globalList = getRouteApi("/_authed/_shell/automations/")
 const spaceList = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/")
@@ -15,15 +17,22 @@ const kindParam = (kind: Automations.ListKind) => (kind === "webhooks" ? "webhoo
 export function AutomationsPage() {
   const search = globalList.useSearch()
   const navigate = globalList.useNavigate()
+  const deep = DarkUi.useDarkUi()
   return (
-    <Page title="Automations" description="Agents that run on a schedule, or when another app sends a request.">
-      <AutomationsList
-        spaceId={undefined}
-        kind={search.kind ?? "schedules"}
-        onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
-        actions={<NewAutomationButton spaceId={undefined} />}
-      />
-    </Page>
+    <SpaceFrame.Screen name="automations">
+      <Page
+        title="Automations"
+        description={deep ? undefined : "Agents that run on a schedule, or when another app sends a request."}
+        width={deep ? "full" : undefined}
+      >
+        <AutomationsList
+          spaceId={undefined}
+          kind={search.kind ?? "schedules"}
+          onKind={(kind) => void navigate({ search: { kind: kindParam(kind) } })}
+          actions={<NewAutomationButton spaceId={undefined} />}
+        />
+      </Page>
+    </SpaceFrame.Screen>
   )
 }
 

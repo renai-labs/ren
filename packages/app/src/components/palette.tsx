@@ -27,6 +27,7 @@ export function PaletteDialog(props: {
       <DialogContent
         showCloseButton={false}
         initialFocus={input}
+        data-dialog="palette"
         overlayClassName="duration-200 data-closed:duration-150"
         className={cn("flex flex-col gap-0 overflow-hidden p-0 sm:max-w-120", motion, props.className)}
       >

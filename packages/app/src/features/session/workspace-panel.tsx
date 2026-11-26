@@ -326,19 +326,19 @@ export function WorkspacePanel(props: {
     if (current?.id === id) setActive(next[Math.min(index, next.length - 1)]?.id)
   }
   return (
-    <aside aria-label="Workspace" className="flex size-full min-w-0 flex-col">
+    <aside aria-label="Workspace" data-slot="workspace-panel" className="flex size-full min-w-0 flex-col">
       <Tabs
         value={current?.id ?? ""}
         onValueChange={(value: string) => setActive(value)}
         className="min-h-0 flex-1 gap-0"
       >
-        <div className="flex h-10 shrink-0 items-center gap-1 px-2">
+        <div data-slot="workspace-bar" className="flex h-10 shrink-0 items-center gap-1 px-2">
           <TabsList className="h-7 min-w-0 shrink scrollbar-none justify-start gap-0.5 overflow-x-auto overscroll-contain bg-transparent p-0">
             {tabs.map((tab) => {
               const TabIcon = byKind.get(tab.kind)?.icon ?? IconFiles
               const label = labelOf(tab)
               return (
-                <span key={tab.id} className="group/tab relative flex shrink-0">
+                <span key={tab.id} data-slot="workspace-tab" className="group/tab relative flex shrink-0">
                   <TabsTrigger
                     value={tab.id}
                     title={tab.file?.path}
@@ -359,6 +359,7 @@ export function WorkspacePanel(props: {
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`Close ${label}`}
+                    data-workspace-part="close-tab"
                     onClick={() => close(tab.id)}
                     className="absolute top-1/2 right-1 size-5 -translate-y-1/2 rounded-sm text-muted-foreground opacity-0 transition-[color,background-color,opacity] group-hover/tab:opacity-100 focus-visible:opacity-100 group-has-[[data-active]]/tab:opacity-100 [&_svg:not([class*='size-'])]:size-3.5"
                   >

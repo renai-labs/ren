@@ -1,0 +1,127 @@
+/*
+ * Corrections from review. Loaded last, so these hold whatever the area files do.
+ */
+
+/* "This should be brighter in colour than the rest": in the model picker the model's name is the value,
+   the vendor before it is context. */
+html.dark [data-composer-part="model"] bdi:not([data-model-part="vendor"]) {
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark [data-composer-part="model"]:hover bdi:not([data-model-part="vendor"]) {
+    color: var(--d-text);
+  }
+}
+
+/* A property chip stays lit while its menu is open (asked for by the controls pass). */
+html.dark [data-slot="task-chips"] > button[data-variant]:not(#d):is([data-popup-open], [aria-expanded="true"]) {
+  background-color: color-mix(in srgb, var(--d-chip), white 9%);
+  color: var(--d-text-2);
+}
+
+/*
+ * "These don't look right with their custom icons": a space's or agent's custom icon was a filled colour
+ * tile with a white glyph squeezed inside it. Linear draws a resource's icon as the glyph itself, in the
+ * resource's colour, with nothing behind it. Same here: the tile's fill becomes the glyph's colour.
+ */
+html.dark
+  [data-slot="avatar"]
+  > span[aria-hidden]:is(
+    [class~="bg-avatar-azure"],
+    [class~="bg-avatar-violet"],
+    [class~="bg-avatar-green"],
+    [class~="bg-avatar-amber"],
+    [class~="bg-avatar-coral"],
+    [class~="from-avatar-from"]
+  ) {
+  border-radius: 0;
+  background: none;
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="bg-avatar-azure"] {
+  color: var(--avatar-azure);
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="bg-avatar-violet"] {
+  color: var(--avatar-violet);
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="bg-avatar-green"] {
+  color: var(--avatar-green);
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="bg-avatar-amber"] {
+  color: var(--avatar-amber);
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="bg-avatar-coral"] {
+  color: var(--avatar-coral);
+}
+
+html.dark [data-slot="avatar"] > span[aria-hidden][class~="from-avatar-from"] {
+  color: var(--d-text-3);
+}
+
+/* With no tile around it, the glyph is the icon: it fills the box up to 24px, and stays at 70% above. */
+html.dark
+  [data-slot="avatar"]
+  > span[aria-hidden]:is(
+    [class~="bg-avatar-azure"],
+    [class~="bg-avatar-violet"],
+    [class~="bg-avatar-green"],
+    [class~="bg-avatar-amber"],
+    [class~="bg-avatar-coral"],
+    [class~="from-avatar-from"]
+  )
+  > svg {
+  width: 70%;
+  height: 70%;
+}
+
+@container (max-width: 24px) {
+  html.dark
+    [data-slot="avatar"]
+    > span[aria-hidden]:is(
+      [class~="bg-avatar-azure"],
+      [class~="bg-avatar-violet"],
+      [class~="bg-avatar-green"],
+      [class~="bg-avatar-amber"],
+      [class~="bg-avatar-coral"],
+      [class~="from-avatar-from"]
+    )
+    > svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/*
+ * "These shouldn't have a card by default; it only appears on hover": an app in the catalog is a plain row
+ * at rest (icon, name, one line, Add), and the card surface comes in on hover or keyboard focus. The rows
+ * hang 14px/12px outside the column so their icons line up with the section headings while at rest.
+ */
+html.dark [data-screen="apps"] [role="list"]:has(> [data-app-row]) {
+  gap: 4px 20px;
+  margin-inline: -14px -12px;
+}
+
+html.dark [data-screen="apps"] [data-app-row]:not(#d) {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-screen="apps"] [data-app-row]:not(#d):has(:focus-visible) {
+  border-color: var(--d-edge-faint);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="apps"] [data-app-row]:not(#d):hover {
+    border-color: var(--d-edge-faint);
+    background-color: var(--d-card);
+    box-shadow: var(--d-contact);
+  }
+}

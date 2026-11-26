@@ -112,7 +112,7 @@ export function TimelineDetailSetting() {
     <StackedRow
       title="Timeline detail"
       aside={
-        <p aria-live="polite" className="min-w-0 text-xs/5 text-muted-foreground">
+        <p aria-live="polite" data-slot="timeline-detail-level" className="min-w-0 text-xs/5 text-muted-foreground">
           <span className="font-medium text-foreground">{level.label}:</span> {level.description}
         </p>
       }

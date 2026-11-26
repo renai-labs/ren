@@ -20,6 +20,7 @@ export function ArtifactThumbnail(props: { artifact: ArtifactInfo; className?: s
   return (
     <div
       aria-hidden
+      data-slot="artifact-thumbnail"
       className={cn(
         "relative aspect-16/10 overflow-hidden",
         tone.wash,

@@ -12,6 +12,7 @@ import { AppRegistryPages, Debounce } from "@ren/client/react"
 import { AppCategories } from "./app-categories.js"
 import { AppGridSample, CatalogList } from "./catalog.js"
 import { useAddSheet, useRegistryApps } from "./use-catalog.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 export function CategoryPage(props: { slug: string }) {
   const { client } = RouterContext.useRouterContext()
@@ -35,16 +36,21 @@ export function CategoryPage(props: { slug: string }) {
   ]
   const pending = featured.pending || registry.isPending
   const sheet = useAddSheet()
+  const deep = DarkUi.useDarkUi()
+  const crumbs = (
+    <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
+      {category.title}
+    </Breadcrumb.Root>
+  )
   return (
-    <div className="relative flex flex-1 flex-col">
-      <div className="absolute top-0 left-0 z-30">
-        <Breadcrumb.Header>
-          <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
-            {category.title}
-          </Breadcrumb.Root>
-        </Breadcrumb.Header>
-      </div>
+    <div data-screen="apps" className="relative flex flex-1 flex-col">
+      {deep ? null : (
+        <div className="absolute top-0 left-0 z-30">
+          <Breadcrumb.Header>{crumbs}</Breadcrumb.Header>
+        </div>
+      )}
       <Page
+        back={deep ? crumbs : undefined}
         title={category.title}
         description={category.description}
         width="wide"

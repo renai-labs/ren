@@ -95,7 +95,7 @@ export function UsageView(props: {
         />
       ) : null}
       {current.isError || empty ? null : (
-        <div className="flex flex-col gap-4">
+        <div data-screen="usage" className="flex flex-col gap-4">
           <UsageTotals
             total={total}
             previous={previous.data?.rows.at(0)}

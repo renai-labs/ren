@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Button } from "@ren/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { FileIcon } from "@ren/ui/file-icon"
@@ -16,7 +17,10 @@ function Media(props: { space: string | undefined; path: string; name: string; k
   const link = useQuery(useDriveLink(props.space)(props.path, "inline"))
   const url = link.data?.url
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto overscroll-contain bg-muted/40 p-6">
+    <div
+      data-slot="viewer-media"
+      className="flex min-h-0 flex-1 items-center justify-center overflow-auto overscroll-contain bg-muted/40 p-6"
+    >
       {url === undefined ? <Spinner /> : null}
       {url && props.kind === "image" ? (
         <img src={url} alt={props.name} className="max-h-full max-w-full rounded-md object-contain" />
@@ -36,6 +40,7 @@ function Media(props: { space: string | undefined; path: string; name: string; k
 export function DriveFileView(props: {
   space: string | undefined
   file: SessionMessage.DriveFile
+  aside?: ReactNode | undefined
   onClose: () => void
   onFolder: (folder: string) => void
 }) {
@@ -49,12 +54,35 @@ export function DriveFileView(props: {
     enabled: kind === undefined && media === undefined,
   })
   if (kind)
-    return <Viewer kind={kind} file={file} bytes={drive.bytes} onClose={props.onClose} onDownload={drive.download} />
+    return (
+      <Viewer
+        kind={kind}
+        file={file}
+        bytes={drive.bytes}
+        aside={props.aside}
+        onClose={props.onClose}
+        onDownload={drive.download}
+      />
+    )
+  const body = media ? (
+    <Media space={props.space} path={file.path} name={file.name} kind={media} />
+  ) : (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <OpenFile
+        read={{ result: QueryResult.of(read), refresh: () => void read.refetch() }}
+        tab={{ path: file.path, preview: false }}
+        onFolder={props.onFolder}
+        onMention={undefined}
+      />
+    </div>
+  )
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
+      <div data-slot="viewer-bar" className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <FileIcon name={file.name} className="ml-1" />
-        <p className="min-w-0 flex-1 truncate text-sm font-medium">{file.name}</p>
+        <p data-slot="viewer-name" className="min-w-0 flex-1 truncate text-sm font-medium">
+          {file.name}
+        </p>
         <Button variant="ghost" size="icon-sm" aria-label="Download" onClick={drive.download}>
           <IconDownload />
         </Button>
@@ -62,17 +90,15 @@ export function DriveFileView(props: {
           <IconX />
         </Button>
       </div>
-      {media ? (
-        <Media space={props.space} path={file.path} name={file.name} kind={media} />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <OpenFile
-            read={{ result: QueryResult.of(read), refresh: () => void read.refetch() }}
-            tab={{ path: file.path, preview: false }}
-            onFolder={props.onFolder}
-            onMention={undefined}
-          />
+      {props.aside ? (
+        <div data-slot="viewer-split" className="flex min-h-0 flex-1">
+          <div data-slot="viewer-body" className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {body}
+          </div>
+          {props.aside}
         </div>
+      ) : (
+        body
       )}
     </>
   )

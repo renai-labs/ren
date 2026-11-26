@@ -33,6 +33,7 @@ import { fromApp, isBundle, listNames, source, statusOf, waitsForUser, type Cata
 import { pickerPageSize } from "../../lib/pagination.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { SpaceFrame } from "./space-frame.js"
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/apps")
 
@@ -290,8 +291,10 @@ export function SpaceAppsTab() {
           })
         }
       />
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search apps" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         <Button onClick={() => setAdding(true)}>
           <IconPlus />
           Add app

@@ -1,0 +1,200 @@
+/*
+ * Edges. Loads on top of type.css and palette.css. This file holds the surfaces:
+ * how Linear draws the edge of a panel, a card, a control, a menu and the composer in dark mode.
+ *
+ * Two things, both measured in the app:
+ *
+ * 1. A raised surface is one lightness step up, with a 1px light edge and a tight dark contact shadow
+ *    (0 .5px 1px 1px rgb(0 0 0/.3)) that darkens the pixel outside it. That pair reads as a crisp edge.
+ *    Menus add three soft shadows; the composer gets a top-lit gradient hairline.
+ *
+ * 2. Edges are real borders, never box-shadow rings. A border snaps to whole device pixels; a 1px ring at
+ *    125% or 110% zoom (or any fractional display scale) is 1.25 or 1.1 device pixels and smears over two.
+ *    Ren's panel ring paints #27 then #1a across two pixels; Linear's panel border is one pixel of #1a.
+ */
+html.dark {
+  --linear-contact: 0 0.5px 1px 1px rgb(0 0 0 / 0.3);
+  --linear-edge-panel: #1c1d1f;
+  --linear-edge-card: rgb(255 255 255 / 0.048);
+  --linear-edge-control: rgb(255 255 255 / 0.095);
+  --linear-edge-menu: #3f4044;
+  --linear-edge-dialog: #2e2f32;
+  --linear-control: #232325;
+  --linear-control-hover: #2a2b2d;
+  --linear-menu-shadow: 0 3px 8px rgb(0 0 0 / 0.125), 0 2px 5px rgb(0 0 0 / 0.125), 0 1px 1px rgb(0 0 0 / 0.125);
+  --linear-dialog-shadow:
+    0 4px 40px rgb(0 0 0 / 0.1), 0 3px 20px rgb(0 0 0 / 0.12), 0 3px 12px rgb(0 0 0 / 0.12),
+    0 2px 8px rgb(0 0 0 / 0.12), 0 1px 1px rgb(0 0 0 / 0.12);
+
+  /* Fallback for the few overlays no rule below reaches: they keep a ring. */
+  --overlay-shadow: 0 0 0 1px var(--linear-edge-menu), var(--linear-menu-shadow);
+  --dialog-shadow: 0 0 0 1px var(--linear-edge-dialog), var(--linear-dialog-shadow);
+}
+
+/* The main panel: a solid hairline one step above the panel colour, and the contact shadow. */
+html.dark [data-slot="sidebar-inset"] {
+  border: 1px solid var(--linear-edge-panel);
+  box-shadow: var(--linear-contact);
+}
+
+/* Sidebar: hover is lighter than selected, so the selected row stays the one filled thing. */
+@media (hover: hover) {
+  html.dark [data-slot="sidebar-menu-button"]:hover:not([data-active="true"], [aria-current="page"]) {
+    background-color: rgb(255 255 255 / 0.05);
+  }
+}
+
+/* Cards and settings groups: a faint edge and the contact shadow. */
+html.dark :is([data-slot="card"], [data-slot="item-group"].bg-card) {
+  border: 1px solid var(--linear-edge-card);
+  border-radius: 10px;
+  --tw-shadow: var(--linear-contact);
+  box-shadow: var(--linear-contact);
+}
+
+/* Dividers inside a group are inset to the row padding, and drawn as a border so they stay one pixel. */
+html.dark [data-slot="item-group"].bg-card > [data-slot="item-separator"] {
+  width: auto;
+  height: 0;
+  margin-inline: 16px;
+  border-top: 1px solid rgb(255 255 255 / 0.055);
+  background-color: transparent;
+}
+
+/* Secondary controls sit one step above their surface. */
+html.dark :is([data-slot="select-trigger"], [data-slot="button"].bg-secondary, [data-slot="button"].border-border) {
+  border-color: var(--linear-edge-control);
+  background-color: var(--linear-control);
+  color: #e4e5e7;
+  --tw-shadow: var(--linear-contact);
+}
+
+html.dark
+  :is([data-slot="select-trigger"], [data-slot="button"].bg-secondary, [data-slot="button"].border-border):not(
+    :focus-visible
+  ) {
+  box-shadow: var(--linear-contact);
+}
+
+@media (hover: hover) {
+  html.dark
+    :is([data-slot="select-trigger"], [data-slot="button"].bg-secondary, [data-slot="button"].border-border):hover {
+    background-color: var(--linear-control-hover);
+    color: #ffffff;
+  }
+}
+
+html.dark [data-slot="button"].bg-primary {
+  --tw-shadow: var(--linear-contact);
+}
+
+html.dark [data-slot="button"].bg-primary:not(:focus-visible) {
+  box-shadow: var(--linear-contact);
+}
+
+html.dark :is([data-slot="input"], [data-slot="textarea"]):not(:focus-visible) {
+  border-color: var(--linear-edge-control);
+}
+
+/* The selected tab is a control; the others are text. */
+html.dark [data-slot="tabs-trigger"][data-active] {
+  border-color: var(--linear-edge-control);
+  background-color: var(--linear-control);
+}
+
+/* Menus: 12px outside, 3px padding + 1px border, 8px items, so the radii are concentric. */
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="select-content"],
+    [data-slot="popover-content"]
+  ) {
+  border: 1px solid var(--linear-edge-menu);
+  border-radius: 12px;
+  box-shadow: var(--linear-menu-shadow);
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="select-content"]
+  ) {
+  padding: 3px;
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="context-menu-item"],
+    [data-slot="select-item"],
+    [data-slot="command-item"]
+  ) {
+  border-radius: 8px;
+}
+
+html.dark [data-slot="dialog-content"] {
+  border: 1px solid var(--linear-edge-dialog);
+  box-shadow: var(--linear-dialog-shadow);
+}
+
+/* The composer: Linear's top-lit gradient hairline. */
+html.dark [data-slot="input-group"]:has(textarea) {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background:
+    linear-gradient(#161617, #161617) padding-box,
+    linear-gradient(#2f3033, #1f2022) border-box;
+  --tw-shadow: var(--linear-contact);
+}
+
+html.dark [data-slot="input-group"]:has(textarea):not(:focus-within) {
+  box-shadow: var(--linear-contact);
+}
+
+html.dark [data-slot="input-group"]:has(textarea):focus-within {
+  background:
+    linear-gradient(#161617, #161617) padding-box,
+    linear-gradient(#45464a, #2c2d30) border-box;
+}
+
+/* Tooltips are dark in Linear: the menu surface, a size down. */
+html.dark [data-slot="tooltip-content"] {
+  border: 1px solid var(--linear-edge-menu);
+  border-radius: 6px;
+  background-color: #28292b;
+  color: #e3e4e6;
+  box-shadow:
+    0 2px 5px rgb(0 0 0 / 0.125),
+    0 1px 1px rgb(0 0 0 / 0.125);
+}
+
+html.dark [data-slot="tooltip-content"] > :last-child:empty {
+  display: none;
+}
+
+/* Code in the transcript: the composer's surface, with the card edge. */
+html.dark [data-slot="code-block"] {
+  border: 1px solid var(--linear-edge-card);
+  border-radius: 8px;
+  background-color: #161617;
+  box-shadow: var(--linear-contact);
+}
+
+/*
+ * Icons: Heroicons' outline set at a 1.5px rendered stroke, the weight better-ui pairs with 13px/450–500 text.
+ * In dark mode src/icons/heroicons.tsx swaps each solid icon for its outline twin.
+ */
+html.dark svg[data-outline] {
+  stroke-width: 1.5px;
+}
+
+html.dark svg[data-outline] * {
+  vector-effect: non-scaling-stroke;
+}

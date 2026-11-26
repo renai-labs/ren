@@ -1,0 +1,1042 @@
+/* Controls.
+ *
+ * Every button, tab, field, choice control, chip, badge, key cap and avatar, in Linear's anatomy:
+ * pills and circles, 24/28/32px, mini/500 labels, one accent fill, real 1px edges, a 1px accent focus ring.
+ *
+ * Sizing rules key on the size class each component ships with (h-8, size-6.5, px-3, rounded-lg …). When a
+ * caller overrides it, tailwind-merge drops that class, so a control someone sized on purpose keeps its size.
+ * Colour rules key on data-variant (Button) and fall back to the variant's own class for buttonVariants()
+ * links, which carry no data attributes.
+ *
+ * Specificity: edges.css colours secondary buttons and select triggers at (0,4,1), and hovers and
+ * box-shadows at (0,5,1). The rules below match those, and win by loading later.
+ */
+html.dark {
+  --c-ring: var(--d-accent);
+  --c-image-outline: rgb(255 255 255 / 0.1);
+  --c-primary-hover: color-mix(in oklab, var(--d-accent) 90%, black);
+  --c-danger: var(--destructive);
+  --c-danger-tint: color-mix(in srgb, var(--destructive) 12%, transparent);
+  --c-danger-tint-hover: color-mix(in srgb, var(--destructive) 18%, transparent);
+  --c-chip-hover: color-mix(in srgb, var(--d-chip), white 5%);
+  --c-chip-active: color-mix(in srgb, var(--d-chip), white 9%);
+  --c-box-edge: color-mix(in srgb, var(--d-text-4), var(--d-text-3) 35%);
+  --c-ok: var(--chart-2);
+  --c-warn: var(--chart-3);
+}
+
+/* ─── 1. Buttons ──────────────────────────────────────────────────────────────────────────────────── */
+
+/* Shape: pills and circles, mini/500, 100ms hovers. Wide buttons (rows, full-width actions) keep 8px. */
+html.dark [class~="group/button"] {
+  font-weight: 500;
+  transition-duration: 100ms;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [class~="rounded-lg"],
+    [class~="rounded-[min(var(--radius-md),10px)]"],
+    [class~="rounded-[calc(var(--radius)-3px)]"]
+  ):is([class~="h-8"], [class~="h-6.5"], [class~="h-6"], [class~="size-8"], [class~="size-6.5"], [class~="size-6"]) {
+  border-radius: var(--d-r-pill);
+}
+
+html.dark
+  [class~="group/button"]:is([class~="rounded-lg"], [class~="rounded-[min(var(--radius-md),10px)]"]):is(
+    [class~="w-full"],
+    [class~="justify-start"]
+  ) {
+  border-radius: var(--d-r);
+}
+
+/* Sizes. Ren's default (h-8) is 28px: bars, toolbars, dialogs and rows. */
+html.dark [class~="group/button"][class~="h-8"][class] {
+  height: var(--d-ctl);
+}
+
+html.dark [class~="group/button"]:is([class~="h-6.5"], [class~="h-6"]) {
+  height: var(--d-ctl-sm);
+}
+
+html.dark [class~="group/button"][class~="size-8"] {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+}
+
+html.dark [class~="group/button"]:is([class~="size-6.5"], [class~="size-6"]) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+}
+
+html.dark [class~="group/button"]:is([class~="text-sm"], [class~="text-xs"]) {
+  font-size: var(--d-mini);
+  line-height: 1rem;
+}
+
+/* Padding: 10px, 2px less on the icon's side. */
+html.dark [class~="group/button"][class~="px-3"] {
+  gap: 6px;
+  padding-inline: 10px;
+}
+
+html.dark [class~="group/button"]:is([class~="px-2"], [class~="px-1.5"]) {
+  gap: 4px;
+  padding-inline: 8px;
+}
+
+html.dark
+  [class~="group/button"]:is([class~="px-3"], [class~="px-2"], [class~="px-1.5"]):has(
+    > :is(svg, [data-slot="spinner"]):first-child:not([data-icon="inline-end"]),
+    > [data-icon="inline-start"]
+  ) {
+  padding-inline-start: 8px;
+}
+
+html.dark
+  [class~="group/button"]:is([class~="px-3"], [class~="px-2"], [class~="px-1.5"]):has(> [data-icon="inline-end"]) {
+  padding-inline-end: 8px;
+}
+
+html.dark
+  [class~="group/button"]:is([class~="px-2"], [class~="px-1.5"]):has(
+    > :is(svg, [data-slot="spinner"]):first-child:not([data-icon="inline-end"]),
+    > [data-icon="inline-start"]
+  ) {
+  padding-inline-start: 6px;
+}
+
+/* Icons: 14px beside a label and in 24px circles, 16px in 28px circles. */
+html.dark [class~="group/button"] > svg:not([class*="size-"]),
+html.dark [class~="group/button"] > [data-slot="spinner"] {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [class~="group/button"][class~="size-8"] > svg:not([class*="size-"]) {
+  width: 16px;
+  height: 16px;
+}
+
+/* Settings-style pages (marked by the shell): page-level actions are 32px, small/500. */
+html.dark
+  :is([data-page-width="grid"], [data-page-width="column"], [data-page-width="wide"])
+  [class~="group/button"][class~="h-8"]:not(tr *) {
+  height: var(--d-ctl-lg);
+  font-size: var(--d-small);
+}
+
+html.dark
+  :is([data-page-width="grid"], [data-page-width="column"], [data-page-width="wide"])
+  [class~="group/button"][class~="h-8"][class~="px-3"]:not(tr *) {
+  padding-inline: 12px;
+}
+
+html.dark
+  :is([data-page-width="grid"], [data-page-width="column"], [data-page-width="wide"])
+  [class~="group/button"][class~="h-8"][class~="px-3"]:not(tr *):has(
+    > :is(svg, [data-slot="spinner"]):first-child:not([data-icon="inline-end"]),
+    > [data-icon="inline-start"]
+  ) {
+  padding-inline-start: 10px;
+}
+
+/* Primary: the accent fill. Hover darkens (a lighter fill would drop white text under 4.5:1). */
+html.dark [class~="group/button"]:is([data-variant="default"], :not([data-variant]).bg-primary) {
+  border-color: transparent;
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark [class~="group/button"]:is([data-variant="default"], :not([data-variant]).bg-primary):hover {
+    background-color: var(--c-primary-hover);
+  }
+}
+
+html.dark
+  [class~="group/button"]:is([data-variant="default"], :not([data-variant]).bg-primary):is(
+    [data-popup-open],
+    [aria-haspopup][aria-expanded="true"]
+  ) {
+  background-color: var(--c-primary-hover);
+}
+
+/* Secondary (outline and secondary): control fill, 1px edge, contact shadow. */
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="secondary"],
+    [data-variant="outline"],
+    :not([data-variant]):is(.bg-secondary, .border-border)
+  ) {
+  border-color: var(--d-edge);
+  background-color: var(--d-control);
+  color: var(--d-text-2);
+  box-shadow: var(--d-contact);
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="secondary"],
+    [data-variant="outline"],
+    :not([data-variant]):is(.bg-secondary, .border-border)
+  ):not(:focus-visible) {
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark
+    [class~="group/button"]:is(
+      [data-variant="secondary"],
+      [data-variant="outline"],
+      :not([data-variant]):is(.bg-secondary, .border-border)
+    ):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="secondary"],
+    [data-variant="outline"],
+    :not([data-variant]):is(.bg-secondary, .border-border)
+  ):is([data-popup-open], [aria-haspopup][aria-expanded="true"], [aria-pressed="true"]) {
+  background-color: var(--d-control-active);
+  color: var(--d-text);
+}
+
+/* On a raised surface (dialog, sheet, popover, card) the control fill would vanish: it takes the chip step,
+   as Linear's property chips do. */
+html.dark
+  :is([data-slot="dialog-content"], [data-slot="sheet-content"], [data-slot="popover-content"], [data-slot="card"])
+  [class~="group/button"]:is(
+    [data-variant="secondary"],
+    [data-variant="outline"],
+    :not([data-variant]):is(.bg-secondary, .border-border)
+  ) {
+  background-color: var(--d-chip);
+}
+
+@media (hover: hover) {
+  html.dark
+    :is([data-slot="dialog-content"], [data-slot="sheet-content"], [data-slot="popover-content"], [data-slot="card"])
+    [class~="group/button"]:is(
+      [data-variant="secondary"],
+      [data-variant="outline"],
+      :not([data-variant]):is(.bg-secondary, .border-border)
+    ):hover {
+    background-color: var(--c-chip-hover);
+  }
+}
+
+html.dark
+  :is([data-slot="dialog-content"], [data-slot="sheet-content"], [data-slot="popover-content"], [data-slot="card"])
+  [class~="group/button"]:is(
+    [data-variant="secondary"],
+    [data-variant="outline"],
+    :not([data-variant]):is(.bg-secondary, .border-border)
+  ):is([data-popup-open], [aria-haspopup][aria-expanded="true"], [aria-pressed="true"]) {
+  background-color: var(--c-chip-active);
+}
+
+/* Ghost: no fill, quiet text; hover lifts the text to content colour. */
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="ghost"],
+    :not([data-variant])[class~="hover:bg-muted"]:not(.border-border)
+  ) {
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--d-text-3);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  html.dark
+    [class~="group/button"]:is(
+      [data-variant="ghost"],
+      :not([data-variant])[class~="hover:bg-muted"]:not(.border-border)
+    ):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="ghost"],
+    :not([data-variant])[class~="hover:bg-muted"]:not(.border-border)
+  ):is([data-popup-open], [aria-haspopup][aria-expanded="true"], [aria-pressed="true"]) {
+  background-color: var(--d-selected);
+  color: var(--d-text);
+}
+
+/* Destructive: quiet red text on a faint red tint. 5.9:1 on the panel, 5.4:1 on a dialog. */
+html.dark [class~="group/button"]:is([data-variant="destructive"], :not([data-variant])[class~="bg-destructive/10"]) {
+  border-color: transparent;
+  background-color: var(--c-danger-tint);
+  color: var(--c-danger);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  html.dark
+    [class~="group/button"]:is([data-variant="destructive"], :not([data-variant])[class~="bg-destructive/10"]):hover {
+    background-color: var(--c-danger-tint-hover);
+  }
+}
+
+/* Link: accent text, no pill. */
+html.dark [class~="group/button"]:is([data-variant="link"], :not([data-variant])[class~="underline-offset-4"]) {
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--d-accent-text);
+  box-shadow: none;
+  text-underline-offset: 3px;
+}
+
+/* Focus: a 1px accent ring 2px outside the pill, so it reads beside an accent fill and on every surface
+   (3.1:1 on a menu, 3.7:1 on a dialog, 4.0:1 on the panel). Tailwind's 3px blurred ring is replaced. */
+html.dark [class~="group/button"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [data-variant="ghost"],
+    [data-variant="destructive"],
+    [data-variant="link"],
+    :not([data-variant])[class~="hover:bg-muted"]:not(.border-border)
+  ):focus-visible {
+  box-shadow: none;
+}
+
+html.dark [class~="group/button"][aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+/* Radio cards (theme and layout pickers): the chosen card takes an accent edge instead of a white ring,
+   and its caption lifts to full white, so the state is not colour alone. */
+html.dark [class~="group/button"][role="radio"] > span:first-child {
+  border-color: var(--d-edge);
+}
+
+html.dark [class~="group/button"][role="radio"][aria-checked="true"] {
+  color: var(--d-text);
+}
+
+html.dark [class~="group/button"][role="radio"][aria-checked="true"] > span:first-child {
+  border-color: var(--d-accent);
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+}
+
+/* ─── 2. Switchers: Linear's view pills ───────────────────────────────────────────────────────────────
+ * Tabs (every variant), PageTabs and ToggleGroups are one control: a row of separate 28px pills 4px apart
+ * (24px inside a popover, a card or a dialog). Idle: control fill, edge, contact, quiet text. Selected:
+ * the active fill, the same edge, no contact, white text. No track, no underline, no sliding thumb.
+ * Selected is told apart by fill and text weight of colour (white vs #959597), not by colour hue alone. */
+
+html.dark :is([data-slot="tabs-list"], [data-slot="toggle-group"]) {
+  gap: 4px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Room for the focus ring when an ancestor clips (scrolling tab rows): padding paid back by a margin. */
+html.dark [data-slot="tabs-list"][data-orientation="horizontal"][class] {
+  height: auto;
+  margin: -3px;
+  padding: 3px;
+}
+
+html.dark [data-slot="tabs-list"][data-orientation="vertical"] {
+  align-items: stretch;
+}
+
+html.dark :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"]))[class][class] {
+  height: var(--d-ctl);
+  min-width: 0;
+}
+
+html.dark
+  :is(
+    [data-slot="popover-content"],
+    [data-slot="dropdown-menu-content"],
+    [data-slot="card"],
+    [data-slot="item"],
+    [data-slot="dialog-content"],
+    [data-slot="toggle-group"][data-size="sm"]
+  )
+  :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"]))[class][class][class] {
+  height: var(--d-ctl-sm);
+  padding-inline: 8px;
+}
+
+html.dark :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"])) {
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-control);
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  line-height: 1rem;
+  box-shadow: var(--d-contact);
+  transition-duration: 100ms;
+}
+
+html.dark [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+
+html.dark [data-orientation="vertical"] > [data-slot="tabs-trigger"] {
+  justify-content: flex-start;
+}
+
+html.dark
+  :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"]))
+  > svg:not([class*="size-"]) {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"])):has(> svg:first-child) {
+  padding-inline-start: 8px;
+}
+
+html.dark [data-slot="tabs-trigger"] > span:last-child:not(:first-child) {
+  color: var(--d-text-3);
+  font-weight: 450;
+}
+
+@media (hover: hover) {
+  html.dark
+    :is(
+      [data-slot="tabs-trigger"]:not([data-active]),
+      [data-slot="toggle-group-item"]:not([class~="p-0"]):not([data-pressed])
+    ):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark
+  :is([data-slot="tabs-trigger"][data-active], [data-slot="toggle-group-item"]:not([class~="p-0"])[data-pressed]) {
+  border-color: var(--d-edge);
+  background-color: var(--d-control-active);
+  color: var(--d-text);
+  box-shadow: none;
+}
+
+html.dark :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([class~="p-0"])):focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+  border-color: var(--d-edge);
+}
+
+/* Hand-rolled switchers: Buttons in a tablist (sheet tabs) and labelled aria-pressed buttons (display
+   property chips). Icon-only aria-pressed buttons (show/hide, panel toggles) stay ghost circles. The ID-level
+   :not() lets the switcher recipe win over every variant and surface rule above. */
+html.dark
+  [class~="group/button"]:is(
+    [role="tab"],
+    [aria-pressed]:not([class~="size-8"], [class~="size-6.5"], [class~="size-6"], [class~="size-7"], [class~="size-5"])
+  ):not(#deep-switcher) {
+  border-color: var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-control);
+  color: var(--d-text-3);
+  font-weight: 500;
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark
+    [class~="group/button"]:is(
+      [role="tab"]:not([aria-selected="true"]),
+      [aria-pressed="false"]:not(
+        [class~="size-8"],
+        [class~="size-6.5"],
+        [class~="size-6"],
+        [class~="size-7"],
+        [class~="size-5"]
+      )
+    ):not(#deep-switcher):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark
+  [class~="group/button"]:is(
+    [role="tab"][aria-selected="true"],
+    [aria-pressed="true"]:not(
+      [class~="size-8"],
+      [class~="size-6.5"],
+      [class~="size-6"],
+      [class~="size-7"],
+      [class~="size-5"]
+    )
+  ):not(#deep-switcher) {
+  border-color: var(--d-edge);
+  background-color: var(--d-control-active);
+  color: var(--d-text);
+  box-shadow: none;
+}
+
+/* Swatch and glyph pickers mark the pick with a ring; here it is a crisp accent outline instead. */
+html.dark [data-slot="toggle-group-item"][class~="p-0"] {
+  border-color: transparent;
+  border-radius: var(--d-r-pill);
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-slot="toggle-group-item"][class~="p-0"][data-pressed],
+html.dark [class~="group/button"][class~="aria-pressed:ring-2"][aria-pressed="true"] {
+  outline: 2px solid var(--d-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/* ─── 3. Fields ───────────────────────────────────────────────────────────────────────────────────── */
+
+/* Input and textarea, unless a caller stripped the frame (inline editors, titles). */
+html.dark :is([data-slot="input"], [data-slot="textarea"]):not([class~="border-0"], [class~="bg-transparent"]) {
+  border-color: var(--d-line-3);
+  border-radius: var(--d-r);
+  background-color: var(--d-control);
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+html.dark [data-slot="textarea"]:not([class~="border-0"], [class~="bg-transparent"]) {
+  padding: 8px 12px;
+  color: var(--d-text-2);
+  font-weight: 450;
+  line-height: 1.5;
+}
+
+html.dark [data-slot="input"][class~="h-8"][class] {
+  height: var(--d-ctl-lg);
+}
+
+html.dark [data-slot="input"][class~="px-3"]:not([class~="border-0"]) {
+  padding-inline: 12px;
+}
+
+html.dark :is([data-slot="input"], [data-slot="textarea"], [data-slot="input-group-control"])::placeholder {
+  color: var(--d-text-3);
+  font-weight: 450;
+  opacity: 1;
+}
+
+html.dark
+  :is([data-slot="input"], [data-slot="textarea"]):not([class~="border-0"], [class~="bg-transparent"]):focus-visible {
+  border-color: var(--c-ring);
+}
+
+html.dark :is([data-slot="input"], [data-slot="textarea"])[aria-invalid="true"] {
+  border-color: var(--c-danger);
+  box-shadow: none;
+}
+
+html.dark :is([data-slot="input"], [data-slot="textarea"]):disabled {
+  background-color: var(--d-control);
+}
+
+/* Input groups (search fields, copy fields). The chat composer is the chat agent's; command and combobox
+   inputs are the overlays agent's. */
+html.dark [data-slot="input-group"]:not(:has(textarea), [data-slot="command"] *, [data-slot="combobox-content"] *) {
+  border-color: var(--d-line-3);
+  border-radius: var(--d-r);
+  background-color: var(--d-control);
+  box-shadow: none;
+}
+
+html.dark [data-slot="input-group"][class~="h-8"][class]:not(:has(textarea, > [data-align^="block"])) {
+  height: var(--d-ctl-lg);
+}
+
+html.dark
+  [data-slot="input-group"]:not(
+    :has(textarea),
+    [data-slot="command"] *,
+    [data-slot="combobox-content"] *
+  ):focus-within {
+  border-color: var(--c-ring);
+}
+
+html.dark [data-slot="input-group"]:has([data-slot][aria-invalid="true"]) {
+  border-color: var(--c-danger);
+  box-shadow: none;
+}
+
+html.dark [data-slot="input-group"]:not(:has(textarea)) > input[data-slot="input-group-control"] {
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+/* Search fields: the icon sits inside at 14px, 10px from the edge. */
+html.dark [data-slot="input-group"]:not(:has(textarea)) > [data-slot="input-group-addon"] {
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="input-group"]:not(:has(textarea)) > [data-slot="input-group-addon"][data-align="inline-start"] {
+  padding-inline-start: 10px;
+}
+
+html.dark [data-slot="input-group"]:not(:has(textarea)) > [data-slot="input-group-addon"] > svg:not([class*="size-"]) {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-slot="input-group"]:not(:has(textarea)) > [data-slot="input-group-addon"][data-align="inline-end"] {
+  padding-inline-end: 4px;
+}
+
+/* Select trigger: Linear's "All ▾": one step up, edge and contact, small/450. */
+html.dark [data-slot="select-trigger"][data-size] {
+  gap: 6px;
+  padding-inline: 10px 8px;
+  border-color: var(--d-edge);
+  border-radius: var(--d-r);
+  background-color: var(--d-control-hover);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 450;
+  box-shadow: var(--d-contact);
+  transition-duration: 100ms;
+}
+
+html.dark [data-slot="select-trigger"][data-size]:not(:focus-visible) {
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-slot="select-trigger"][data-size="default"][class] {
+  height: var(--d-ctl-lg);
+}
+
+html.dark [data-slot="select-trigger"][data-size="sm"] {
+  height: var(--d-ctl);
+  font-size: var(--d-mini);
+}
+
+html.dark [data-slot="select-trigger"][data-size] > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="select-trigger"][data-size][data-placeholder] {
+  color: var(--d-text-3);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="select-trigger"][data-size]:hover {
+    background-color: var(--d-control-active);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-slot="select-trigger"][data-size]:is([aria-expanded="true"], [data-popup-open]) {
+  background-color: var(--d-control-active);
+  color: var(--d-text);
+}
+
+html.dark [data-slot="select-trigger"][data-size]:focus-visible {
+  border-color: var(--c-ring);
+}
+
+html.dark [data-slot="select-trigger"][data-size][aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+/* One-time code: joined 32px cells, accent border on the active one. */
+html.dark [data-slot="input-otp-slot"] {
+  border-color: var(--d-line-3);
+  background-color: var(--d-control);
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+html.dark [data-slot="input-otp-slot"]:first-child {
+  border-start-start-radius: var(--d-r);
+  border-end-start-radius: var(--d-r);
+}
+
+html.dark [data-slot="input-otp-slot"]:last-child {
+  border-start-end-radius: var(--d-r);
+  border-end-end-radius: var(--d-r);
+}
+
+html.dark [data-slot="input-otp-slot"][data-active="true"] {
+  border-color: var(--c-ring);
+  box-shadow: none;
+  outline: 1px solid var(--c-ring);
+  outline-offset: -1px;
+}
+
+html.dark [data-slot="input-otp-slot"][aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+/* Labels and help text. */
+html.dark :is([data-slot="label"], [data-slot="field-label"]) {
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-slot="field-description"] {
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+html.dark [data-slot="field-error"] {
+  color: var(--c-danger);
+  font-size: var(--d-mini);
+}
+
+/* ─── 4. Choice controls ─────────────────────────────────────────────────────────────────────────── */
+
+/* Switch: 26×16 (sm 22×14), a visible boundary when off, the accent when on. */
+html.dark [data-slot="switch"] {
+  border: 1px solid var(--d-line-menu);
+  background-color: var(--d-control-active);
+  box-shadow: none;
+  transition-duration: 100ms;
+}
+
+html.dark [data-slot="switch"][data-size="default"] {
+  width: 26px;
+  height: 16px;
+}
+
+html.dark [data-slot="switch"][data-size="sm"] {
+  width: 22px;
+  height: 14px;
+}
+
+html.dark [data-slot="switch-thumb"] {
+  margin-inline-start: 1px;
+  background-color: var(--d-text-2);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+html.dark [data-slot="switch"][data-size="default"] > [data-slot="switch-thumb"] {
+  width: 12px;
+  height: 12px;
+}
+
+html.dark [data-slot="switch"][data-size="sm"] > [data-slot="switch-thumb"] {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark [data-slot="switch"][data-checked] {
+  border-color: var(--d-accent);
+  background-color: var(--d-accent);
+}
+
+html.dark [data-slot="switch"][data-checked] > [data-slot="switch-thumb"] {
+  background-color: var(--d-accent-fg);
+}
+
+html.dark [data-slot="switch"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+html.dark [data-slot="switch"][aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+/* Checkbox and radio: 14px, a boundary at 3:1 on panel, dialog and menu, the accent when checked. */
+html.dark :is([data-slot="checkbox"], [data-slot="radio-group-item"]) {
+  width: 14px;
+  height: 14px;
+  border-color: var(--c-box-edge);
+  background-color: var(--d-control);
+  box-shadow: none;
+}
+
+html.dark [data-slot="checkbox"] {
+  border-radius: 4px;
+}
+
+html.dark :is([data-slot="checkbox"], [data-slot="radio-group-item"]):is([data-checked], [data-indeterminate]) {
+  border-color: var(--d-accent);
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+}
+
+html.dark [data-slot="checkbox-indicator"] > svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3.5;
+}
+
+html.dark [data-slot="radio-group-indicator"] {
+  width: 12px;
+  height: 12px;
+}
+
+html.dark [data-slot="radio-group-indicator"] > span {
+  width: 6px;
+  height: 6px;
+  background-color: var(--d-accent-fg);
+}
+
+html.dark :is([data-slot="checkbox"], [data-slot="radio-group-item"]):focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+html.dark :is([data-slot="checkbox"], [data-slot="radio-group-item"])[aria-invalid="true"] {
+  border-color: var(--c-danger);
+}
+
+/* Slider: a 4px track, the accent range, a light 14px thumb with contact. */
+html.dark [data-slot="slider-track"] {
+  background-color: var(--d-control-active);
+}
+
+html.dark [data-slot="slider-range"] {
+  background-color: var(--d-accent);
+}
+
+html.dark [data-slot="slider-thumb"] {
+  width: 14px;
+  height: 14px;
+  border-color: rgb(0 0 0 / 0.2);
+  background-color: var(--d-text);
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-slot="slider-thumb"]:has(:focus-visible) {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+html.dark [data-slot="slider-mark"] {
+  background-color: var(--d-text-4);
+  box-shadow: none;
+}
+
+html.dark [data-slot="slider-mark"][data-passed] {
+  background-color: var(--d-accent);
+}
+
+/* A standalone toggle (one on/off button, not a switcher): a ghost pill that fills when pressed. */
+html.dark [data-slot="toggle"] {
+  border: 1px solid transparent;
+  border-radius: var(--d-r-pill);
+  background-color: transparent;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  box-shadow: none;
+  transition-duration: 100ms;
+}
+
+html.dark [data-slot="toggle"][class~="outline"],
+html.dark [data-slot="toggle"][class~="border-input"] {
+  border-color: var(--d-line-3);
+}
+
+html.dark [data-slot="toggle"][class~="h-8"][class] {
+  height: var(--d-ctl);
+  min-width: var(--d-ctl);
+}
+
+html.dark [data-slot="toggle"][class~="h-7"] {
+  height: var(--d-ctl-sm);
+  min-width: var(--d-ctl-sm);
+  padding-inline: 8px;
+}
+
+html.dark [data-slot="toggle"] > svg:not([class*="size-"]) {
+  width: 14px;
+  height: 14px;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="toggle"]:hover:not([data-pressed]) {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark [data-slot="toggle"][data-pressed] {
+  border-color: var(--d-edge);
+  background-color: var(--d-control-active);
+  color: var(--d-text);
+}
+
+html.dark [data-slot="toggle"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+/* Progress: a 4px pill track, the accent fill. */
+html.dark [data-slot="progress-track"] {
+  background-color: var(--d-control-active);
+}
+
+html.dark [data-slot="progress-indicator"] {
+  background-color: var(--d-accent);
+}
+
+/* ─── 5. Chips, badges, key caps, avatars ─────────────────────────────────────────────────────────── */
+
+/* Outline badges are Linear's chips: 24px pills, a 1px line, mini/450 in quiet text, 8px dot. */
+html.dark [data-slot="badge"][data-variant="outline"] {
+  gap: 6px;
+  height: var(--d-ctl-sm);
+  padding: 0 8px;
+  border-color: var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background-color: transparent;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+html.dark [data-slot="badge"][data-variant="outline"]:has(> [data-slot="color-dot"]:first-child) {
+  padding-inline-start: 7px;
+}
+
+@media (hover: hover) {
+  html.dark a[data-slot="badge"][data-variant="outline"]:hover {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+/* Tinted badges, for roles and states: 3px radius, 2px 6px, mini/450. */
+html.dark [data-slot="badge"]:is([data-variant="default"], [data-variant="secondary"], [data-variant="destructive"]) {
+  height: auto;
+  min-height: 20px;
+  padding: 2px 6px;
+  border-color: transparent;
+  border-radius: 3px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1rem;
+}
+
+html.dark [data-slot="badge"][data-variant="default"] {
+  background-color: var(--d-accent-tint);
+  color: var(--d-accent-text);
+}
+
+html.dark [data-slot="badge"][data-variant="secondary"] {
+  background-color: var(--d-selected);
+  color: var(--d-text-2);
+}
+
+html.dark :is([data-slot="badge"][data-variant="destructive"], [data-slot="badge"][data-tone="error"]) {
+  background-color: var(--c-danger-tint);
+  color: var(--c-danger);
+}
+
+html.dark [data-slot="badge"][data-tone="ok"] {
+  background-color: color-mix(in srgb, var(--c-ok) 12%, transparent);
+  color: var(--c-ok);
+}
+
+html.dark [data-slot="badge"][data-tone="warn"] {
+  background-color: color-mix(in srgb, var(--c-warn) 12%, transparent);
+  color: var(--c-warn);
+}
+
+html.dark [data-slot="badge"] > svg {
+  width: 12px;
+  height: 12px;
+}
+
+html.dark [data-slot="badge"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Key caps: 20px rounded squares, mini/500. */
+html.dark [data-slot="kbd"] {
+  height: 20px;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background-color: var(--d-selected);
+  color: var(--d-text-2);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  line-height: 1;
+}
+
+html.dark [data-slot="kbd-group"] {
+  gap: 2px;
+}
+
+/* Avatars: a 1px pure-white 10% outline inside the edge, instead of Ren's blended border. */
+html.dark [data-slot="avatar"]::after {
+  display: none;
+}
+
+html.dark :is([data-slot="avatar-image"], [data-slot="avatar-fallback"]) {
+  outline: 1px solid var(--c-image-outline);
+  outline-offset: -1px;
+}
+
+html.dark [data-slot="avatar-fallback"] {
+  font-weight: 500;
+}
+
+/* Initials scale with the avatar (ResourceAvatar is a size container), so "QM" fits a 20px circle. */
+html.dark [data-slot="avatar"][class~="@container"] > [data-slot="avatar-fallback"] {
+  font-size: clamp(8px, 40cqw, 15px);
+  letter-spacing: 0;
+}
+
+/* ─── 6. Odds and ends ───────────────────────────────────────────────────────────────────────────── */
+
+html.dark [data-slot="link"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+html.dark [data-slot="skeleton"] {
+  border-radius: var(--d-r-sm);
+  background-color: var(--d-hover);
+}
+
+/* Fields in a 44px header bar or toolbar line up with its 28px pills (settings-style pages keep 32px). */
+html.dark
+  :is([data-slot="page-bar"], [data-page-width="full"] [data-slot="page-toolbar"])
+  [data-slot="input-group"][class~="h-8"][class]:not(:has(textarea)),
+html.dark
+  :is([data-slot="page-bar"], [data-page-width="full"] [data-slot="page-toolbar"])
+  [data-slot="input"][class~="h-8"][class],
+html.dark
+  :is([data-slot="page-bar"], [data-page-width="full"] [data-slot="page-toolbar"])
+  [data-slot="select-trigger"][data-size="default"][class] {
+  height: var(--d-ctl);
+}

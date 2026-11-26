@@ -1,0 +1,1032 @@
+/*
+ * Overlays.
+ *
+ * Every modal, side panel, menu, popover, picker, palette, tooltip and toast, in Linear's anatomy:
+ *  - dialogs float 13vh from the top (a growing dialog never jumps), radius 20px, one of four widths;
+ *  - the command palette is a 720px card with no dimmed backdrop and 46px rows;
+ *  - sheets stop being drawers: a panel 8px off the top, right and bottom edges, with a 44px header bar;
+ *  - menus, selects, popovers and pickers share one surface: --d-menu, radius 12px, 4px padding, 32px rows.
+ * Edges are real borders. Hooks: data-width on dialog-content (dialog.tsx), data-dialog="confirm|palette",
+ * data-close="icon" on the built-in close buttons, data-slot="menu-search" and "drop-overlay".
+ */
+html.dark {
+  /* Measured in create-modal.png and command.png: white 7.5% over the fill (#2b2c2e on the dialog). */
+  --ov-edge: rgb(255 255 255 / 0.075);
+  /* command.png: the palette sits one step above the dialog card. */
+  --ov-palette: #212122;
+  --ov-backdrop: rgb(0 0 0 / 0.45);
+  --ov-backdrop-sheet: rgb(0 0 0 / 0.25);
+  --ov-sep: rgb(255 255 255 / 0.07);
+  --ov-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ov-dialog-top: 13vh;
+  --ov-w-confirm: 420px;
+  --ov-w-form: 520px;
+  --ov-w-wide: 750px;
+  --ov-w-full: 1000px;
+  --ov-w-palette: 720px;
+  --ov-danger: var(--destructive);
+}
+
+/* ---------------------------------------------------------------- Backdrops */
+
+html.dark [data-slot="dialog-overlay"] {
+  background-color: var(--ov-backdrop);
+  animation: d-ov-fade-in 200ms ease-out both;
+}
+
+html.dark [data-slot="dialog-overlay"][data-closed] {
+  animation: d-ov-fade-out 150ms ease-out both;
+}
+
+/* The palette floats over a readable page, as Linear's does. The backdrop stays, transparent, to catch the click. */
+html.dark [data-slot="dialog-overlay"]:has(~ [data-dialog="palette"]) {
+  background-color: transparent;
+}
+
+html.dark [data-slot="sheet-overlay"] {
+  background-color: var(--ov-backdrop-sheet);
+}
+
+/* ---------------------------------------------------------------- Dialog shell */
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"]) {
+  top: var(--ov-dialog-top);
+  translate: -50% 0;
+  width: 100%;
+  max-width: min(var(--ov-w-form), calc(100% - 32px));
+  max-height: calc(100dvh - var(--ov-dialog-top) - 24px);
+  border: 1px solid var(--ov-edge);
+  border-radius: var(--d-r-dialog);
+  background-color: var(--d-card);
+  color: var(--d-text-2);
+  box-shadow: var(--d-shadow-dialog);
+  font-size: var(--d-small);
+  font-weight: 450;
+  overscroll-behavior: contain;
+  animation: d-ov-fade-in 200ms var(--ov-ease) both;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"])[data-closed] {
+  animation: d-ov-fade-out 150ms ease-out both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"]) {
+    animation-name: d-ov-dialog-in;
+  }
+
+  html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"])[data-closed] {
+    animation-name: d-ov-dialog-out;
+  }
+}
+
+/* Four widths: a question, a form, a create flow or a wide read, and the expanded create flow. */
+html.dark [data-slot="dialog-content"][data-width="confirm"],
+html.dark [data-slot="dialog-content"][data-dialog="confirm"] {
+  max-width: min(var(--ov-w-confirm), calc(100% - 32px));
+}
+
+html.dark [data-slot="dialog-content"][data-width="wide"] {
+  max-width: min(var(--ov-w-wide), calc(100% - 32px));
+}
+
+html.dark [data-slot="dialog-content"][data-width="full"] {
+  max-width: min(var(--ov-w-full), calc(100% - 32px));
+}
+
+/* Header: title large/600 with the close circle on its line. */
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-header"] {
+  gap: 6px;
+  padding-inline-end: 36px;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-title"] {
+  color: var(--d-text);
+  font-size: var(--d-large);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-description"] {
+  color: var(--d-text-3);
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* A dialog that draws its own padding (p-0) gets the same header inset as the rest, so its title lines up
+   with the close circle. */
+html.dark [data-slot="dialog-content"][data-flush]:not([data-width="fill"]) > [data-slot="dialog-header"] {
+  padding-block: 1rem 14px;
+  padding-inline: 1.5rem 52px;
+}
+
+/* The built-in close: a 28px ghost circle, centred on the title line. */
+html.dark [data-slot="dialog-content"] > [data-close="icon"] {
+  /* The content's 1rem padding plus half the title's line box, less half the circle. */
+  top: calc(1rem + var(--d-large) * 0.7 - 14px);
+  right: 12px;
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+/* Footer: no rule above it, actions on the right as 28px pills, primary last. A non-button lead item
+   (a note, a "start" slot) is pushed to the left. */
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-footer"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  padding-block: 4px 14px;
+  border-top: 0;
+  background-color: transparent;
+}
+
+html.dark
+  [data-slot="dialog-footer"]
+  > :first-child:not(:last-child, button, [data-slot="button"], [data-slot="dialog-close"]) {
+  margin-inline-end: auto;
+}
+
+/* Destructive confirmations: a red mark beside the question, and the red action. */
+html.dark [data-dialog="confirm"][data-tone="destructive"] [data-slot="dialog-header"] {
+  position: relative;
+  padding-inline-start: 44px;
+}
+
+html.dark [data-dialog="confirm"][data-tone="destructive"] [data-slot="dialog-header"]::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+  background-color: color-mix(in oklab, var(--ov-danger) 18%, transparent);
+  /* A filled warning glyph drawn as a mask so it takes the danger colour. */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Ccircle cx='14' cy='14' r='14'/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  content: "";
+}
+
+html.dark [data-dialog="confirm"][data-tone="destructive"] [data-slot="dialog-header"]::after {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  background-color: var(--ov-danger);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z'/%3E%3Cpath d='M12 16h.01'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  content: "";
+}
+
+/* ---------------------------------------------------------------- Create dialog chrome (New task) */
+
+/* The create flow's header row: breadcrumb chips on the left, 28px ghost circles (expand, close) on the right. */
+html.dark [data-slot="dialog-content"]:has(> :first-child [data-slot="breadcrumb"]) {
+  max-width: min(var(--ov-w-wide), calc(100% - 32px));
+}
+
+html.dark [data-slot="dialog-content"][data-width="full"]:has(> :first-child [data-slot="breadcrumb"]) {
+  max-width: min(var(--ov-w-full), calc(100% - 32px));
+}
+
+/* In a create flow the title is the last crumb: small/500, like Linear's "REN › New issue". */
+html.dark [data-slot="dialog-content"] > :first-child:has([data-slot="breadcrumb"]) [data-slot="dialog-title"] {
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+html.dark
+  [data-slot="dialog-content"]
+  > :first-child:has([data-slot="breadcrumb"])
+  > :is([data-slot="button"], [data-slot="dialog-close"])[data-size^="icon"] {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+/* ---------------------------------------------------------------- Command palette */
+
+html.dark [data-slot="dialog-content"][data-dialog="palette"] {
+  max-width: min(var(--ov-w-palette), calc(100% - 32px));
+  max-height: min(calc(100dvh - var(--ov-dialog-top) - 24px), 600px);
+  border-radius: 14px;
+  background-color: var(--ov-palette);
+}
+
+/* cmdk (Control+K) */
+html.dark [data-dialog="palette"] [data-slot="command"] {
+  padding: 0;
+  background-color: transparent;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-input-wrapper"] {
+  margin: 0;
+  padding: 0 8px;
+  border-bottom: 0;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-input-wrapper"] [data-slot="input-group"] {
+  height: 52px;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-input-wrapper"] [data-slot="input-group-addon"] {
+  display: none;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-input"] {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--d-text);
+  font-size: var(--d-regular);
+  font-weight: 450;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-input"]::placeholder {
+  color: var(--d-text-3);
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-list"] {
+  max-height: min(460px, calc(100dvh - var(--ov-dialog-top) - 120px));
+  padding: 0 8px 8px;
+  scroll-padding-block: 8px;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-group"] {
+  padding: 0;
+}
+
+html.dark [data-dialog="palette"] [cmdk-group-heading] {
+  padding: 10px 12px 6px;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-item"] {
+  min-height: 46px;
+  gap: 12px;
+  padding: 0 12px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 450;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-item"] > svg:first-child {
+  width: 16px;
+  height: 16px;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-item"][data-selected="true"] {
+  background-color: var(--d-selected);
+  color: var(--d-text);
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-shortcut"] {
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+  letter-spacing: 0;
+}
+
+html.dark [data-dialog="palette"] [data-slot="command-empty"] {
+  padding: 28px 0;
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+}
+
+/* The footer hint row (search-dialog.tsx). */
+html.dark [data-slot="palette-hints"] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-top: 1px solid var(--ov-sep);
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+html.dark [data-slot="palette-hints"] > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pickers built on PaletteDialog (model, folder, repositories): the same card and rows. */
+html.dark [data-dialog="palette"] > div:first-of-type:has([data-slot="input-group"]) {
+  gap: 0;
+  padding: 0 8px;
+}
+
+html.dark [data-dialog="palette"] > div:first-of-type [data-slot="input-group"] {
+  height: 52px;
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-dialog="palette"] > div:first-of-type [data-slot="input-group"] [data-slot="input-group-addon"] {
+  display: none;
+}
+
+html.dark [data-dialog="palette"] > div:first-of-type [data-slot="input-group-control"] {
+  height: 52px;
+  padding-inline: 10px;
+  color: var(--d-text);
+  font-size: var(--d-regular);
+  font-weight: 450;
+}
+
+html.dark [data-dialog="palette"] > div:first-of-type > [aria-hidden] {
+  margin-inline: -8px;
+  background-color: var(--ov-sep);
+}
+
+html.dark [data-dialog="palette"] h3 {
+  background-color: var(--ov-palette);
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+html.dark [data-dialog="palette"] button[data-row] {
+  height: 36px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 450;
+}
+
+html.dark [data-dialog="palette"] button[data-row]:is([data-active], :focus-visible) {
+  background-color: var(--d-selected);
+  color: var(--d-text);
+}
+
+/* ---------------------------------------------------------------- Sheets: floating side panels */
+
+html.dark [data-slot="sheet-content"] {
+  gap: 0;
+  overflow: clip;
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-panel);
+  color: var(--d-text-2);
+  box-shadow: var(--d-shadow-dialog);
+  font-size: var(--d-small);
+  transition-property: opacity, translate;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ov-ease);
+}
+
+html.dark [data-slot="sheet-content"][data-ending-style] {
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+html.dark [data-slot="sheet-content"]:is([data-side="right"], [data-side="left"]) {
+  top: var(--d-gutter);
+  bottom: var(--d-gutter);
+  height: auto;
+}
+
+html.dark [data-slot="sheet-content"][data-side="right"] {
+  right: var(--d-gutter);
+}
+
+html.dark [data-slot="sheet-content"][data-side="left"] {
+  left: var(--d-gutter);
+}
+
+html.dark [data-slot="sheet-content"]:is([data-side="top"], [data-side="bottom"]) {
+  inset-inline: var(--d-gutter);
+}
+
+html.dark [data-slot="sheet-content"][data-side="bottom"] {
+  bottom: var(--d-gutter);
+}
+
+html.dark [data-slot="sheet-content"][data-side="top"] {
+  top: var(--d-gutter);
+}
+
+html.dark [data-slot="sheet-content"][data-side="right"]:is([data-starting-style], [data-ending-style]) {
+  translate: 0 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.dark [data-slot="sheet-content"][data-side="right"]:is([data-starting-style], [data-ending-style]) {
+    translate: 24px 0;
+  }
+}
+
+/* The 44px header bar: title small/500, the close circle at its right end, a hairline under it. */
+html.dark [data-slot="sheet-header"] {
+  gap: 0;
+  padding: 0 0 16px;
+}
+
+html.dark [data-slot="sheet-title"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--d-header);
+  padding: 0 48px 0 16px;
+  border-bottom: 1px solid var(--d-line);
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+html.dark [data-slot="sheet-description"] {
+  padding: 12px 16px 0;
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.6;
+}
+
+html.dark [data-slot="sheet-content"] > [data-close="icon"] {
+  top: 8px;
+  right: 8px;
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="sheet-footer"] {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 12px;
+  border-top: 1px solid var(--d-line);
+}
+
+html.dark [data-slot="sheet-content"] [data-slot="field-group"] {
+  overscroll-behavior: contain;
+}
+
+/* ---------------------------------------------------------------- Menus, selects, popovers, pickers */
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="select-content"],
+    [data-slot="popover-content"]
+  ) {
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-menu);
+  color: var(--d-text-2);
+  box-shadow: var(--d-shadow-menu);
+  font-size: var(--d-small);
+  font-weight: 450;
+  overscroll-behavior: contain;
+  transform-origin: var(--transform-origin);
+  animation: d-ov-fade-in 120ms ease-out both;
+  /* Menu text on the menu surface: --d-text-3 is 4.87:1 here. */
+  --muted-foreground: var(--d-text-3);
+  --popover: var(--d-menu);
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="select-content"],
+    [data-slot="popover-content"]
+  )[data-closed] {
+  animation: d-ov-fade-out 100ms ease-out both;
+}
+
+/* A select that sits on its trigger does not travel. */
+html.dark [data-slot="select-content"][data-align-trigger="true"] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.dark
+    :is(
+      [data-slot="dropdown-menu-content"],
+      [data-slot="dropdown-menu-sub-content"],
+      [data-slot="context-menu-content"],
+      [data-slot="select-content"],
+      [data-slot="popover-content"]
+    ) {
+    animation-name: d-ov-menu-in;
+  }
+
+  html.dark
+    :is(
+      [data-slot="dropdown-menu-content"],
+      [data-slot="dropdown-menu-sub-content"],
+      [data-slot="context-menu-content"],
+      [data-slot="select-content"],
+      [data-slot="popover-content"]
+    )[data-closed] {
+    animation-name: d-ov-menu-out;
+  }
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="context-menu-content"],
+    [data-slot="select-content"]
+  ) {
+  padding: 4px;
+}
+
+/* Rows: 32px, small/450, an 8px-radius highlight inset by the 4px padding. Checkable rows keep their own
+   inline padding, because their indicator sits in it. */
+html.dark
+  :is(
+    [data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="context-menu-item"],
+    [data-slot="select-item"]
+  ) {
+  height: auto;
+  min-height: 32px;
+  padding-block: 4px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.35;
+}
+
+html.dark
+  :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="context-menu-item"]) {
+  gap: 8px;
+  padding-inline: 8px;
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-checkbox-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-sub-trigger"],
+    [data-slot="context-menu-item"],
+    [data-slot="select-item"]
+  ):is([data-highlighted], :focus, [data-popup-open]) {
+  background-color: var(--d-selected);
+  color: var(--d-text);
+  /* Meta text brightens with the row: --d-text-3 is 3.9:1 on the highlight, --d-text-2 is 9.2:1. */
+  --muted-foreground: var(--d-text-2);
+  --accent-foreground: var(--d-text);
+}
+
+/* Destructive rows: red text, a faint red highlight. */
+html.dark :is([data-slot="dropdown-menu-item"], [data-slot="context-menu-item"])[data-variant="destructive"] {
+  color: var(--ov-danger);
+}
+
+html.dark
+  :is([data-slot="dropdown-menu-item"], [data-slot="context-menu-item"])[data-variant="destructive"]:is(
+    [data-highlighted],
+    :focus
+  ) {
+  background-color: color-mix(in oklab, var(--ov-danger) 16%, transparent);
+  color: var(--ov-danger);
+}
+
+html.dark :is([data-slot="dropdown-menu-item"], [data-slot="context-menu-item"])[data-disabled] {
+  opacity: 1;
+  color: var(--d-text-4);
+}
+
+/* Check marks, radio marks and the sub-menu chevron: --d-text-3, 14px. */
+html.dark
+  :is(
+    [data-slot="dropdown-menu-checkbox-item-indicator"],
+    [data-slot="dropdown-menu-radio-item-indicator"],
+    [data-slot="select-item"] > span:last-child:not([data-slot])
+  ) {
+  color: var(--d-text-3);
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-checkbox-item-indicator"],
+    [data-slot="dropdown-menu-radio-item-indicator"],
+    [data-slot="dropdown-menu-sub-trigger"] > svg:last-child
+  )
+  svg,
+html.dark [data-slot="dropdown-menu-sub-trigger"] > svg:last-child {
+  width: 14px;
+  height: 14px;
+}
+
+/* Group labels: mini/500, --d-text-3. */
+html.dark :is([data-slot="dropdown-menu-label"], [data-slot="select-label"]) {
+  padding: 6px 8px 4px;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+/* Separators: one hairline, edge to edge. */
+html.dark
+  :is([data-slot="dropdown-menu-separator"], [data-slot="context-menu-separator"], [data-slot="select-separator"]) {
+  height: 1px;
+  margin: 4px -4px;
+  background-color: var(--ov-sep);
+}
+
+/* Shortcuts: mini, --d-text-3, no letter-spacing (the key caps inside are the controls agent's kbd). */
+html.dark [data-slot="dropdown-menu-shortcut"] {
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  letter-spacing: 0;
+}
+
+html.dark [data-highlighted] > [data-slot="dropdown-menu-shortcut"] {
+  color: var(--d-text-2);
+}
+
+/* Select: list padding lives on the popup; the scroll arrows are quiet 20px bars on the menu fill. */
+html.dark [data-slot="select-content"] [data-slot="select-group"] {
+  padding: 0;
+}
+
+html.dark :is([data-slot="select-scroll-up-button"], [data-slot="select-scroll-down-button"]) {
+  height: 20px;
+  padding: 0;
+  background-color: var(--d-menu);
+  color: var(--d-text-3);
+}
+
+/* The search row inside a menu (MenuSearch): part of the menu, not a boxed field inside a box. */
+html.dark [data-slot="menu-search"] {
+  background-color: var(--d-menu);
+}
+
+html.dark [data-slot="menu-search"] [data-slot="input"] {
+  height: 36px;
+  border: 0;
+  border-radius: var(--d-r);
+  background-color: transparent;
+  box-shadow: none;
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 450;
+}
+
+html.dark [data-slot="menu-search"] [data-slot="input"]::placeholder {
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="menu-search"] > div > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--d-text-3);
+}
+
+/* Focus stays visible: the hairline under the search row turns accent while the field has focus. */
+html.dark [data-slot="menu-search"]:focus-within > [data-slot="dropdown-menu-separator"] {
+  background-color: var(--d-accent);
+}
+
+/* cmdk pickers inside a popover (assignee, agent, labels, spaces): the same search row and rows. */
+html.dark [data-slot="popover-content"] [data-slot="command"] {
+  border-radius: 0;
+  background-color: transparent;
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input-wrapper"] {
+  border-bottom: 1px solid var(--ov-sep);
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input-wrapper"]:focus-within {
+  border-bottom-color: var(--d-accent);
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input-wrapper"] [data-slot="input-group"] {
+  height: 38px;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input-wrapper"] [data-slot="input-group-addon"] svg {
+  width: 14px;
+  height: 14px;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input"] {
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 450;
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-input"]::placeholder {
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-list"] {
+  padding: 4px;
+}
+
+html.dark [data-slot="popover-content"] [cmdk-group-heading] {
+  padding: 6px 8px 4px;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-item"] {
+  min-height: 32px;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 450;
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-item"][data-selected="true"] {
+  background-color: var(--d-selected);
+  color: var(--d-text);
+  --muted-foreground: var(--d-text-2);
+}
+
+html.dark [data-slot="popover-content"] [data-slot="command-empty"] {
+  padding: 16px 8px;
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+}
+
+/* Popover headings (icon picker, context usage): small/500 title, mini description. */
+html.dark [data-slot="popover-title"] {
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-slot="popover-description"] {
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+}
+
+/* The calendar in the due-date popover: 28px day circles, today and selection the controls' way. */
+html.dark [data-slot="popover-content"] [data-slot="calendar"] {
+  background-color: transparent;
+  --cell-size: 28px;
+  --cell-radius: var(--d-r-pill);
+}
+
+/* Day cells are ghost buttons; the selected day keeps the accent fill the ghost recipe would wipe. */
+html.dark [data-slot="calendar"] button[data-day][data-slot="button"][data-variant] {
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-2);
+  font-size: var(--d-mini);
+  font-variant-numeric: tabular-nums;
+}
+
+html.dark
+  [data-slot="calendar"]
+  button[data-day][data-slot="button"][data-variant]:is(
+    [data-selected-single="true"],
+    [data-range-start="true"],
+    [data-range-end="true"]
+  ) {
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+  font-weight: 500;
+}
+
+html.dark [data-slot="calendar"] [data-outside="true"] button[data-day][data-slot="button"][data-variant] {
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="calendar"] button[data-day][data-slot="button"][data-variant][data-range-middle="true"] {
+  border-radius: 0;
+  background-color: var(--d-accent-tint);
+  color: var(--d-text);
+}
+
+/* Switchers inside an overlay (icon picker: Icons / Emoji / Upload) are a row of separate pills sized to
+   their label, not a stretched segmented bar. The pill recipe itself is the controls agent's. */
+html.dark
+  :is([data-slot="popover-content"], [data-slot="dialog-content"], [data-slot="sheet-content"])
+  [data-slot="tabs-list"][data-orientation="horizontal"] {
+  justify-content: flex-start;
+  width: auto;
+}
+
+html.dark
+  :is([data-slot="popover-content"], [data-slot="dialog-content"], [data-slot="sheet-content"])
+  [data-slot="tabs-list"][data-orientation="horizontal"]
+  > [data-slot="tabs-trigger"] {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- Tooltips */
+
+html.dark [data-slot="tooltip-content"] {
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-sm);
+  background-color: var(--d-menu);
+  color: var(--d-text-2);
+  box-shadow: var(--d-shadow-menu);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  line-height: 1.4;
+  animation: d-ov-fade-in 120ms ease-out both;
+}
+
+html.dark [data-slot="tooltip-content"]:has([data-slot="kbd"]) {
+  padding-inline-end: 4px;
+}
+
+html.dark [data-slot="tooltip-content"][data-closed] {
+  animation: d-ov-fade-out 80ms ease-out both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.dark [data-slot="tooltip-content"] {
+    animation-name: d-ov-menu-in;
+  }
+}
+
+/* ---------------------------------------------------------------- Toasts (sonner) */
+
+html.dark [data-sonner-toast] {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 40px 12px 12px;
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-card);
+  color: var(--d-text-2);
+  box-shadow: var(--d-shadow-dialog);
+  font-size: var(--d-small);
+}
+
+html.dark [data-sonner-toast] [data-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+
+html.dark [data-sonner-toast] [data-title] {
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+html.dark [data-sonner-toast] [data-description] {
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.5;
+}
+
+html.dark [data-sonner-toast] [data-close-button] {
+  top: 10px;
+  right: 10px;
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+}
+
+@media (hover: hover) {
+  html.dark [data-sonner-toast] [data-close-button]:hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-sonner-toast] [data-close-button]:focus-visible {
+  outline: 1px solid var(--d-accent);
+  outline-offset: 1px;
+}
+
+html.dark [data-sonner-toast] :is([data-button], [data-cancel]) {
+  height: var(--d-ctl);
+  padding: 0 10px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+html.dark [data-sonner-toast] [data-button] {
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+}
+
+/* ---------------------------------------------------------------- Drop overlay */
+
+html.dark [data-slot="drop-overlay"] {
+  inset: var(--d-gutter);
+  border: 1px dashed var(--d-accent);
+  border-radius: var(--d-r-panel);
+  background-color: rgb(9 9 10 / 0.8);
+}
+
+html.dark [data-slot="drop-overlay"] > div {
+  gap: 6px;
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="drop-overlay"] > div > svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  margin-bottom: 6px;
+  padding: 9px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  color: var(--d-text);
+}
+
+html.dark [data-slot="drop-overlay"] > div > span:first-of-type {
+  color: var(--d-text);
+  font-weight: 500;
+}
+
+html.dark [data-slot="drop-overlay"] > div > span:last-of-type {
+  font-size: var(--d-mini);
+}
+
+/* ---------------------------------------------------------------- Motion */
+
+@keyframes d-ov-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes d-ov-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes d-ov-dialog-in {
+  from {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+
+@keyframes d-ov-dialog-out {
+  to {
+    opacity: 0;
+    scale: 0.99;
+  }
+}
+
+@keyframes d-ov-menu-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+@keyframes d-ov-menu-out {
+  to {
+    opacity: 0;
+    scale: 0.99;
+  }
+}

@@ -166,7 +166,7 @@ function TaskChips(props: {
 }) {
   const noPriority = props.draft.priority === "none"
   return (
-    <div className={cn("flex flex-wrap gap-2 px-4 pt-4 pb-2", props.className)}>
+    <div data-slot="task-chips" className={cn("flex flex-wrap gap-2 px-4 pt-4 pb-2", props.className)}>
       <StatusMenu
         status={props.draft.status}
         onChange={(status) => props.onChange({ status })}
@@ -258,6 +258,7 @@ function TitleField({
         aria-label="Task title"
         aria-invalid={props.missing || undefined}
         aria-describedby={props.missing ? errorId : undefined}
+        data-task-title=""
         rows={1}
         className={cn(
           "min-h-7 resize-none rounded-none border-0 bg-transparent p-0 text-xl font-medium wrap-break-word shadow-none focus-visible:ring-0 md:text-xl dark:bg-transparent",
@@ -351,9 +352,11 @@ export function NewTaskDialog(props: {
       <DialogContent
         showCloseButton={false}
         initialFocus={titleRef}
+        data-task-composer=""
+        data-expanded={expanded || undefined}
         className={cn("top-[12%] translate-y-0 gap-0 p-0", expanded ? "sm:max-w-5xl" : "sm:max-w-3xl")}
       >
-        <div className="flex items-center gap-2 p-4 pb-2">
+        <div data-part="head" className="flex items-center gap-2 p-4 pb-2">
           <Breadcrumb.Root
             ancestors={[
               {
@@ -402,7 +405,7 @@ export function NewTaskDialog(props: {
             })
           }
         >
-          <div className="flex flex-col gap-2 px-6 pt-2">
+          <div data-part="fields" className="flex flex-col gap-2 px-6 pt-2">
             <TitleField ref={titleRef} value={draft.title} missing={form.missing} onChange={form.setTitle} />
             <Suspense fallback={<div className={height.fallback} />}>
               <MarkdownEditor
@@ -417,9 +420,9 @@ export function NewTaskDialog(props: {
             </Suspense>
           </div>
           <TaskChips draft={draft} spaceId={spaceId} onChange={set} />
-          <div className="flex items-center justify-end gap-4 px-4 pt-2 pb-4">
+          <div data-part="footer" className="flex items-center justify-end gap-4 px-4 pt-2 pb-4">
             {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
-            <label className="flex items-center gap-2 text-xs">
+            <label data-part="more" className="flex items-center gap-2 text-xs">
               <Switch checked={createMore} onCheckedChange={setCreateMore} />
               Create more
             </label>
@@ -446,6 +449,7 @@ export function SubtaskComposer(props: {
     // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- Escape closes the inline form, as it closes a dialog
     <form
       aria-label={`New sub-task of ${props.parent.identifier}`}
+      data-slot="subtask-composer"
       className="mt-2 flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3"
       onKeyDownCapture={submitShortcut}
       onKeyDown={(event) => {

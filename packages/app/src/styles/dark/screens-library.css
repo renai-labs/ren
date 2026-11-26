@@ -1,0 +1,661 @@
+/* Screens-library.
+ * Drive (files, artifacts, previews), Apps (the catalog, a category, an app's page) and their overlays.
+ * Every screen is scoped to a hook on its root: [data-screen="drive" | "drive-artifacts" | "apps" | "app"],
+ * [data-slot="drive-viewer"], [data-slot="app-catalog"]. Shared recipes (page bar, toolbar, tables, pills,
+ * dialogs, sheets) come from shell/controls/data/overlays.css; this file only takes each screen the rest of the way.
+ * Specificity: controls.css shapes buttons at up to (0,7,1); where a screen reshapes a button it adds :not(#d).
+ */
+html.dark {
+  /* A drive row's icon column: 16px glyphs, 10px to the name (projects.png). */
+  --lib-icon: 16px;
+  --lib-icon-gap: 10px;
+  /* The detail page's properties panel and the viewer's panel. */
+  --lib-aside: 280px;
+}
+
+/* ───────────────────────── 1. Drive: header bar, toolbar, file table (projects.png) ───────────────────────── */
+
+/* Drive sits in the Apps grid (owner's addendum). The table's text lines up with the title; its rows' hover
+   shape reaches 16px past it on both sides, as Linear's rows do. */
+html.dark
+  :is([data-screen="drive"], [data-screen="drive-artifacts"])
+  [data-slot="table-container"]:has(> [data-file-table]) {
+  width: calc(100% + 32px);
+  max-width: none;
+  margin-inline: -16px;
+}
+
+/* The crumbs above the title are the folder's ancestors. */
+html.dark
+  :is([data-screen="drive"], [data-screen="drive-artifacts"], [data-screen="apps"])
+  [data-slot="page-back"]
+  [data-slot="breadcrumb-item"]:first-child
+  > a {
+  margin-inline-start: -8px;
+}
+
+html.dark [data-file-table] [data-file-name] {
+  gap: var(--lib-icon-gap);
+}
+
+html.dark [data-file-table] [data-file-media] {
+  width: var(--lib-icon);
+  color: var(--d-text-3);
+
+  & svg {
+    width: var(--lib-icon);
+    height: var(--lib-icon);
+  }
+}
+
+html.dark [data-file-table] [data-file-name] > a {
+  color: var(--d-text-2);
+}
+
+html.dark [data-file-table] [data-file-row] > [data-slot="table-cell"]:not(:first-child) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────────────────── 2. Drive viewer (a file's preview + its properties: issue-detail.png) ───────────────────────── */
+
+/* A floating panel, 8px from every edge, radius 12, the panel fill and the dialog shadow; not an edge-glued page. */
+html.dark [data-slot="dialog-content"][data-slot-viewer="drive"] {
+  top: 8px;
+  left: 8px;
+  width: calc(100vw - 16px);
+  height: calc(100dvh - 16px);
+  max-height: none;
+  translate: none;
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-panel);
+  box-shadow: var(--d-shadow-dialog);
+  overscroll-behavior: contain;
+}
+
+/* The 44px bar: file icon + name small/500, 28px ghost circles at the right. */
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-bar"] {
+  height: var(--d-header);
+  flex: none;
+  gap: 4px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--d-line);
+}
+
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-bar"] > svg:first-child {
+  width: var(--lib-icon);
+  height: var(--lib-icon);
+  margin: 0 4px 0 0;
+}
+
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-name"] {
+  padding: 0;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-bar"] button[data-variant]:not(#d)[data-size^="icon"] {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+}
+
+/* Images and media sit on the panel, not on a grey wash. */
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-media"] {
+  background-color: var(--d-page);
+}
+
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-media"] img {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r);
+}
+
+/* The text viewer's own row repeats the file name; the bar already says it. Keep its tools. */
+html.dark [data-slot-viewer="drive"] [data-slot="file-view"] > div:first-child [data-slot="breadcrumb"],
+html.dark
+  [data-slot-viewer="drive"]
+  [data-slot="viewer-body"]
+  > div
+  > div:first-child
+  > div:has(> [data-slot="breadcrumb"]) {
+  visibility: hidden;
+}
+
+/* Properties panel: no card; section label small/500 text-3; 30px property rows small/500, 16px icons. */
+html.dark [data-slot-viewer="drive"] [data-slot="viewer-aside"] {
+  display: flex;
+  width: var(--lib-aside);
+  flex: none;
+  flex-direction: column;
+  gap: 28px;
+  padding: 20px 16px 24px 24px;
+  border-inline-start: 1px solid var(--d-line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  & h2 {
+    margin: 0 0 6px;
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-3);
+  }
+
+  & section {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  & [data-property],
+  & button[data-variant]:not(#d) {
+    display: flex;
+    height: 30px;
+    max-width: 100%;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 0 -8px;
+    padding: 0 10px 0 8px;
+    border-radius: var(--d-r);
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+
+  & :is([data-property], button) > svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--d-text-3);
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot-viewer="drive"] [data-slot="viewer-aside"] button[data-variant]:not(#d):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text);
+  }
+}
+
+@container (width < 56rem) {
+  html.dark [data-slot-viewer="drive"] [data-slot="viewer-aside"] {
+    display: none;
+  }
+}
+
+/* ───────────────────────── 3. Artifacts (projects.png: thumbnail + name, then quiet meta columns) ───────────────────────── */
+
+/* The link is meta, not a call to action: text-3, brightening on hover; the copy glyph shows on hover/focus. */
+html.dark
+  [data-screen="drive-artifacts"]
+  [data-file-row]
+  > [data-slot="table-cell"]:nth-child(2)
+  button[data-variant="link"]:not(#d) {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+@media (hover: hover) {
+  html.dark
+    [data-screen="drive-artifacts"]
+    [data-file-row]
+    > [data-slot="table-cell"]:nth-child(2)
+    button[data-variant="link"]:not(#d):hover {
+    color: var(--d-text-2);
+  }
+}
+
+/* The name column takes the room the meta columns do not need. */
+html.dark [data-screen="drive-artifacts"] [data-file-table] [data-slot="table-head"]:nth-child(2) {
+  width: 13rem;
+}
+
+html.dark [data-screen="drive-artifacts"] [data-file-table] [data-slot="table-head"]:nth-child(3) {
+  width: 9rem;
+}
+
+html.dark [data-screen="drive-artifacts"] [data-file-table] [data-slot="table-head"]:nth-child(4) {
+  width: 8rem;
+}
+
+/* The thumbnail is the row's 24px icon: a small tile with a faint real edge. */
+html.dark [data-screen="drive-artifacts"] [data-file-name] [data-slot="artifact-thumbnail"] {
+  width: 24px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: 4px;
+}
+
+/* "Not served" is a chip: 24px pill, --d-line-3 edge, mini/450 text-3. */
+html.dark [data-screen="drive-artifacts"] [data-file-name] [data-slot="badge"] {
+  height: var(--d-ctl-sm);
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background: transparent;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── 4. Apps catalog (the one grid of cards; apps-grid.png, Linear-quiet) ───────────────────────── */
+
+/* Section heading: regular/500 white, a quiet chevron; sections 32px apart. */
+html.dark [data-screen="apps"] [data-slot="app-section"] {
+  gap: 12px;
+}
+
+html.dark [data-screen="apps"] [data-slot="app-section"] > h2,
+html.dark [data-screen="apps"] [data-slot="app-section"] > h2 a {
+  font-size: var(--d-regular);
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-screen="apps"] [data-slot="app-section"] > h2 a {
+  gap: 4px;
+  border-radius: var(--d-r-sm);
+}
+
+html.dark [data-screen="apps"] [data-slot="app-section"] > h2 a:focus-visible {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: 2px;
+}
+
+html.dark [data-screen="apps"] [data-slot="app-section"] > h2 a svg {
+  width: 14px;
+  height: 14px;
+  color: var(--d-text-3);
+}
+
+/* The grid: two columns of cards, 8px apart, no negative inset. */
+html.dark [data-screen="apps"] [role="list"]:has(> [data-app-row]) {
+  gap: 8px;
+  margin-inline: 0;
+}
+
+/* A card: card fill, faint real edge, contact, 10px radius, 12px padding; 24px icon; name small/500;
+   one-line description mini text-3; a secondary 24px "Add" pill. */
+html.dark [data-screen="apps"] [data-app-row] {
+  min-height: 60px;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out;
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="apps"] [data-app-row]:has([data-slot="app-open"]:hover) {
+    border-color: var(--d-edge);
+    background-color: var(--d-control-hover);
+  }
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > span,
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > :is(div, svg) {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-content"] {
+  gap: 2px;
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-title"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--d-text);
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-description"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.4;
+  color: var(--d-text-3);
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="app-open"]:focus-visible::after {
+  border-radius: var(--d-r-card);
+}
+
+/* The Add pill is quiet until its card is hovered or focused (always there on touch). */
+html.dark [data-screen="apps"] [data-app-row] [data-app-add]:not(#d) {
+  height: var(--d-ctl-sm);
+  padding: 0 9px 0 7px;
+  font-size: var(--d-mini);
+}
+
+/* Collapsible space groups on the Organization tab: a 24px ghost pill, like a section toggle. */
+html.dark [data-screen="apps"] section > h2 > button[data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  margin-inline-start: -8px;
+  padding: 0 8px 0 4px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+/* The name is a ghost button that stretches over the card; it reads as the card's title, not a ghost control. */
+html.dark [data-app-row] [data-slot="app-open"][data-variant]:not(#d) {
+  height: auto;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+/* App icons: a real 1px faint edge instead of the inset ring. */
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > span[class~="ring-1"] {
+  box-shadow: none;
+  outline: 1px solid var(--d-edge-faint);
+  outline-offset: -1px;
+}
+
+/* ───────────────────────── 5. An app's page (issue-detail.png: bar, ~730px column, properties panel) ───────────────────────── */
+
+html.dark [data-screen="app"] > [data-slot="page-bar"] > [data-slot="page-actions"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+html.dark [data-screen="app"] [data-slot="app-article"] {
+  gap: 32px;
+  padding: 56px clamp(24px, 6cqw, 96px) 96px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-article"] > *,
+html.dark [data-screen="app"] [data-slot="app-article"] > * > * {
+  width: 100%;
+  max-width: 730px;
+  margin-inline: auto;
+}
+
+/* Title block: a 40px icon with a faint real edge, title 1.5rem/600, description regular/450 text-3. */
+html.dark [data-screen="app"] [data-slot="app-header"] > div:first-child {
+  gap: 16px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-header"] > div:first-child > span:first-child {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--d-r-card);
+  box-shadow: none;
+  outline: 1px solid var(--d-edge-faint);
+  outline-offset: -1px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-header"] h1 {
+  font-size: var(--d-title);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--d-text);
+}
+
+html.dark [data-screen="app"] [data-slot="app-header"] p {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* Body copy: regular/450, 1.6, text-2. */
+html.dark [data-screen="app"] [data-slot="app-article"] [class~="whitespace-pre-line"] {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+/* Sections: heading regular/600 (Linear's "Activity"); their actions are 24px pills, ghost-quiet. */
+html.dark [data-screen="app"] [data-slot="app-detail-section"] {
+  gap: 12px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-detail-section"] h3 {
+  font-size: var(--d-regular);
+  font-weight: 600;
+  color: var(--d-text);
+}
+
+html.dark [data-screen="app"] [data-slot="app-detail-section"] h3 > span {
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > div:first-child
+  button[data-variant="default"]:not(#d) {
+  height: var(--d-ctl-sm);
+  padding: 0 9px 0 7px;
+  border: 1px solid var(--d-edge);
+  background-color: var(--d-control);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-mini);
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark
+    [data-screen="app"]
+    [data-slot="app-detail-section"]
+    > div:first-child
+    button[data-variant="default"]:not(#d):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-screen="app"] [data-slot="app-detail-section"] > p {
+  margin-top: -4px;
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+/* MCP / skill / dependency tiles: 48px rows, 24px icon, name small/500, caption mini text-3; 8px hover. */
+html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] {
+  gap: 2px 8px;
+  margin-inline: -8px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] button[data-variant]:not(#d) {
+  height: 48px;
+  gap: 10px;
+  padding: 0 8px;
+  border-radius: var(--d-r);
+}
+
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > div[class~="grid"]
+  button[data-variant]:not(#d)
+  > :first-child {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > div[class~="grid"]
+  button
+  > span:last-child
+  > span:first-child {
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > div[class~="grid"]
+  button
+  > span:last-child
+  > span
+  + span {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+/* Account rows: 44px, 8px hover. */
+html.dark [data-slot="account-row"] {
+  min-height: 44px;
+  padding-block: 6px;
+  border-radius: var(--d-r);
+}
+
+/* Example prompts: no shader wash; a label and the prompts as raised rows (the composer surface). */
+html.dark [data-screen="app"] [data-slot="app-prompts"] {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+}
+
+html.dark [data-slot="app-prompts-title"] {
+  margin-bottom: 4px;
+  font-size: var(--d-regular);
+  font-weight: 600;
+  color: var(--d-text);
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompts"] ul {
+  max-width: none;
+  margin: 0;
+  gap: 6px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompts"] li > :is(button, p):not(#d) {
+  min-height: 44px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  box-shadow: var(--d-contact);
+  backdrop-filter: none;
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="app"] [data-slot="app-prompts"] li > button:not(#d):hover {
+    border-color: var(--d-edge);
+    background-color: var(--d-control-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompts"] li > button > span:last-child {
+  width: 24px;
+  height: 24px;
+  background-color: transparent;
+  color: var(--d-text-3);
+}
+
+/* Properties panel: no card; labels small/500 text-3; 30px rows small/500 text-2 with 16px icons. */
+html.dark [data-slot="app-aside"] {
+  display: flex;
+  width: var(--lib-aside);
+  flex: none;
+  flex-direction: column;
+  gap: 28px;
+  padding: 60px 24px 48px 8px;
+
+  & h2 {
+    margin: 0 0 6px;
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-3);
+  }
+
+  & section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  & [data-property] {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+
+  & [data-property] > svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="app-chips"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@container (width < 52rem) {
+  html.dark [data-slot="app-aside"] {
+    display: none;
+  }
+}
+
+html.dark [data-slot="account-row"] [data-slot="account-open"][data-variant]:not(#d) {
+  height: auto;
+  padding: 0;
+  background: none;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="account-row"] [data-slot="account-open"]:focus-visible::after {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="account-row"]:has([data-slot="account-open"]:hover) {
+    background-color: var(--d-hover);
+  }
+}
+
+/* The spaces an account reaches are chips, not role badges. */
+html.dark [data-slot="account-row"] [data-slot="badge"] {
+  height: var(--d-ctl-sm);
+  padding: 0 8px;
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background: transparent;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}

@@ -160,7 +160,10 @@ function LinkRow(props: { link: LinkInfo; pull: PullRequestInfo | undefined; onR
   const shown = describe(props.link)
   const label = props.pull?.title ?? shown.label
   return (
-    <div className="group/link -ml-2.5 flex h-8 max-w-full min-w-0 items-center gap-2 rounded-full pr-1 pl-2.5 hover:bg-muted">
+    <div
+      data-slot="task-link-row"
+      className="group/link -ml-2.5 flex h-8 max-w-full min-w-0 items-center gap-2 rounded-full pr-1 pl-2.5 hover:bg-muted"
+    >
       <LinkMark link={props.link} shown={shown} pull={props.pull} />
       <Link
         href={props.link.url}

@@ -159,7 +159,10 @@ function Changes(props: {
         </div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b px-2 text-xs text-muted-foreground tabular-nums">
+        <div
+          data-slot="workspace-subbar"
+          className="flex h-9 shrink-0 items-center gap-2 border-b px-2 text-xs text-muted-foreground tabular-nums"
+        >
           <span className="@xl/changes:hidden">
             {props.changes.length === 1 ? "1 file" : `${props.changes.length} files`}
           </span>

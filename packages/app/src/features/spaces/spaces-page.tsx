@@ -5,7 +5,7 @@ import { Tabs } from "@ren/ui/tabs"
 import { FilterMenu, type Filters } from "../../components/filter-menu.js"
 import { FilterMatch } from "@ren/util/filter-match"
 import { ToolbarSearch } from "../../components/toolbar-search.js"
-import { Page, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
+import { Page, PageActions, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
 import { Loading } from "@ren/ui/loading"
 import { pageSize, pickerPageSize } from "../../lib/pagination.js"
@@ -18,6 +18,8 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { getRouteApi } from "@tanstack/react-router"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
+import { DarkUi } from "../../lib/dark-ui.js"
+import { SpaceFrame } from "./space-frame.js"
 
 const route = getRouteApi("/_authed/_shell/spaces/")
 
@@ -39,6 +41,7 @@ export function SpacesPage() {
     initialDataUpdatedAt: () => queryClient.getQueryState(pickerKey)?.dataUpdatedAt,
     ...Loader.required,
   })
+  const deep = DarkUi.useDarkUi()
   const shapeId = useShapeId("spaces")
   const [creating, setCreating] = useState(false)
   const spaces = list.data?.pages.flatMap((page) => page.items)
@@ -48,64 +51,73 @@ export function SpacesPage() {
     .filter((space) => (tab === "all" ? !isPrivate(space) : space.membershipId !== null))
     .filter((space) => Search.matches(query, space.name, space.description))
     .filter((space) => FilterMatch.passes(filters, { visibility: [isPrivate(space) ? "private" : "shared"] }))
+  const create = (
+    <>
+      <Button onClick={() => setCreating(true)}>
+        <IconPlus data-icon="inline-start" />
+        New space
+      </Button>
+      <NewSpaceDialog open={creating} onOpenChange={setCreating} />
+    </>
+  )
   return (
-    <Page
-      title="Spaces"
-      description="Each space gives a team its own credentials, apps and agents."
-      tabs={
-        <Tabs
-          value={tab}
-          onValueChange={(value: string) =>
-            void navigate({ search: value === "all" ? { tab: "all" } : {}, replace: true })
-          }
-        >
-          <PageTabsList>
-            <PageTabsTrigger value="your">Your spaces</PageTabsTrigger>
-            <PageTabsTrigger value="all">All spaces</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
-      }
-      actions={
-        <>
-          <ToolbarSearch label="Search spaces" value={query} onChange={setQuery} />
-          <FilterMenu
-            label="Filter spaces"
-            properties={[
-              {
-                key: "visibility",
-                label: "Visibility",
-                any: "All spaces",
-                icon: IconEye,
-                single: true,
-                options: [
-                  { value: "shared", label: "Shared", icon: IconUsers },
-                  { value: "private", label: "Private", icon: IconLock },
-                ],
-              },
-            ]}
-            value={filters}
-            onChange={setFilters}
-          />
-          <Button onClick={() => setCreating(true)}>
-            <IconPlus data-icon="inline-start" />
-            New space
-          </Button>
-          <NewSpaceDialog open={creating} onOpenChange={setCreating} />
-        </>
-      }
-    >
-      <Loading id={shapeId} loading={!spaces} label="Loading spaces">
-        {spaces ? (
-          <SpacesTable
-            spaces={shown}
-            browsing={tab === "all"}
-            empty={Search.empty(query, tab === "all" ? "No shared spaces yet." : "You’re not in any space yet.")}
-          />
-        ) : (
-          <TableSample columns={["Space", "Description", "Members", ""]} />
-        )}
-      </Loading>
-      <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
-    </Page>
+    <SpaceFrame.Screen name="spaces">
+      <Page
+        title="Spaces"
+        description={deep ? undefined : "Each space gives a team its own credentials, apps and agents."}
+        width={deep ? "full" : undefined}
+        tabs={
+          <Tabs
+            value={tab}
+            onValueChange={(value: string) =>
+              void navigate({ search: value === "all" ? { tab: "all" } : {}, replace: true })
+            }
+          >
+            <PageTabsList>
+              <PageTabsTrigger value="your">Your spaces</PageTabsTrigger>
+              <PageTabsTrigger value="all">All spaces</PageTabsTrigger>
+            </PageTabsList>
+          </Tabs>
+        }
+        actions={
+          <>
+            <ToolbarSearch label="Search spaces" value={query} onChange={setQuery} />
+            <FilterMenu
+              label="Filter spaces"
+              properties={[
+                {
+                  key: "visibility",
+                  label: "Visibility",
+                  any: "All spaces",
+                  icon: IconEye,
+                  single: true,
+                  options: [
+                    { value: "shared", label: "Shared", icon: IconUsers },
+                    { value: "private", label: "Private", icon: IconLock },
+                  ],
+                },
+              ]}
+              value={filters}
+              onChange={setFilters}
+            />
+            {deep ? null : create}
+          </>
+        }
+      >
+        {deep ? <PageActions>{create}</PageActions> : null}
+        <Loading id={shapeId} loading={!spaces} label="Loading spaces">
+          {spaces ? (
+            <SpacesTable
+              spaces={shown}
+              browsing={tab === "all"}
+              empty={Search.empty(query, tab === "all" ? "No shared spaces yet." : "You’re not in any space yet.")}
+            />
+          ) : (
+            <TableSample columns={["Space", "Description", "Members", ""]} />
+          )}
+        </Loading>
+        <LoadMore more={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
+      </Page>
+    </SpaceFrame.Screen>
   )
 }

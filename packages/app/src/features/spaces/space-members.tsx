@@ -47,6 +47,7 @@ import { Search } from "@ren/schema/search"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Loader } from "../../lib/loader.js"
+import { SpaceFrame } from "./space-frame.js"
 
 interface Candidate {
   readonly value: string
@@ -236,9 +237,9 @@ function SpaceRequests() {
     .filter((request) => Search.matches(query, request.name, request.email, request.note))
   return (
     <>
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search requests" value={query} onChange={setQuery} />
-      </PageActions>
+      </SpaceFrame.Tools>
       <Loading id={shapeId} loading={requests.isPending} label="Loading requests">
         <TableCard>
           <Table className="table-fixed">
@@ -357,8 +358,10 @@ function SpaceMembers() {
   }
   return (
     <>
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         {space.membershipId && space.kind === "shared" ? <InviteLinkDialog /> : null}
         {space.canAddMember ? (
           <AddSpaceMemberDialog

@@ -34,6 +34,8 @@ import { docsUrl, founderCallUrl } from "../lib/links.js"
 import { useMe } from "../lib/use-me.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
+import { Kbd } from "@ren/ui/kbd"
+import { DarkUi } from "../lib/dark-ui.js"
 
 function ChatResults(props: {
   query: string
@@ -92,6 +94,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
   const open = props.open
   const admin = useQuery({ ...canAdministerOptions(auth), enabled: open }).data === true
   const navigate = useNavigate()
+  const deep = DarkUi.useDarkUi()
   const [query, setQuery] = useState("")
   const typed = query.trim() !== ""
   const spaces = useQuery({ ...api.space.list.queryOptions({ page: 1, pageSize: pickerPageSize }), enabled: open })
@@ -121,6 +124,7 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
     >
       <DialogContent
         showCloseButton={false}
+        data-dialog="palette"
         className="top-[18%] translate-y-0 gap-0 overflow-hidden rounded-xl p-0 sm:max-w-xl"
       >
         <DialogTitle className="sr-only">Search</DialogTitle>
@@ -190,6 +194,23 @@ export function SearchDialog(props: { open: boolean; onOpenChange: (open: boolea
             ) : null}
           </CommandList>
         </Command>
+        {deep ? (
+          <div data-slot="palette-hints" aria-hidden>
+            <span>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              Move
+            </span>
+            <span>
+              <Kbd>↵</Kbd>
+              Open
+            </span>
+            <span>
+              <Kbd>Esc</Kbd>
+              Close
+            </span>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

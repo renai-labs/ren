@@ -194,6 +194,7 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
     <InputGroupButton
       size="sm"
       disabled={props.disabled}
+      data-composer-part="model"
       aria-label={`Choose model, ${props.picker.current.name}`}
       aria-haspopup="dialog"
       className={cn(chipClass, "max-w-72 shrink")}
@@ -201,8 +202,10 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
       onClick={props.onOpen}
     >
       <span className="flex min-w-0 whitespace-nowrap">
-        <bdi className="min-w-0 shrink-2 truncate text-muted-foreground/60">{vendor}</bdi>
-        <span aria-hidden className="mx-1 text-muted-foreground/40">
+        <bdi data-model-part="vendor" className="min-w-0 shrink-2 truncate text-muted-foreground/60">
+          {vendor}
+        </bdi>
+        <span aria-hidden data-model-part="vendor" className="mx-1 text-muted-foreground/40">
           /
         </span>
         <bdi className="min-w-0 truncate">{props.picker.current.name}</bdi>
@@ -220,7 +223,9 @@ function EffortChip(props: { picker: Picker; disabled?: boolean | undefined }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={props.disabled}
-        render={<InputGroupButton size="sm" aria-label="Choose effort" className={chipClass} />}
+        render={
+          <InputGroupButton data-composer-part="effort" size="sm" aria-label="Choose effort" className={chipClass} />
+        }
       >
         <span className="truncate">{variant ? effortLabel(variant) : "Default"}</span>
         <IconChevronDown className="-mr-1 -ml-0.5" />
@@ -557,7 +562,7 @@ export function ModelPicker(props: {
   if (props.loading)
     return (
       <Loading label="Loading models" className="ml-auto">
-        <InputGroupButton disabled>
+        <InputGroupButton data-composer-part="model" disabled>
           Choose model
           <IconChevronDown />
         </InputGroupButton>
@@ -565,7 +570,7 @@ export function ModelPicker(props: {
     )
   if (!picker) return null
   return (
-    <span className="ml-auto flex min-w-0 items-center gap-0.5">
+    <span data-slot="model-picker" className="ml-auto flex min-w-0 items-center gap-0.5">
       <ModelChip picker={picker} disabled={props.disabled} onOpen={() => setOpen(true)} />
       <EffortChip picker={picker} disabled={props.disabled} />
       <ModelDialog models={props.models} picker={picker} open={open} onOpenChange={setOpen} />

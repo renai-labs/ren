@@ -95,6 +95,7 @@ export function MentionOverlay(props: {
   return (
     <div
       aria-hidden
+      data-slot="mention-overlay"
       className="pointer-events-none absolute overflow-hidden"
       style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
     >
@@ -116,7 +117,9 @@ export function MentionOverlay(props: {
                 <span className="invisible">{node.text.slice(0, node.text.length - node.mark.label.length)}</span>
                 <MarkIcon mark={node.mark} />
               </span>
-              <span className={props.labelClassName}>{node.mark.label}</span>
+              <span data-slot="mention-overlay-label" className={props.labelClassName}>
+                {node.mark.label}
+              </span>
             </span>
           ) : (
             <span key={node.key}>{node.text}</span>

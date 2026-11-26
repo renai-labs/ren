@@ -99,10 +99,12 @@ export function ContextUsage(props: {
             ? `Context ${formatTokens(usage.tokens)} tokens used`
             : `Context ${usage.percent}% used`
         }
-        render={<Button variant="ghost" size="sm" className="gap-1.5 tabular-nums" />}
+        render={<Button data-chat-part="context" variant="ghost" size="sm" className="gap-1.5 tabular-nums" />}
       >
         <Ring percent={usage.percent} className={tone.ring} />
-        <span className="text-muted-foreground">{formatTokens(usage.tokens)}</span>
+        <span data-chat-part="context-count" className="text-muted-foreground">
+          {formatTokens(usage.tokens)}
+        </span>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 gap-2 p-3">
         <Row label="Context">

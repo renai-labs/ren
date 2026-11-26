@@ -1,0 +1,406 @@
+/* Screens-spaces.
+ *
+ * The spaces list, every page inside a space, and automations. Hooks (all added by this area):
+ *   [data-screen="space-<tab>"]          SpaceLayout's wrapper (display: contents) around each space page
+ *   [data-screen="space-<tab>-detail"]   agent and automation detail pages inside a space
+ *   [data-screen="spaces"|"automations"|"automation"|"agent"|"webhook"]   the top-level and detail screens
+ *   [data-slot="space-crumb"]            the `Space ›` crumb at the start of a Full page's header bar
+ *
+ * Frames: Full (header bar `Space › Page`, toolbar row, content the whole width) for every list, table, board
+ * and work surface; the Apps grid for Instructions, Permissions, Compute, Usage and Settings. See the report.
+ */
+
+html.dark {
+  --sp-row: 48px;
+}
+
+/* ───────────── The space crumb in the header bar ───────────── */
+
+/* It leads the bar even when it is portalled in after the bar's own children (Tasks owns its bar). */
+html.dark [data-slot="page-bar"] > [data-slot="space-crumb"] {
+  order: -1;
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+}
+
+html.dark [data-slot="space-crumb"] [data-slot="breadcrumb-list"] {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+html.dark [data-slot="space-crumb"] [data-slot="breadcrumb-item"] {
+  min-width: 0;
+}
+
+html.dark [data-slot="space-crumb"] [data-slot="breadcrumb-link"] {
+  min-width: 0;
+}
+
+html.dark [data-slot="space-crumb"] [data-slot="avatar"] {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* The page's own title follows the crumb without the bar's 4px gap doubling the separator's air. */
+html.dark [data-slot="page-bar"]:has(> [data-slot="space-crumb"]) > [data-slot="page-title"] {
+  margin-inline-start: -2px;
+  color: var(--d-text);
+}
+
+/* ───────────── Full space pages: the toolbar row is always there unless it would be empty ───────────── */
+
+html.dark
+  [data-screen^="space-"]
+  [data-page-width="full"]
+  > [data-slot="page-toolbar"]:not(:has([data-slot="page-tabs"] > * > *, [data-slot="page-tools"] > * > *)) {
+  display: none;
+}
+
+html.dark
+  [data-screen^="space-"]
+  [data-page-width="full"]:has(
+    > [data-slot="page-toolbar"]:not(:has([data-slot="page-tabs"] > * > *, [data-slot="page-tools"] > * > *))
+  )
+  [data-slot="page-body"] {
+  padding-top: 8px;
+}
+
+/* ───────────── Detail pages (issue-detail.png): automation editor, agent, webhook ─────────────
+ * TaskLayout's frame (a ~730px column and a properties panel without a card), with the values the data area
+ * gives the task detail, so every detail page in the app reads alike. */
+
+html.dark [data-slot="detail-body"] {
+  gap: 0;
+  padding: 0;
+}
+
+html.dark [data-slot="detail-main"] {
+  max-width: none;
+  gap: 32px;
+  padding: 56px 32px 96px;
+}
+
+html.dark [data-slot="detail-main"] > * {
+  width: 100%;
+  max-width: 730px;
+  margin-inline: auto;
+}
+
+html.dark [data-slot="detail-aside"] {
+  gap: 28px;
+  padding: 60px 24px 48px 16px;
+}
+
+@container (width >= 48rem) {
+  html.dark [data-slot="detail-aside"] {
+    width: clamp(280px, 30cqw, 400px);
+    padding-inline-start: 24px;
+  }
+
+  html.dark [data-slot="detail-main"] {
+    padding-inline: clamp(32px, 6cqw, 96px) 24px;
+  }
+}
+
+@container (width < 48rem) {
+  html.dark [data-slot="detail-main"] {
+    padding: 32px 16px 24px;
+  }
+
+  html.dark [data-slot="detail-aside"] {
+    padding: 0 16px 48px;
+  }
+}
+
+/* The title: 1.5rem/600, -0.01em, no field chrome until focus. */
+html.dark [data-slot="detail-main"] > [data-detail-title] {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: var(--d-title);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--d-text);
+
+  &::placeholder {
+    color: var(--d-text-3);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 4px;
+  }
+}
+
+/* Properties panel: label small/500 text-3; rows 30px small/500 with 16px icons, hover --d-hover. */
+html.dark [data-slot="detail-aside"] > section {
+  gap: 1px;
+}
+
+html.dark [data-slot="detail-aside"] > section > h2 {
+  margin-bottom: 6px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="detail-aside"] section > :is(button, a)[data-variant]:not(#d):not([data-size^="icon"]),
+html.dark [data-slot="detail-aside"] section > [data-property],
+html.dark [data-slot="detail-aside"] section > * > button[data-variant]:not(#d):not([data-size^="icon"]) {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  height: 30px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-inline-start: -8px;
+  padding-inline: 8px 10px;
+  border: 0;
+  border-radius: var(--d-r);
+  background: none;
+  box-shadow: none;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="detail-aside"] section > [data-property] {
+  width: 100%;
+  justify-content: space-between;
+}
+
+html.dark [data-slot="detail-aside"] section :is(button, a)[data-variant]:not(#d) > svg:first-child {
+  width: 16px;
+  height: 16px;
+  color: var(--d-text-3);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="detail-aside"] section :is(button, a)[data-variant]:not(#d):not([data-size^="icon"]):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-slot="detail-aside"] section button[data-variant]:not(#d)[data-popup-open] {
+  background-color: var(--d-selected);
+}
+
+/* ───────────── Webhook (a form in the Apps grid): its Setup / Requests pills live in the pill row ───────────── */
+
+html.dark
+  [data-screen="space-automations-detail"]
+  [data-page-width="grid"]
+  [data-slot="page-body"]
+  [data-slot="tabs-content"] {
+  padding-top: 0;
+}
+
+html.dark
+  [data-screen="space-automations-detail"]
+  [data-page-width="grid"]
+  [data-slot="page-actions"]
+  > span:has(> [data-slot="switch"]) {
+  gap: 8px;
+  margin-inline-end: 6px;
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-3);
+}
+
+/* ───────────── Factory: the flow is the page (no card); its pills sit in the toolbar ─────────────
+ * Mermaid writes its colours under an id selector, hence the :not(#d) to outrank it. */
+
+html.dark [data-slot="factory-canvas"] {
+  margin: 0 -8px -8px;
+}
+
+html.dark [data-slot="factory-canvas"] svg .node :is(rect, polygon, circle, path):not(#d) {
+  fill: var(--d-card);
+  stroke: var(--d-line-menu);
+  stroke-width: 1px;
+}
+
+html.dark [data-slot="factory-canvas"] svg .node rect:not(#d) {
+  rx: 8px;
+  ry: 8px;
+}
+
+html.dark [data-slot="factory-canvas"] svg .node.free rect:not(#d) {
+  fill: transparent;
+  stroke: var(--d-line-menu);
+  stroke-dasharray: 4 3;
+}
+
+html.dark [data-slot="factory-canvas"] svg .nodeLabel:not(#d) {
+  color: var(--d-text-2);
+  font-weight: 500;
+}
+
+html.dark [data-slot="factory-canvas"] svg :is(.labelBkg, .edgeLabel, .edgeLabel p):not(#d) {
+  background-color: var(--d-panel);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="factory-canvas"] svg .flowchart-link:not(#d) {
+  stroke: var(--d-text-3);
+}
+
+html.dark [data-slot="factory-canvas"] svg .arrowMarkerPath:not(#d) {
+  fill: var(--d-text-3);
+  stroke: var(--d-text-3);
+}
+
+/* spec.yaml: the editor fills the page; its gutter and text on the panel. */
+html.dark [data-slot="factory-canvas"][data-view="spec"] {
+  background-color: var(--d-panel);
+}
+
+html.dark [data-slot="factory-canvas"]:has(textarea:focus-visible) {
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+  border-radius: 0 0 12px 12px;
+}
+
+/* ───────────── Overview (the factory dashboard) ─────────────
+ * The dashboard is a designed piece (@ren/ui/factory-analytics); it keeps its sentence and grid. In this frame it
+ * starts under the toolbar line like Linear's overview instead of floating mid-panel, its breakdown tabs become
+ * the switcher pills, its panel becomes a card, and "Needs you" packs to the top. */
+
+html.dark [data-screen="space-overview"] .factory {
+  align-items: flex-start;
+  padding-top: 16px;
+}
+
+html.dark [data-screen="space-overview"] .factory [role="tablist"] {
+  height: auto;
+  gap: 4px;
+  padding: 3px;
+  margin: -3px;
+}
+
+html.dark [data-screen="space-overview"] .factory [role="tab"] {
+  height: var(--d-ctl);
+  padding: 0 10px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-control);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-3);
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+
+  &[data-active] {
+    background-color: var(--d-control-active);
+    box-shadow: none;
+    color: var(--d-text);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="space-overview"] .factory [role="tab"]:not([data-active]):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark [data-screen="space-overview"] .factory [role="tablist"] ~ div,
+html.dark [data-screen="space-overview"] .factory :has(> [role="tablist"]) + div {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: 10px;
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-screen="space-overview"] .factory .f-scroll {
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+
+html.dark [data-screen="space-overview"] .factory .f-scroll > a {
+  border-radius: var(--d-r);
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+  }
+}
+
+/* ───────────── A space's Apps-grid pages: the same outset as Settings ─────────────
+ * Settings and a space's Usage (styled by the settings area) let cards and table rows bleed 16px past the title's
+ * line, so row titles sit under the page title. The space's other grid pages (Instructions, Permissions, Compute,
+ * Settings, Memory, an agent, a webhook) follow, so moving between them never shifts the text line. */
+
+html.dark
+  [data-screen^="space-"]
+  [data-page-width="grid"]
+  [data-slot="page-body"]
+  :is([data-slot="settings-card"], [data-slot="item-group"], [class~="group/instructions"]):not(
+    [data-slot="dialog-content"] *,
+    [data-slot="sheet-content"] *,
+    [data-slot="card"] *,
+    [data-slot="item-group"] *,
+    [data-slot="settings-card"] *,
+    [data-screen="usage"] *
+  ) {
+  width: auto;
+  max-width: none;
+  margin-inline: calc(var(--settings-outset) * -1 - 2px);
+}
+
+html.dark
+  [data-screen^="space-"]
+  [data-page-width="grid"]
+  [data-slot="page-body"]
+  :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
+    [data-slot="dialog-content"] *,
+    [data-slot="sheet-content"] *,
+    [data-slot="card"] *,
+    [data-slot="item-group"] *
+  ) {
+  width: auto;
+  max-width: none;
+  margin-inline: calc(var(--settings-outset) * -1);
+}
+
+html.dark [data-screen^="space-"] [data-page-width="grid"] {
+  & [data-slot="page-body"] > div:first-child:has(> [data-slot="page-section"]) {
+    gap: var(--settings-section-gap);
+  }
+
+  & [data-slot="page-section"] {
+    gap: var(--settings-heading-gap);
+  }
+}
+
+/* ───────────── Spaces list (projects.png) ───────────── */
+
+/* Member stacks: Linear's 20px faces (the group's own -4px overlap stays). */
+html.dark [data-screen="spaces"] [data-slot="avatar-group"] {
+  & > [data-slot="avatar"] {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* An empty description is a quiet dash, not text. */
+html.dark [data-screen="spaces"] td[title=""],
+html.dark [data-screen="spaces"] td:not([title]):is(:nth-child(2)) {
+  color: var(--d-text-4);
+}

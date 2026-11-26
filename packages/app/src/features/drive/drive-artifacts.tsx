@@ -29,6 +29,8 @@ import { Search } from "@ren/schema/search"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { ArtifactThumbnail } from "./artifact-thumbnail.js"
 import { DriveCrumbs } from "./drive-crumbs.js"
+import { DriveViews } from "./drive-views.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/drive/artifacts")
 
@@ -202,14 +204,20 @@ function ArtifactList(props: { space: string | undefined }) {
 export function ArtifactsPage() {
   const space = route.useSearch({ select: (search) => search.space })
   const home = { kind: "org" } as const
+  const deep = DarkUi.useDarkUi()
+  const crumbs = <DriveCrumbs home={home} space={space} folder={undefined} last="Artifacts" />
   return (
-    <Page
-      title="Artifacts"
-      width="full"
-      leading={<DriveCrumbs home={home} space={space} folder={undefined} last="Artifacts" />}
-    >
-      <ArtifactList key={space ?? ""} space={space} />
-    </Page>
+    <div data-screen="drive-artifacts" className="contents">
+      <Page
+        title="Artifacts"
+        width={deep ? "wide" : "full"}
+        back={deep ? crumbs : undefined}
+        leading={deep ? undefined : crumbs}
+        tabs={deep ? <DriveViews page="artifacts" space={space} /> : undefined}
+      >
+        <ArtifactList key={space ?? ""} space={space} />
+      </Page>
+    </div>
   )
 }
 

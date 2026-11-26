@@ -3,11 +3,17 @@ import { cn } from "cn"
 
 export function Stat(props: { label: string; value: string; detail?: ReactNode | undefined }) {
   return (
-    <span className="flex min-w-0 flex-col items-start gap-1.5">
-      <span className="text-sm text-muted-foreground">{props.label}</span>
-      <span className="text-2xl/tight font-medium tracking-heading text-foreground tabular-nums">{props.value}</span>
+    <span data-slot="stat" className="flex min-w-0 flex-col items-start gap-1.5">
+      <span data-slot="stat-label" className="text-sm text-muted-foreground">
+        {props.label}
+      </span>
+      <span data-slot="stat-value" className="text-2xl/tight font-medium tracking-heading text-foreground tabular-nums">
+        {props.value}
+      </span>
       {props.detail ? (
-        <span className="text-xs font-medium text-muted-foreground tabular-nums">{props.detail}</span>
+        <span data-slot="stat-detail" className="text-xs font-medium text-muted-foreground tabular-nums">
+          {props.detail}
+        </span>
       ) : null}
     </span>
   )

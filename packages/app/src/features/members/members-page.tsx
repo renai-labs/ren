@@ -264,9 +264,17 @@ function RoleCell(props: {
     })
   }
   if (!props.editable)
-    return <span className="flex h-7 items-center text-muted-foreground">{roleLabel[props.member.role]}</span>
+    return (
+      <span
+        data-slot="role-badge"
+        data-role={props.member.role}
+        className="flex h-7 items-center text-muted-foreground"
+      >
+        {roleLabel[props.member.role]}
+      </span>
+    )
   return (
-    <>
+    <span data-slot="role-badge" data-role={props.member.role} className="contents">
       <Choice
         label={`Role for ${props.member.name}`}
         options={props.roles}
@@ -294,7 +302,7 @@ function RoleCell(props: {
         }}
         onConfirm={() => (next ? changeRole(props.member, next) : undefined)}
       />
-    </>
+    </span>
   )
 }
 
@@ -524,7 +532,9 @@ function InvitationsTab(props: { query: string; filters: Filters; onClear: () =>
               <TableRow key={invite.id}>
                 <TableCell>{invite.email}</TableCell>
                 <TableCell className="text-muted-foreground">
-                  {roleLabel[isRole(invite.role) ? invite.role : "member"]}
+                  <span data-slot="role-badge" data-role={isRole(invite.role) ? invite.role : "member"}>
+                    {roleLabel[isRole(invite.role) ? invite.role : "member"]}
+                  </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground tabular-nums">{formatDate(invite.createdAt)}</TableCell>
                 <TableCell>

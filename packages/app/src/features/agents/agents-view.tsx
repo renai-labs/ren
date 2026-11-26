@@ -20,6 +20,7 @@ import { modelKey } from "../../lib/format.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Search } from "@ren/schema/search"
 import { useSpaces } from "../../lib/use-spaces.js"
+import { SpaceFrame } from "../spaces/space-frame.js"
 
 const modelsProbe = Session.ID.create()
 
@@ -112,8 +113,10 @@ export function AgentsView(props: { spaceId: string }) {
   const create = () => void navigate({ to: "/spaces/$spaceId/agents/new", params: { spaceId: props.spaceId } })
   return (
     <>
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search agents" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         <Button onClick={create}>
           <IconPlus data-icon="inline-start" />
           New agent

@@ -38,6 +38,8 @@ import { useSpaces } from "../../lib/use-spaces.js"
 import { DriveCrumbs } from "./drive-crumbs.js"
 import { DriveLink } from "./drive-link.js"
 import { DriveViewer } from "./drive-viewer.js"
+import { DriveViews } from "./drive-views.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/drive/")
 
@@ -50,7 +52,9 @@ const columns = [
   { label: "File size", className: "w-32" },
 ]
 
-const blank = ["—", "—"]
+const dashes = ["—", "—"]
+
+const quiet = ["", ""]
 
 function Upload(props: {
   space: string | undefined
@@ -125,9 +129,11 @@ function Upload(props: {
 
 function PinnedRows(props: { home: DriveSearch.Home; space: string | undefined; query: string }) {
   const spaces = useSpaces()
+  const deep = DarkUi.useDarkUi()
+  const blank = deep ? quiet : dashes
   return (
     <>
-      {Search.matches(props.query, "Artifacts") ? (
+      {Search.matches(props.query, "Artifacts") && !(deep && props.home.kind === "org") ? (
         <FileRow
           media={<IconBrowser />}
           name={
@@ -168,6 +174,7 @@ function EntryRow(props: {
   const { api } = RouterContext.useRouterContext()
   const remove = useMutation(api.files.delete.mutationOptions())
   const download = useDriveDownload(props.space)
+  const blank = DarkUi.useDarkUi() ? quiet : dashes
   const entry = props.entry
   const name = FileName.base(entry.path)
   if (entry.type === "directory")
@@ -334,16 +341,29 @@ function DriveFiles(props: {
 
 export function DrivePage() {
   const search = route.useSearch()
+  const deep = DarkUi.useDarkUi()
+  const spaces = useSpaces()
+  const crumbs = <DriveCrumbs home={org} space={search.space} folder={search.folder} />
+  const here = search.folder ? FileName.base(search.folder) : search.space ? spaces.spaceName(search.space) : "Drive"
   return (
-    <Page title="Drive" width="full" leading={<DriveCrumbs home={org} space={search.space} folder={search.folder} />}>
-      <DriveFiles
-        key={`${search.space ?? ""}:${search.folder ?? ""}`}
-        home={org}
-        space={search.space}
-        folder={search.folder ?? ""}
-        file={search.file}
-      />
-    </Page>
+    <div data-screen="drive" className="contents">
+      <Page
+        title={deep ? here : "Drive"}
+        description={deep && here === "Drive" ? "Files every chat in your organization can read." : undefined}
+        width={deep ? "wide" : "full"}
+        back={deep ? crumbs : undefined}
+        leading={deep ? undefined : crumbs}
+        tabs={deep ? <DriveViews page="files" space={search.space} /> : undefined}
+      >
+        <DriveFiles
+          key={`${search.space ?? ""}:${search.folder ?? ""}`}
+          home={org}
+          space={search.space}
+          folder={search.folder ?? ""}
+          file={search.file}
+        />
+      </Page>
+    </div>
   )
 }
 

@@ -131,6 +131,7 @@ function TaskGroups(props: {
   filtersOn: boolean
   onClearFilters: () => void
   properties: ReadonlyArray<string>
+  groupBy: string
   idWidth: number
   selected: ReadonlyArray<string>
   onSelect: (selection: { taskId: string; checked: boolean }) => void
@@ -167,13 +168,17 @@ function TaskGroups(props: {
       </EmptyState>
     )
   return (
-    <div className={cn("@container/tasks flex flex-col transition-opacity", props.stale && "opacity-60")}>
+    <div
+      data-slot="task-list"
+      className={cn("@container/tasks flex flex-col transition-opacity", props.stale && "opacity-60")}
+    >
       {groups.map((group) => (
         <Collapsible key={group.id} defaultOpen>
           <GroupHeader
             label={group.label}
             icon={group.icon}
             count={group.tasks.length}
+            tone={props.groupBy === "status" ? group.id : undefined}
             action={
               <NewTaskDialog
                 spaceId={group.spaceId}
@@ -372,11 +377,13 @@ export function TasksPage(props: {
       shape={`page-${display.layout}`}
       tabs={<TaskViewTabs state={views} />}
       leading={
-        <FilterChips
-          properties={taskProperties(lookups).filter((property) => !spaceId || property.key !== "space")}
-          value={TaskView.extrasOf(filters, views.viewFilters)}
-          onChange={(extras) => views.setFilters(TaskView.withExtras(views.viewFilters, extras))}
-        />
+        <div data-slot="filter-chips" className="contents">
+          <FilterChips
+            properties={taskProperties(lookups).filter((property) => !spaceId || property.key !== "space")}
+            value={TaskView.extrasOf(filters, views.viewFilters)}
+            onChange={(extras) => views.setFilters(TaskView.withExtras(views.viewFilters, extras))}
+          />
+        </div>
       }
       actions={
         <>
@@ -423,6 +430,7 @@ export function TasksPage(props: {
             filtersOn={!sameFilters(filters, views.viewFilters)}
             onClearFilters={clearFilters}
             properties={properties}
+            groupBy={groupBy}
             idWidth={idWidth}
             selected={selected}
             onSelect={select}
@@ -494,9 +502,13 @@ function SelectionBar(props: {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the floating selection bar is a landmark without a heading
       role="region"
       aria-label="Selected tasks"
+      data-slot="selection-bar"
       className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-popover p-1 text-sm shadow-overlay md:left-[calc(50%+var(--sidebar-width)/2)]"
     >
-      <span className="flex h-7 items-center rounded-md border border-dashed px-2 text-xs tabular-nums">
+      <span
+        data-slot="selection-count"
+        className="flex h-7 items-center rounded-md border border-dashed px-2 text-xs tabular-nums"
+      >
         {props.count} selected
         <Button
           variant="ghost"

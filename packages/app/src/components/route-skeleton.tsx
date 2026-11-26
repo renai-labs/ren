@@ -18,6 +18,7 @@ import { PermissionRulesSample } from "./permission-rules.js"
 import { Breadcrumb } from "./breadcrumb.js"
 import { TaskLayout } from "./task-layout.js"
 import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
 
@@ -136,9 +137,24 @@ function TaskSkeleton() {
   )
 }
 
+const tabbedSections = new Set(["inbox", "automations", "apps", "members", "permissions"])
+
 function TasksSkeleton() {
+  const deep = DarkUi.useDarkUi()
   return (
-    <PageSkeleton title="Tasks" width="full" shape="tasks-first-load" actions={<div className="min-h-8" />}>
+    <PageSkeleton
+      title="Tasks"
+      width="full"
+      shape="tasks-first-load"
+      actions={<div className="min-h-8" />}
+      tabs={
+        deep ? (
+          <div className="min-h-7">
+            <span />
+          </div>
+        ) : undefined
+      }
+    >
       <TasksSample />
     </PageSkeleton>
   )
@@ -220,11 +236,24 @@ export function SpaceSectionSkeleton() {
 }
 
 function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
+  const deep = DarkUi.useDarkUi()
   const tab = props.path.at(3) ?? "inbox"
   if (tab === "tasks") return props.path.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   const section = spaceSections[tab] ?? spaceSections.inbox
   return (
-    <Page title={section.title} description={section.description?.("this space")} width={section.width} loading>
+    <Page
+      title={section.title}
+      description={section.description?.("this space")}
+      width={section.width}
+      tabs={
+        deep && tabbedSections.has(tab) ? (
+          <div className="min-h-7">
+            <span />
+          </div>
+        ) : undefined
+      }
+      loading
+    >
       <SpaceSectionSample section={tab} />
     </Page>
   )
@@ -266,6 +295,32 @@ export function RouteSkeleton() {
       </PageSkeleton>
     )
   if (path.startsWith("/settings")) return <SettingsPageSkeleton />
+  return <HomeSkeleton />
+}
+
+function HomeSkeleton() {
+  const deep = DarkUi.useDarkUi()
+  if (deep)
+    return (
+      <div data-slot="chat-home" className="relative flex min-h-0 flex-1 flex-col">
+        <header data-slot="page-bar">
+          <Breadcrumb.Root ancestors={[{ key: "space", content: <span>Space</span> }]}>
+            <h1 data-slot="page-title">New chat</h1>
+          </Breadcrumb.Root>
+        </header>
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-6">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <Logomark
+              outline
+              className="h-[min(40vh,--spacing(84))] w-auto shrink-0 -translate-y-1/4 mask-b-from-25% mask-b-to-72% text-foreground/10"
+            />
+          </div>
+          <div data-slot="chat-home-column" className="relative flex w-full flex-col">
+            <ComposerFrame />
+          </div>
+        </div>
+      </div>
+    )
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center px-6 pt-4">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -458,7 +513,13 @@ function SettingsPageSkeleton() {
           permissions: "What agents in every space may do, and what they ask first.",
         }[section]
       }
-      tabs={["members", "credentials", "permissions"].includes(section) ? <div className="min-h-8" /> : undefined}
+      tabs={
+        ["members", "credentials", "permissions"].includes(section) ? (
+          <div className="min-h-8">
+            <span />
+          </div>
+        ) : undefined
+      }
       loading
     >
       {body}

@@ -43,6 +43,8 @@ import { AgentPicker } from "../../components/agent-select.js"
 import { Breadcrumb } from "../../components/breadcrumb.js"
 import { TimeZonePicker } from "../../components/time-zone-picker.js"
 import { WorkingIn } from "../../components/working-in.js"
+import { TaskLayout } from "../../components/task-layout.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 import { RunStatus } from "./run-status.js"
 import { AddTrigger, DatePicker, ScheduleTrigger, TriggerList, TriggerWarning, WebhookTrigger } from "./triggers.js"
 
@@ -550,6 +552,38 @@ function Editor(props: {
     })
   }
   const name = Automations.nameOrDefault(draft.name)
+  const deep = DarkUi.useDarkUi()
+  const nameInput = (
+    <Input
+      aria-label="Name"
+      data-detail-title=""
+      placeholder="Untitled"
+      readOnly={Automations.presetOfDraft(draft) !== null}
+      value={draft.name}
+      onChange={(event) => change({ name: event.target.value })}
+      className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 max-md:basis-full md:text-xl dark:bg-transparent"
+    />
+  )
+  const history =
+    automation && props.tab !== "runs" ? (
+      <Button variant="ghost" className="text-muted-foreground" onClick={() => props.onTab("runs")}>
+        <IconHistory data-icon="inline-start" />
+        Run history
+      </Button>
+    ) : null
+  const active = (
+    // oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button
+    <label data-property="active" className="flex items-center gap-2 text-sm text-muted-foreground">
+      Active
+      <Switch checked={draft.active} onCheckedChange={(active) => change({ active })} />
+    </label>
+  )
+  const body =
+    props.tab === "runs" ? (
+      <RunHistory automation={automation} onOpenRun={props.onOpenRun} />
+    ) : (
+      <Settings draft={draft} automation={automation} onChange={change} />
+    )
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       <EditorHeader
@@ -564,37 +598,36 @@ function Editor(props: {
         onOpen={(saved) => void open(saved)}
         onDeleted={() => void toList()}
       />
-      <div className="mx-auto flex w-full max-w-200 flex-1 flex-col gap-6 px-6 pt-16 pb-12">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3 max-md:flex-wrap">
-            <Input
-              aria-label="Name"
-              placeholder="Untitled"
-              readOnly={Automations.presetOfDraft(draft) !== null}
-              value={draft.name}
-              onChange={(event) => change({ name: event.target.value })}
-              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 text-xl font-medium shadow-none focus-visible:ring-0 max-md:basis-full md:text-xl dark:bg-transparent"
-            />
-            {automation && props.tab !== "runs" ? (
-              <Button variant="ghost" className="text-muted-foreground" onClick={() => props.onTab("runs")}>
-                <IconHistory data-icon="inline-start" />
-                Run history
-              </Button>
-            ) : null}
-            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps a Base UI Switch, which renders a button */}
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              Active
-              <Switch checked={draft.active} onCheckedChange={(active) => change({ active })} />
-            </label>
+      {deep ? (
+        <div className={TaskLayout.scroller}>
+          <div data-slot="detail-body" className={TaskLayout.body}>
+            <div data-slot="detail-main" className={TaskLayout.article}>
+              {nameInput}
+              {body}
+            </div>
+            <aside aria-label="Automation properties" data-slot="detail-aside" className={TaskLayout.aside}>
+              <section className="flex flex-col">
+                <h2 className={TaskLayout.sectionTitle}>Properties</h2>
+                {active}
+                <SpaceRow draft={draft} automation={automation} onChange={change} />
+                {history}
+              </section>
+            </aside>
           </div>
-          <SpaceRow draft={draft} automation={automation} onChange={change} />
         </div>
-        {props.tab === "runs" ? (
-          <RunHistory automation={automation} onOpenRun={props.onOpenRun} />
-        ) : (
-          <Settings draft={draft} automation={automation} onChange={change} />
-        )}
-      </div>
+      ) : (
+        <div className="mx-auto flex w-full max-w-200 flex-1 flex-col gap-6 px-6 pt-16 pb-12">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3 max-md:flex-wrap">
+              {nameInput}
+              {history}
+              {active}
+            </div>
+            <SpaceRow draft={draft} automation={automation} onChange={change} />
+          </div>
+          {body}
+        </div>
+      )}
       {blocker.status === "blocked" ? (
         <ConfirmDialog
           open

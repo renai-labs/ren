@@ -11,6 +11,7 @@ import {
   IconArchive,
   IconCalendarDue,
   IconCheck,
+  IconChevronDown,
   IconCopy,
   IconCube,
   IconDots,
@@ -78,10 +79,12 @@ import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
 import { SubtaskComposer } from "../../components/new-task-dialog.js"
 import { cn } from "cn"
 import { TaskLayout } from "../../components/task-layout.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 function ReadOnlyProperty(props: { children: ReactNode; className?: string | undefined }) {
   return (
     <div
+      data-property=""
       className={cn(buttonVariants({ variant: "ghost" }), TaskLayout.property, "pointer-events-none", props.className)}
     >
       {props.children}
@@ -131,9 +134,9 @@ export function TaskPage(props: {
     <div className="flex min-h-0 flex-1 flex-col">
       <TaskHeader task={task} menu={menu} onOpenSession={openSession} onArchive={() => setArchiving(true)} />
       <div className={TaskLayout.scroller}>
-        <div className={TaskLayout.body}>
+        <div data-slot="task-body" className={TaskLayout.body}>
           <TaskArticle task={task} onChange={change} onOpenSession={openSession} />
-          <aside aria-label="Task properties" className={TaskLayout.aside}>
+          <aside aria-label="Task properties" data-slot="task-aside" className={TaskLayout.aside}>
             <PropertySection title="Properties">
               <StatusProperty task={task} onChange={change} />
               <PriorityProperty task={task} onChange={change} />
@@ -436,7 +439,10 @@ function TaskHeader({
   const copy = useCopy()
   const [requesting, setRequesting] = useState(false)
   return (
-    <Breadcrumb.Header className={TaskLayout.header}>
+    <header
+      data-slot="page-bar"
+      className={cn("mx-8 flex min-h-12 shrink-0 items-center gap-1 pt-2 max-md:pl-6", TaskLayout.header)}
+    >
       <Breadcrumb.Root
         ancestors={[
           { key: "tasks", content: <TasksLink>Tasks</TasksLink> },
@@ -498,7 +504,7 @@ function TaskHeader({
         </DropdownMenuContent>
       </DropdownMenu>
       <RequestReview task={task} open={requesting} onOpenChange={setRequesting} />
-    </Breadcrumb.Header>
+    </header>
   )
 }
 
@@ -533,7 +539,7 @@ function TaskArticle(props: {
   const task = props.task
   return (
     <DriveSpace value={task.spaceId}>
-      <article className={TaskLayout.article}>
+      <article data-slot="task-article" className={TaskLayout.article}>
         <h1 className="sr-only">{task.title}</h1>
         <Textarea
           key={`title-${task.title}`}
@@ -555,6 +561,7 @@ function TaskArticle(props: {
             else if (title !== task.title) props.onChange({ title })
           }}
           aria-label="Task title"
+          data-task-title=""
           className="min-h-0 shrink-0 resize-none rounded-none border-0 bg-transparent p-0 text-2xl font-semibold tracking-heading wrap-break-word shadow-none focus-visible:ring-0 md:text-2xl dark:bg-transparent"
         />
         {task.parent ? <ParentLine parent={task.parent} /> : null}
@@ -663,7 +670,7 @@ function ReviewBanner(props: { task: TaskInfo; onOpenSession: (session: string |
   const review = useReview(props.task)
   const session = props.task.session?.id
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border bg-card py-2.5 pr-2.5 pl-4">
+    <div data-slot="review-banner" className="flex flex-col gap-1.5 rounded-xl border bg-card py-2.5 pr-2.5 pl-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <IconHandStop className="size-4 shrink-0 text-chart-3" />
         <span className="min-w-0 grow basis-56 text-sm font-medium [overflow-wrap:anywhere]">{waiting}</span>
@@ -693,7 +700,10 @@ function ReviewCard(props: { task: TaskInfo }) {
   const review = useReview(props.task)
   const waiting = useWaiting(props.task)
   return (
-    <div className="flex animate-in flex-col gap-3 rounded-xl border bg-card p-4 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0">
+    <div
+      data-slot="review-card"
+      className="flex animate-in flex-col gap-3 rounded-xl border bg-card p-4 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0"
+    >
       <div className="flex items-start gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-chart-3">
           <IconHandStop className="size-4" />
@@ -722,8 +732,38 @@ function Subtasks(props: { task: TaskInfo }) {
   return <SubtaskList task={task} />
 }
 
-function SubtasksHeader(props: { task: TaskInfo; adding: boolean; onAdd: () => void }) {
+function SubtasksHeader(props: {
+  task: TaskInfo
+  adding: boolean
+  onAdd: () => void
+  open: boolean
+  onToggle: () => void
+}) {
   const total = props.task.subtasks?.total ?? 0
+  const deep = DarkUi.useDarkUi()
+  if (deep)
+    return (
+      <div data-slot="subtasks-header" className="flex h-8 items-center justify-between">
+        <h2 className="flex">
+          <Button variant="ghost" size="sm" data-toggle="subtasks" aria-expanded={props.open} onClick={props.onToggle}>
+            <IconChevronDown data-icon="inline-start" />
+            Sub-tasks
+            {total > 0 ? <SubtaskProgress done={props.task.subtasks?.done ?? 0} total={total} /> : null}
+          </Button>
+        </h2>
+        {props.task.canUpdate ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Add sub-task"
+            aria-expanded={props.adding}
+            onClick={props.onAdd}
+          >
+            <IconPlus />
+          </Button>
+        ) : null}
+      </div>
+    )
   return (
     <div className="flex h-8 items-center justify-between">
       <h2 className="text-sm font-medium">
@@ -766,10 +806,24 @@ function SubtaskList(props: { task: TaskInfo }) {
   const members = useMembers()
   const spaces = useSpaces()
   const [adding, setAdding] = useState(false)
+  const [open, setOpen] = useState(true)
+  const deep = DarkUi.useDarkUi()
+  const shown = open || !deep
   return (
-    <section className="flex flex-col gap-1">
-      <SubtasksHeader task={task} adding={adding} onAdd={() => setAdding(true)} />
-      {listed.isPending && total > 0 ? <SkeletonRows count={Math.min(total, 3)} label="Loading sub-tasks" /> : null}
+    <section data-slot="subtasks" className="flex flex-col gap-1">
+      <SubtasksHeader
+        task={task}
+        adding={adding}
+        open={open}
+        onToggle={() => setOpen((current) => !current)}
+        onAdd={() => {
+          setOpen(true)
+          setAdding(true)
+        }}
+      />
+      {shown && listed.isPending && total > 0 ? (
+        <SkeletonRows count={Math.min(total, 3)} label="Loading sub-tasks" />
+      ) : null}
       {listed.isError ? (
         <p className="text-sm text-muted-foreground">
           Couldn’t load the sub-tasks.{" "}
@@ -778,20 +832,22 @@ function SubtaskList(props: { task: TaskInfo }) {
           </Button>
         </p>
       ) : null}
-      <div className="@container/tasks -mx-2 flex flex-col">
-        {subtasks.map((subtask) => (
-          <TaskRow
-            key={subtask.id}
-            task={subtask}
-            show={properties}
-            selected={false}
-            idWidth={idWidth}
-            agentName={agents.agent(subtask.agentId)?.name ?? null}
-            spaceName={spaces.spaceName(subtask.spaceId)}
-            owner={members.member(subtask.ownerId)}
-          />
-        ))}
-      </div>
+      {shown ? (
+        <div data-slot="task-list" className="@container/tasks -mx-2 flex flex-col">
+          {subtasks.map((subtask) => (
+            <TaskRow
+              key={subtask.id}
+              task={subtask}
+              show={properties}
+              selected={false}
+              idWidth={idWidth}
+              agentName={agents.agent(subtask.agentId)?.name ?? null}
+              spaceName={spaces.spaceName(subtask.spaceId)}
+              owner={members.member(subtask.ownerId)}
+            />
+          ))}
+        </div>
+      ) : null}
       {adding ? (
         <SubtaskComposer
           parent={{ id: task.id, identifier: task.identifier }}

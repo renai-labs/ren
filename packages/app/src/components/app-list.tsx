@@ -3,7 +3,14 @@ import { Link } from "@ren/ui/link"
 import { lazy, Suspense, useState, type ReactNode } from "react"
 import { useQueries, useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { IconBook, IconChevronRight, IconCoin, IconPlus, IconRosetteDiscountCheckFilled } from "@tabler/icons-react"
+import {
+  IconBook,
+  IconChevronRight,
+  IconCoin,
+  IconPlus,
+  IconRosetteDiscountCheckFilled,
+  IconTool,
+} from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button, buttonVariants } from "@ren/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@ren/ui/collapsible"
@@ -58,7 +65,7 @@ export function AppSection(props: {
   children: ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section data-slot="app-section" className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">
         {props.heading ?? props.title}
         {props.count === undefined ? null : <span className="ml-1.5 text-muted-foreground">{props.count}</span>}
@@ -123,6 +130,7 @@ export function AppRow(props: {
     <Item
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Item renders a div inside the list grid
       role="listitem"
+      data-app-row=""
       className={cn(
         "relative flex-nowrap gap-3 has-[[data-slot=app-open]:hover]:bg-muted",
         props.compact ? "px-2 py-2.5" : "p-2",
@@ -342,7 +350,50 @@ function DependencyCards(props: { app: App }) {
   )
 }
 
-export function AppSections(props: { app: App }) {
+export function AppFacts(props: { app: App }) {
+  const app = props.app
+  const spaceName = useSpaces().spaceName
+  const categories = [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel)
+  const tools = Object.values(app.listing?.toolCounts ?? {}).reduce((total, count) => total + count, 0)
+  const skills = Object.keys(app.skills ?? {}).length
+  return (
+    <aside aria-label="App properties" data-slot="app-aside">
+      <section>
+        <h2>Properties</h2>
+        <p data-property="">
+          <IconRosetteDiscountCheckFilled />
+          {app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId ?? "")}`}
+        </p>
+        {tools > 0 ? (
+          <p data-property="">
+            <IconTool />
+            {plural(tools, "tool")}
+          </p>
+        ) : null}
+        {skills > 0 ? (
+          <p data-property="">
+            <IconBook />
+            {plural(skills, "skill")}
+          </p>
+        ) : null}
+      </section>
+      {categories.length > 0 ? (
+        <section>
+          <h2>Categories</h2>
+          <div data-slot="app-chips">
+            {categories.map((category) => (
+              <Badge key={category} variant="outline">
+                {category}
+              </Badge>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </aside>
+  )
+}
+
+export function AppSections(props: { app: App; facts?: boolean | undefined }) {
   const app = props.app
   const spaceName = useSpaces().spaceName
   const skills = app.skills ?? {}
@@ -356,16 +407,18 @@ export function AppSections(props: { app: App }) {
       {app.dependsOn.length > 0 ? <DependencyCards app={app} /> : null}
       {app.mcps && Object.keys(app.mcps).length > 0 ? <McpCards app={app} mcps={app.mcps} /> : null}
       {Object.keys(skills).length > 0 ? <SkillCards app={app} skills={skills} /> : null}
-      <SheetSection title="Information">
-        <dl className="divide-y rounded-xl border text-sm">
-          {facts.map(([term, value]) => (
-            <div key={term} className="grid grid-cols-[--spacing(40)_1fr] gap-4 px-4 py-3">
-              <dt className="text-muted-foreground">{term}</dt>
-              <dd className="min-w-0 truncate">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </SheetSection>
+      {props.facts === false ? null : (
+        <SheetSection title="Information">
+          <dl data-slot="app-facts" className="divide-y rounded-xl border text-sm">
+            {facts.map(([term, value]) => (
+              <div key={term} className="grid grid-cols-[--spacing(40)_1fr] gap-4 px-4 py-3">
+                <dt className="text-muted-foreground">{term}</dt>
+                <dd className="min-w-0 truncate">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </SheetSection>
+      )}
     </>
   )
 }
@@ -540,7 +593,7 @@ function SkillCards(props: { app: App; skills: Readonly<Record<string, Skill>> }
 
 function SheetSection(props: { title: string; actions?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-5">
+    <section data-slot="app-detail-section" className="flex flex-col gap-5">
       <div className="flex min-h-6.5 items-center justify-between gap-2">
         <h3 className="text-base font-medium">{props.title}</h3>
         {props.actions}
@@ -703,7 +756,7 @@ export function AccountList(props: {
   onOpen: (profile: AppProfile) => void
 }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section data-slot="app-detail-section" className="flex flex-col gap-3">
       <div className="flex min-h-6.5 items-center justify-between gap-2">
         <h3 className="text-base font-medium">
           {props.title}
@@ -725,6 +778,7 @@ export function AccountList(props: {
             return (
               <div
                 key={profile.id}
+                data-slot="account-row"
                 className="group/row relative flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 ease-out has-[[data-slot=account-open]:hover]:bg-muted"
               >
                 <StatusDot status={status} />

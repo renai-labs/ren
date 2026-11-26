@@ -112,6 +112,7 @@ function TabItem(props: {
     <ContextMenu>
       <ContextMenuTrigger
         draggable
+        data-tab-strip="tab"
         data-active={props.active || undefined}
         data-pinned={props.tab.pinned || undefined}
         data-dragging={props.dragging || undefined}
@@ -297,6 +298,7 @@ export function TabBar() {
   })
   return (
     <header
+      data-slot="tab-bar"
       className={cn(
         "fixed top-0 right-0 z-20 hidden h-10 items-center gap-1 pr-2 transition-[left] duration-200 ease-linear md:flex",
         sidebar.state === "expanded"

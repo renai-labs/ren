@@ -30,6 +30,7 @@ import { errorMessage, errorStatus } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { useMe } from "../../lib/use-me.js"
 import { useSpaces } from "../../lib/use-spaces.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const editRoute = getRouteApi("/_authed/_shell/spaces/$spaceId/agents/$agentId/")
 const newRoute = getRouteApi("/_authed/_shell/spaces/$spaceId/agents/new")
@@ -349,6 +350,8 @@ function NewAgentView(props: { spaceId: string }) {
   const form = useAgentForm()
   const create = useMutation(api.agent.create.mutationOptions())
   const spaceId = props.spaceId
+  const deep = DarkUi.useDarkUi()
+  const space = useSpaces().space(spaceId)
   const submit = () => {
     if (!form.actions.validate()) return
     const draft = form.state.draft
@@ -374,7 +377,11 @@ function NewAgentView(props: { spaceId: string }) {
     )
   }
   return (
-    <Page title="New agent" back={<BackLink spaceId={spaceId} />}>
+    <Page
+      title="New agent"
+      description={deep ? `Its own instructions and model, for work in ${space?.name ?? "this space"}.` : undefined}
+      back={<BackLink spaceId={spaceId} />}
+    >
       <AgentFormFrame onSubmit={submit}>
         <AgentFields />
         <AgentSettings />
@@ -470,6 +477,8 @@ function AgentView(props: { agent: AgentInfo; spaceId: string }) {
   const spaces = useSpaces()
   const update = useMutation(api.agent.update.mutationOptions())
   const agent = props.agent
+  const deep = DarkUi.useDarkUi()
+  const meta = `${Agents.source(agent, props.spaceId, (id) => spaces.space(id)?.name)} · Created ${formatDate(agent.createdAt)} · Updated ${formatDate(agent.updatedAt)}`
   const save = () => {
     if (!form.actions.validate()) return
     const draft = form.state.draft
@@ -493,12 +502,8 @@ function AgentView(props: { agent: AgentInfo; spaceId: string }) {
       back={<BackLink spaceId={props.spaceId} />}
       media={<AgentIcon agent={agent} />}
       menu={agent.canUpdate ? <ArchiveMenu agent={agent} spaceId={props.spaceId} /> : undefined}
-      footer={
-        <p className="text-xs text-muted-foreground">
-          {Agents.source(agent, props.spaceId, (id) => spaces.space(id)?.name)} · Created {formatDate(agent.createdAt)}{" "}
-          · Updated {formatDate(agent.updatedAt)}
-        </p>
-      }
+      description={deep ? meta : undefined}
+      footer={deep ? undefined : <p className="text-xs text-muted-foreground">{meta}</p>}
     >
       {agent.canUpdate ? null : <ReadOnlyNotice agent={agent} />}
       <AgentFormFrame onSubmit={save}>

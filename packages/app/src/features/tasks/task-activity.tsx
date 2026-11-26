@@ -141,7 +141,7 @@ function SessionCard(props: {
   const status = session.data?.status
   const agent = props.names.agent(props.agentId) ?? "Agent"
   return (
-    <div className="relative ml-6 flex">
+    <div data-slot="session-card" className="relative ml-6 flex">
       <Button
         variant="outline"
         aria-label={`Open ${agent}’s session`}
@@ -229,6 +229,7 @@ function CommentCard(props: {
   return (
     <Item
       variant="outline"
+      data-comment=""
       className={cn(
         "items-start gap-y-2 rounded-xl bg-card px-4 py-3.5",
         props.fresh &&
@@ -291,6 +292,7 @@ function CommentComposer(props: { task: TaskInfo }) {
   }
   return (
     <InputGroup
+      data-composer="comment"
       className="relative h-auto rounded-xl focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       onKeyDownCapture={(event) => {
         if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return
@@ -316,6 +318,7 @@ function CommentComposer(props: { task: TaskInfo }) {
                   size="icon-xs"
                   className="rounded-full"
                   aria-label="Attach files"
+                  data-composer-attach=""
                   onClick={() => picker.current?.click()}
                 >
                   <IconPaperclip />
@@ -337,6 +340,7 @@ function CommentComposer(props: { task: TaskInfo }) {
               size="icon-xs"
               className="rounded-full"
               aria-label="Post comment"
+              data-composer-send=""
               disabled={create.isPending || !body.trim()}
               onClick={send}
             >
@@ -355,7 +359,7 @@ export function TaskActivity(props: { task: TaskInfo; onOpenSession: (sessionId:
   const now = useNow()
   const activity = useQuery(Tasks.activity(client, props.task.id))
   return (
-    <section className="flex flex-col gap-5">
+    <section data-slot="task-activity" className="flex flex-col gap-5">
       <h2 className="text-md font-semibold">Activity</h2>
       {activity.isPending ? (
         <Loading label="Loading task activity">

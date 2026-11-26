@@ -126,7 +126,13 @@ function StepIcon(props: { tool: SessionMessage.Tool | undefined }) {
 
 function Connector(props: { last: boolean }) {
   if (props.last) return null
-  return <div aria-hidden className="absolute top-6 bottom-0 left-3 w-px -translate-x-1/2 bg-border" />
+  return (
+    <div
+      aria-hidden
+      data-slot="activity-rail"
+      className="absolute top-6 bottom-0 left-3 w-px -translate-x-1/2 bg-border"
+    />
+  )
 }
 
 const thoughtTitle = (item: Extract<Item, { kind: "thinking" }>) => {
@@ -145,6 +151,7 @@ function ThinkingStep(props: { item: Extract<Item, { kind: "thinking" }>; last: 
         <IconBrain className="size-3.5" />
       </span>
       <span
+        data-slot="activity-step-title"
         className={cn(
           "min-w-0 truncate font-medium text-foreground/80",
           text &&
@@ -157,7 +164,7 @@ function ThinkingStep(props: { item: Extract<Item, { kind: "thinking" }>; last: 
     </>
   )
   return (
-    <div className="relative pb-2">
+    <div data-slot="activity-step" className="relative pb-2">
       <Connector last={props.last} />
       {text ? (
         // oxlint-disable-next-line react/forbid-elements -- a step is a plain underlined line, as in the reference design; a Button would add padding and a fill
@@ -236,7 +243,7 @@ function Changed(props: { tool: SessionMessage.Tool }) {
 // oxlint-disable-next-line ren/no-comments -- What Ren wrote between tool calls, grey and in line with the step titles.
 function UpdateStep(props: { text: string; last: boolean }) {
   return (
-    <div className="relative pb-2">
+    <div data-slot="activity-step" className="relative pb-2">
       <Connector last={props.last} />
       <Markdown className="pl-7.5 text-sm/relaxed text-muted-foreground">{props.text}</Markdown>
     </div>
@@ -258,7 +265,7 @@ function ToolStep(props: {
       ? () => props.onOpenAgent(Session.ID.make(child), title)
       : props.onOpen
   return (
-    <div className="relative pb-2">
+    <div data-slot="activity-step" className="relative pb-2">
       <Connector last={props.last} />
       <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
         {/* oxlint-disable-next-line react/forbid-elements -- a step is a plain underlined line, as in the reference design; a Button would add padding and a fill */}
@@ -271,6 +278,7 @@ function ToolStep(props: {
             <StepIcon tool={tool} />
           </span>
           <span
+            data-slot="activity-step-title"
             className={cn(
               "min-w-0 truncate font-medium text-foreground/80 underline decoration-border decoration-1 underline-offset-3 transition-colors group-hover/step:text-foreground group-hover/step:decoration-muted-foreground/60",
               status === "running" && "shimmer motion-reduce:shimmer-none",
@@ -321,6 +329,7 @@ function TurnHeader(props: { turn: Turn; onOpen: () => void }) {
     // oxlint-disable-next-line react/forbid-elements -- the header reads as a caption; a Button would add padding and a fill
     <button
       type="button"
+      data-slot="activity-turn"
       className="group/turn mt-4 mb-2 flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-sm text-left text-sm text-muted-foreground outline-none first:mt-0 focus-visible:ring-3 focus-visible:ring-ring/50"
       onClick={props.onOpen}
     >
@@ -560,7 +569,7 @@ export function ActivityTab(props: {
   if (shell)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-10 shrink-0 items-center border-b px-4">
+        <div data-slot="workspace-subbar" className="flex h-10 shrink-0 items-center border-b px-4">
           <Crumbs trail={[all(go), { label: preview(shell.command) }]} />
         </div>
         <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain px-4 py-3">
@@ -571,7 +580,7 @@ export function ActivityTab(props: {
   if (agent)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-10 shrink-0 items-center border-b px-4">
+        <div data-slot="workspace-subbar" className="flex h-10 shrink-0 items-center border-b px-4">
           <Crumbs trail={agentTrail(agent, { parent: turns.find((turn) => turn.id === agent.turn), go })} />
         </div>
         <SubagentThread
@@ -630,7 +639,7 @@ function ActivityBody(props: {
   const turn = place.turn ? turns.find((each) => each.id === place.turn?.id) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-10 shrink-0 items-center border-b px-4">
+      <div data-slot="workspace-subbar" className="flex h-10 shrink-0 items-center border-b px-4">
         <Crumbs trail={trailOf(place, go)} />
       </div>
       {props.turns.length === 0 && !place.step ? (

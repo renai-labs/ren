@@ -34,6 +34,7 @@ import { useShown } from "../../lib/use-shown.js"
 import { formText } from "../../lib/format.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { SpaceFrame } from "./space-frame.js"
 
 const isAlias = Schema.is(Reference.Alias)
 
@@ -114,8 +115,10 @@ export function SpaceRepositoriesTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search repositories" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         {canUpdate ? (
           <Button onClick={() => open("add")}>
             <IconPlus data-icon="inline-start" />

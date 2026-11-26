@@ -139,8 +139,10 @@ function Toolbar(props: {
   onDownload: () => void
 }) {
   return (
-    <div className="flex h-11 items-center gap-1 border-b px-3">
-      <p className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{props.file.name}</p>
+    <div data-slot="viewer-bar" className="flex h-11 items-center gap-1 border-b px-3">
+      <p data-slot="viewer-name" className="min-w-0 flex-1 truncate px-1 text-sm font-medium">
+        {props.file.name}
+      </p>
       {props.find ?? (
         <Button variant="ghost" size="icon-sm" aria-label="Find" onClick={() => props.onFind()}>
           <IconSearch />
@@ -196,6 +198,7 @@ export function Viewer(props: {
   kind: Kind
   file: SessionMessage.DriveFile
   bytes: (signal: AbortSignal) => Promise<ArrayBuffer>
+  aside?: ReactNode | undefined
   onClose: () => void
   onDownload: () => void
 }) {
@@ -254,13 +257,30 @@ export function Viewer(props: {
         onClose={props.onClose}
         onDownload={props.onDownload}
       />
-      {blocked ? <Blocked reason={reasonOf({ tooLarge, gone })} onDownload={props.onDownload} /> : null}
-      {!blocked && loaded.data ? (
-        <Suspense fallback={<Pending />}>
-          <View bytes={loaded.data} {...view} />
-        </Suspense>
-      ) : null}
-      {!blocked && !loaded.data ? <Pending /> : null}
+      {props.aside ? (
+        <div data-slot="viewer-split" className="flex min-h-0 flex-1">
+          <div data-slot="viewer-body" className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {blocked ? <Blocked reason={reasonOf({ tooLarge, gone })} onDownload={props.onDownload} /> : null}
+            {!blocked && loaded.data ? (
+              <Suspense fallback={<Pending />}>
+                <View bytes={loaded.data} {...view} />
+              </Suspense>
+            ) : null}
+            {!blocked && !loaded.data ? <Pending /> : null}
+          </div>
+          {props.aside}
+        </div>
+      ) : (
+        <>
+          {blocked ? <Blocked reason={reasonOf({ tooLarge, gone })} onDownload={props.onDownload} /> : null}
+          {!blocked && loaded.data ? (
+            <Suspense fallback={<Pending />}>
+              <View bytes={loaded.data} {...view} />
+            </Suspense>
+          ) : null}
+          {!blocked && !loaded.data ? <Pending /> : null}
+        </>
+      )}
     </>
   )
 }

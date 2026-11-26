@@ -84,6 +84,7 @@ function CardFooter(props: { task: TaskInfo; show: (property: string) => boolean
   if (!space && labels.length === 0 && !priority && !due) return null
   return (
     <div
+      data-slot="board-card-footer"
       className={cn(
         "flex min-h-5 flex-wrap items-center gap-1.5 [&_[data-slot=badge]]:text-muted-foreground",
         show("status") && "pl-6",
@@ -118,6 +119,7 @@ function BoardCard(props: {
       items={actions}
       render={
         <div
+          data-slot="board-card"
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData(dragType, task.id)
@@ -212,6 +214,8 @@ export function TaskBoard(props: {
             <section
               key={group.id}
               aria-label={group.label}
+              data-slot="board-column"
+              data-over={over === group.id || undefined}
               onDragEnter={(event) => {
                 if (event.dataTransfer.types.includes(dragType)) setOver(group.id)
               }}
@@ -232,7 +236,7 @@ export function TaskBoard(props: {
                 over === group.id && "bg-muted/40",
               )}
             >
-              <header className="flex h-8 items-center gap-2 px-1 text-sm">
+              <header data-slot="board-column-header" className="flex h-8 items-center gap-2 px-1 text-sm">
                 <group.icon className="size-4 text-muted-foreground" />
                 <h2 className="truncate font-medium">{group.label}</h2>
                 <span className="text-xs text-muted-foreground tabular-nums">{group.tasks.length}</span>

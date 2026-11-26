@@ -38,6 +38,7 @@ import { Markdown } from "../../components/markdown.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { PastedChip } from "./pasted-chip.js"
 import { TimeZone } from "../../lib/time-zone.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 import { Platform } from "../../platform/platform.js"
 import { formatInZone, formatTimeInZone } from "@ren/ui/time"
 import { DateTime } from "effect"
@@ -468,7 +469,7 @@ function UserFooter(props: {
           Remove
         </Button>
       ) : null}
-      <span className={cn("-mr-1.25 flex items-center gap-1", revealOnHover)}>
+      <span data-slot="message-actions" className={cn("-mr-1.25 flex items-center gap-1", revealOnHover)}>
         <time
           dateTime={props.sentAt}
           title={formatInZone(props.sentAt, timeZone)}
@@ -513,12 +514,27 @@ function QueuedMark() {
   )
 }
 
+const dayInZone = (instant: string, timeZone: string) =>
+  new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone }).format(new Date(instant))
+
+function TurnTime(props: { sentAt: string }) {
+  const timeZone = TimeZone.current(Platform.usePlatform().storage)
+  return (
+    <div data-slot="turn-time">
+      <time dateTime={props.sentAt} title={formatInZone(props.sentAt, timeZone)}>
+        {dayInZone(props.sentAt, timeZone)} at {formatTimeInZone(props.sentAt, timeZone)}
+      </time>
+    </div>
+  )
+}
+
 export function UserMessage(props: {
   message: SessionMessage.User
   spaceId: string | undefined
   fold: boolean
   reveal: boolean
   person: Person
+  self?: boolean | undefined
   status: ChatState.PendingStatus | undefined
   editing: boolean
   onEdit?: (() => void) | undefined
@@ -527,10 +543,12 @@ export function UserMessage(props: {
   onCancel: () => void
   onSave: (text: string) => void
 }) {
-  return (
+  const deep = DarkUi.useDarkUi()
+  const message = (
     <Message
       align="end"
       data-turn={props.message.id}
+      data-self={props.self || undefined}
       className={cn("scroll-mt-16", props.editing ? "w-full @transcript:-mr-13.5" : "w-auto @transcript:-mr-13.5")}
     >
       <MessageAvatar className="ml-3.5">
@@ -565,5 +583,12 @@ export function UserMessage(props: {
         )}
       </MessageContent>
     </Message>
+  )
+  if (!deep) return message
+  return (
+    <>
+      <TurnTime sentAt={DateTime.formatIso(props.message.time.created)} />
+      {message}
+    </>
   )
 }

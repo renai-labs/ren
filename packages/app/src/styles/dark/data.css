@@ -1,0 +1,1443 @@
+/* Data.
+ * Lists (the task list is the exemplar), tables, cards, settings rows, empty states and the task detail page,
+ * in Linear's anatomy: issues.png, issue-detail.png, create-modal.png, projects.png, settings-members.png,
+ * settings-profile.png. Every rule is scoped to html.dark; values come from tokens.css.
+ */
+/* Specificity: controls.css shapes buttons by variant at up to (0,7,1). Where a data surface reshapes a control
+ * (in-row circles, property rows, the send circle), the selector carries :not(#d), one ID step above it. */
+html.dark {
+  /* Extra inset for lists and tables; the shell already insets the page body 8px, which is where Linear puts them. */
+  --data-inset: 0px;
+  /* A settings card's divider, inset to the row padding. */
+  --data-divider: rgb(255 255 255 / 0.055);
+  /* Linear's settings description grey, a hair lighter than --d-text-3 (5.6:1 on --d-card). */
+  --data-description: #98999c;
+  /* Status tints for a list group bar's left end. */
+  --data-tone-in-progress: var(--chart-3);
+  --data-tone-done: var(--chart-6);
+}
+
+/* ───────────────────────── 1. The task list (issues.png) ───────────────────────── */
+
+/* Group bar: 36px, radius 8px, 8px in from the panel, the card fill; label small/500, count mini --d-text-3. */
+html.dark [data-slot="group-header"] {
+  padding-inline: var(--data-inset);
+  background-color: var(--d-panel);
+}
+
+html.dark [data-slot="group-bar"] {
+  height: 36px;
+  gap: 6px;
+  padding-inline: 6px 6px;
+  border-radius: var(--d-r);
+  background-color: var(--d-card);
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="group-header"][data-tone="in_progress"] {
+  --data-tone: var(--data-tone-in-progress);
+}
+
+html.dark [data-slot="group-header"][data-tone="done"] {
+  --data-tone: var(--data-tone-done);
+}
+
+html.dark [data-slot="group-header"][data-tone] [data-slot="group-bar"] {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--data-tone, transparent) 10%, transparent) 0,
+    transparent 24rem
+  );
+}
+
+html.dark [data-slot="group-bar"] > button[data-variant]:not(#d):first-child {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="group-bar"] > svg {
+  width: 16px;
+  height: 16px;
+  margin-inline-start: 2px;
+}
+
+/* Grouped by status, the bar's icon keeps the status colour, as Linear's does. */
+html.dark [data-slot="group-header"][data-tone] [data-slot="group-bar"] > svg {
+  color: var(--data-tone, var(--d-text-3));
+}
+
+html.dark [data-slot="group-label"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="group-count"] {
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="group-bar"] button[data-variant]:not(#d)[data-size="icon-sm"]:not(:first-child) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+/* Rows: a 44px pitch, 8px in from the panel, an 8px-radius hover. */
+html.dark [data-slot="task-list"] {
+  gap: 0;
+}
+
+html.dark [data-slot="task-row"] {
+  height: 44px;
+  gap: 0;
+  margin-inline: var(--data-inset);
+  padding-inline: 8px 12px;
+  border-radius: var(--d-r);
+  font-size: var(--d-small);
+  contain-intrinsic-size: auto 44px;
+}
+
+html.dark [data-slot="task-row"]:is(:hover, [data-selected]) {
+  background-color: transparent;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="task-row"]:hover {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="task-row"][data-selected] {
+  background-color: var(--d-selected);
+}
+
+html.dark [data-slot="task-row"] > [data-slot="checkbox"] {
+  margin-inline: 4px 6px;
+}
+
+/* In-row icon buttons are 24px circles; the icons inside are 16px. */
+html.dark [data-slot="task-row"] button[data-variant]:not(#d)[data-size="icon-sm"] {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+}
+
+html.dark [data-slot="task-row"] button[data-variant]:not(#d)[data-size="icon-sm"] svg {
+  width: 16px;
+  height: 16px;
+}
+
+html.dark [data-slot="task-row"] [data-slot="avatar"] {
+  width: 18px;
+  height: 18px;
+  font-size: 0.5625rem;
+}
+
+/* Id small/450 --d-text-3, -0.02em, and the status icon right after it, as Linear sets them. */
+html.dark [data-slot="task-id"] {
+  margin-inline: 6px 4px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  color: var(--d-text-3);
+  font-variant-numeric: normal;
+}
+
+/* Title small/500 --d-text. */
+html.dark [data-slot="task-row"] > a {
+  margin-inline-start: 6px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="task-row"] > a::after {
+  border-radius: var(--d-r);
+}
+
+html.dark [data-slot="task-row"] > a:focus-visible {
+  outline: none;
+}
+
+html.dark [data-slot="task-row"] > a:focus-visible::after {
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+}
+
+html.dark [data-slot="task-parent"] {
+  margin-inline-start: 8px;
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+/* Chips on the right: 24px pills, a --d-line-3 edge, the surface behind, mini/450 --d-text-3. */
+html.dark :is([data-slot="task-meta"], [data-slot="board-card-footer"], [data-slot="task-aside"]) [data-slot="badge"] {
+  height: var(--d-ctl-sm);
+  gap: 6px;
+  padding-inline: 8px 9px;
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background-color: transparent;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-meta"] {
+  gap: 4px;
+  margin-inline-end: 6px;
+}
+
+html.dark [data-slot="badge"] [data-slot="color-dot"] {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark [data-slot="badge"] > svg {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-slot="task-assignees"] {
+  gap: 2px;
+}
+
+/* Date mini/450 --d-text-3, right aligned. */
+html.dark [data-slot="task-date"] {
+  width: 56px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-date"][data-overdue] {
+  color: var(--destructive);
+}
+
+html.dark [data-slot="task-row"] > button[data-variant]:not(#d):last-child,
+html.dark [data-slot="task-row"] > :last-child button[data-variant]:not(#d) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  margin-inline-start: 4px;
+  border-radius: var(--d-r-pill);
+}
+
+/* Sub-rows: a thin elbow from the parent's priority column. */
+html.dark [data-slot="task-branch"] {
+  width: 24px;
+  margin-inline-end: 0;
+}
+
+html.dark [data-slot="task-branch"] svg {
+  opacity: 1;
+}
+
+html.dark [data-slot="task-branch"] path {
+  stroke: var(--d-line-menu);
+  stroke-width: 1px;
+}
+
+/* The floating bulk-action bar: the menu surface, ghost pills, a dashed count chip. */
+html.dark [data-slot="selection-bar"] {
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-menu);
+  box-shadow: var(--d-shadow-menu);
+  font-size: var(--d-mini);
+}
+
+html.dark [data-slot="selection-count"] {
+  height: var(--d-ctl);
+  margin-inline-end: 4px;
+  padding-inline: 10px 4px;
+  border: 1px dashed var(--d-line-menu);
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="selection-count"] button[data-variant]:not(#d) {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--d-r-pill);
+}
+
+html.dark [data-slot="selection-bar"] > button[data-variant]:not(#d) {
+  height: var(--d-ctl);
+  padding-inline: 10px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+/* Toolbar search: a 28px pill with the control fill. */
+html.dark [data-slot="input-group"][data-toolbar-search] {
+  height: var(--d-ctl);
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-control);
+  box-shadow: none;
+  --tw-inset-ring-shadow: 0 0 #0000;
+}
+
+html.dark [data-slot="input-group"][data-toolbar-search] input {
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+html.dark [data-slot="input-group"][data-toolbar-search] > [data-slot="input-group-addon"]:first-child {
+  padding-inline-start: 10px;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="input-group"][data-toolbar-search] svg {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-slot="input-group"][data-toolbar-search]:has(input:focus-visible) {
+  border-color: var(--d-accent);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="input-group"][data-toolbar-search]:hover {
+    background-color: var(--d-control-hover);
+  }
+}
+
+/* Filter chips: one 24px pill per filter, segments split by hairlines. */
+html.dark [data-slot="filter-chips"] > div {
+  gap: 6px;
+  padding-inline: var(--data-inset);
+}
+
+html.dark [data-slot="filter-chips"] > div > div {
+  height: var(--d-ctl-sm);
+  overflow: hidden;
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-2);
+  --tw-divide-x-reverse: 0;
+}
+
+html.dark [data-slot="filter-chips"] > div > div > * {
+  border-color: var(--d-line-3);
+}
+
+html.dark [data-slot="filter-chips"] > div > div > span:first-child {
+  padding-inline-start: 9px;
+}
+
+html.dark [data-slot="filter-chips"] > div > div > button[data-variant]:not(#d) {
+  height: 100%;
+  padding-inline: 6px 8px;
+  border-radius: 0;
+}
+
+html.dark [data-slot="filter-chips"] > div > button[data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+}
+
+/* ───────────────────────── 2. The board ───────────────────────── */
+
+html.dark [data-slot="board-column"] {
+  width: 340px;
+  gap: 6px;
+  padding: 0;
+  border-radius: var(--d-r-card);
+}
+
+html.dark [data-slot="board-column"][data-over] {
+  background-color: var(--d-hover);
+}
+
+html.dark [data-slot="board-column-header"] {
+  height: 36px;
+  gap: 8px;
+  padding-inline: 8px 4px;
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="board-column-header"] h2 {
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="board-column-header"] h2 + span {
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="board-column-header"] button[data-variant]:not(#d) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+}
+
+html.dark [data-slot="board-card"] {
+  gap: 10px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+  transition-property: opacity, background-color;
+  transition-duration: 100ms;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="board-card"]:hover {
+    background-color: var(--d-control-hover);
+  }
+}
+
+html.dark [data-slot="board-card"] a {
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="board-card"] a::after {
+  border-radius: var(--d-r);
+}
+
+html.dark [data-slot="board-card"] a:focus-visible::after {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+}
+
+html.dark [data-slot="board-card-footer"] {
+  gap: 4px;
+  font-size: var(--d-mini);
+}
+
+html.dark [data-slot="board-card"] [data-slot="avatar"] {
+  width: 18px;
+  height: 18px;
+}
+
+/* ───────────────────────── 3. Task detail (issue-detail.png) ───────────────────────── */
+
+/* The header is tagged page-bar; the shell styles that slot. Below it: a ~730px column and a ~400px panel. */
+html.dark [data-slot="task-body"] {
+  gap: 0;
+  padding: 0;
+}
+
+html.dark [data-slot="task-article"] {
+  max-width: none;
+  gap: 24px;
+  padding: 56px 32px 96px;
+}
+
+html.dark [data-slot="task-article"] > * {
+  width: 100%;
+  max-width: 730px;
+  margin-inline: auto;
+}
+
+html.dark [data-slot="task-aside"] {
+  gap: 28px;
+  padding: 60px 24px 48px 16px;
+}
+
+@container (width >= 48rem) {
+  html.dark [data-slot="task-aside"] {
+    width: clamp(280px, 36cqw, 600px);
+    padding-inline-start: 24px;
+  }
+
+  html.dark [data-slot="task-article"] {
+    padding-inline: clamp(32px, 6cqw, 96px) 24px;
+  }
+}
+
+@container (width < 48rem) {
+  html.dark [data-slot="task-article"] {
+    padding: 32px 16px 24px;
+  }
+
+  html.dark [data-slot="task-aside"] {
+    padding: 0 16px 48px;
+  }
+}
+
+/* Title 1.5rem/600, -0.01em. */
+html.dark main [data-slot="task-article"] > [data-task-title][data-slot="textarea"] {
+  font-size: var(--d-title);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--d-text);
+}
+
+/* Body regular/450 at 1.6 in --d-text-2. */
+html.dark [data-slot="task-article"] > div > .tiptap {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+/* "Sub-task of …" under the title. */
+html.dark [data-slot="task-article"] > p:has(> a) {
+  margin-top: -12px;
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-article"] > p:has(> a) a {
+  font-size: var(--d-small);
+}
+
+/* Sub-tasks: a 24px ghost pill toggle with the progress beside the label; add is a ghost circle. */
+html.dark [data-slot="subtasks"] {
+  gap: 4px;
+}
+
+html.dark [data-slot="subtasks-header"] {
+  height: 28px;
+}
+
+html.dark [data-toggle="subtasks"]:not(#d) {
+  height: var(--d-ctl-sm);
+  gap: 6px;
+  margin-inline-start: -8px;
+  padding-inline: 6px 10px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-3);
+}
+
+html.dark [data-toggle="subtasks"]:not(#d) > svg:first-child {
+  width: 12px;
+  height: 12px;
+  transition: rotate 100ms ease-out;
+}
+
+html.dark [data-toggle="subtasks"]:not(#d)[aria-expanded="false"] > svg:first-child {
+  rotate: -90deg;
+}
+
+html.dark [data-toggle="subtasks"]:not(#d) [data-chip="progress"] {
+  display: inline-flex;
+  height: auto;
+  margin-inline-start: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="subtasks-header"] > button[data-variant]:not(#d) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="subtasks"] > [data-slot="task-list"] {
+  margin-inline: -8px;
+}
+
+html.dark [data-slot="subtasks"] [data-slot="task-row"] {
+  height: 36px;
+  margin-inline: 0;
+  padding-inline: 12px 8px;
+}
+
+html.dark [data-slot="subtask-composer"] {
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-slot="task-article"] > [data-slot="separator"] {
+  background-color: var(--d-line-2);
+}
+
+/* Activity: regular/600 heading; events mini/450 --d-text-3 in 28px rows on a hairline, 14px icons. */
+html.dark [data-slot="task-activity"] {
+  gap: 12px;
+}
+
+html.dark [data-slot="task-activity"] > h2 {
+  font-size: var(--d-regular);
+  font-weight: 600;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="task-activity"] > div {
+  gap: 8px;
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace"] {
+  gap: 0;
+  padding-inline-start: 10px;
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace"]::before {
+  inset-block: 14px;
+  left: 17px;
+  background-color: var(--d-line-2);
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace-line"] {
+  min-height: 28px;
+  align-items: center;
+  gap: 10px;
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace-icon"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 0;
+  background-color: var(--d-panel);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace-icon"] svg {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace-title"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-activity"] [data-slot="trace-title"] > span {
+  color: var(--d-text-3);
+}
+
+/* A comment: the raised surface, radius 10px, faint edge; author small/500, time mini. */
+html.dark [data-comment] {
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+}
+
+html.dark [data-comment] > [data-slot="item-header"] > span:nth-child(2) {
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-comment] > [data-slot="item-header"] > span:last-child {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+html.dark [data-comment] [data-slot="markdown"] {
+  font-size: var(--d-regular);
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+/* The comment box: the composer recipe (raised fill, top-lit 1px gradient edge, contact shadow, radius 10px). */
+html.dark [data-slot="input-group"][data-composer="comment"] {
+  min-height: 100px;
+  border: 1px solid transparent;
+  border-radius: var(--d-r-card);
+  background:
+    linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+    linear-gradient(#2f3033, #1f2022) border-box;
+  box-shadow: var(--d-contact);
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+html.dark [data-slot="input-group"][data-composer="comment"]:focus-within {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+    linear-gradient(#45464a, #2c2d30) border-box;
+}
+
+html.dark [data-slot="input-group"][data-composer="comment"] > div:first-child {
+  min-height: 98px;
+  padding: 12px 12px 40px;
+}
+
+html.dark [data-slot="input-group"][data-composer="comment"] .tiptap {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="input-group"][data-composer="comment"] [data-slot="input-group-addon"] {
+  gap: 6px;
+  padding: 0 10px 10px 0;
+}
+
+html.dark [data-composer="comment"] button[data-composer-attach]:not(#d) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+html.dark [data-composer="comment"] button[data-composer-send]:not(#d) {
+  width: 22.5px;
+  height: 22.5px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  color: var(--d-text-3);
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-composer="comment"] button[data-composer-send]:not(#d):disabled {
+  opacity: 1;
+  color: var(--d-text-4);
+}
+
+html.dark [data-composer="comment"] button[data-composer-send]:not(#d)[data-variant="default"] {
+  border-color: transparent;
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+}
+
+html.dark :is([data-composer-send], [data-composer-attach]) svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Session and review cards: the settings-card surface. */
+html.dark [data-slot="session-card"] {
+  margin-inline-start: 26px;
+}
+
+html.dark [data-slot="session-card"] > button[data-variant]:not(#d) {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="session-card"] > button[data-variant]:not(#d):hover {
+    background-color: var(--d-control-hover);
+  }
+}
+
+html.dark [data-slot="session-card"] > button[data-variant]:not(#d) > span {
+  padding: 8px 12px;
+  border-color: var(--d-line-2);
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="session-card"] > button[data-variant]:not(#d) > span:first-child > span:last-child {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="session-card"] > button[data-variant]:not(#d):not(:only-child) + button[data-variant]:not(#d) {
+  top: 6px;
+  right: 8px;
+  height: var(--d-ctl-sm);
+  font-size: var(--d-mini);
+}
+
+html.dark :is([data-slot="review-banner"], [data-slot="review-card"]) {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+}
+
+/* Properties panel: no card; labels small/500 --d-text-3; rows 30px small/500, 16px icons, --d-hover. */
+html.dark [data-slot="task-aside"] > section > h2 {
+  margin-bottom: 6px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-aside"] section button[data-variant]:not(#d):not([data-size^="icon"]),
+html.dark [data-slot="task-aside"] section > [data-property] {
+  height: 30px;
+  gap: 8px;
+  margin-inline-start: -8px;
+  padding-inline: 8px 10px;
+  border-radius: var(--d-r);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-slot="task-aside"] section button[data-variant]:not(#d) > svg:first-child,
+html.dark [data-slot="task-aside"] section [data-slot="avatar"] {
+  width: 16px;
+  height: 16px;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="task-aside"] section button[data-variant]:not(#d):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-slot="task-aside"] section button[data-variant]:not(#d)[data-popup-open] {
+  background-color: var(--d-selected);
+}
+
+/* Labels: 24px chips with the text a step brighter than the list's, and a 24px add circle. */
+html.dark [data-slot="task-aside"] [data-slot="badge"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="task-aside"] section > div:has(> [data-slot="badge"]) {
+  gap: 6px;
+}
+
+html.dark [data-slot="task-aside"] section > div:has(> [data-slot="badge"]) > button[data-variant]:not(#d) {
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  margin-inline-start: 0;
+  padding: 0;
+  border-radius: var(--d-r-pill);
+}
+
+/* Link rows in the panel follow the property row. */
+html.dark [data-slot="task-link-row"] {
+  height: 30px;
+  margin-inline-start: -8px;
+  padding-inline-start: 8px;
+  border-radius: var(--d-r);
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="task-aside"] section > p {
+  padding: 4px 0;
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── 4. New task (create-modal.png; the overlays agent owns the frame) ───────────────────────── */
+
+html.dark [data-task-composer] [data-part="head"] {
+  gap: 4px;
+  padding: 12px 12px 0 14px;
+}
+
+html.dark [data-task-composer] [data-part="head"] [data-slot="dialog-title"] {
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-2);
+}
+
+/* Breadcrumb chip ("Space ▾ › New task"): a 24px chip. */
+html.dark [data-task-composer] [data-part="head"] [data-slot="breadcrumb"] button[data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  gap: 5px;
+  padding-inline: 7px 6px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-task-composer] [data-part="head"] [data-slot="breadcrumb"] button svg {
+  width: 13px;
+  height: 13px;
+}
+
+html.dark [data-task-composer] [data-part="fields"] {
+  gap: 6px;
+  padding: 14px 18px 0;
+}
+
+/* Title large/600; description regular/450. */
+html.dark [data-task-composer] [data-task-title][data-slot="textarea"] {
+  min-height: 0;
+  font-size: var(--d-large);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--d-text);
+}
+
+html.dark :is([data-task-composer], [data-slot="subtask-composer"]) [data-task-title]::placeholder {
+  color: var(--d-text-3);
+}
+
+html.dark [data-task-composer] [data-part="fields"] .tiptap {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+/* Property chips: 24px pills, the chip fill, edge and contact, mini/500. */
+html.dark [data-slot="task-chips"] {
+  gap: 6px;
+  padding: 24px 12px 12px;
+}
+
+html.dark [data-slot="subtask-composer"] [data-slot="task-chips"] {
+  padding: 4px 0 0;
+}
+
+html.dark [data-slot="task-chips"] > button[data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  gap: 5px;
+  padding-inline: 7px 9px;
+  border: 1px solid var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="task-chips"] > button[data-variant]:not(#d).text-foreground,
+html.dark [data-slot="task-chips"] > button[data-variant]:not(#d)[aria-label*=": "] {
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="task-chips"] > button[data-variant]:not(#d):hover {
+    background-color: var(--d-menu);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-slot="task-chips"] > button[data-variant]:not(#d):focus-visible {
+  outline: 1px solid var(--d-accent);
+  outline-offset: 2px;
+}
+
+html.dark [data-slot="task-chips"] > button svg,
+html.dark [data-slot="task-chips"] > button [data-slot="avatar"] {
+  width: 14px;
+  height: 14px;
+}
+
+/* Footer: a quiet "Create more" switch, then the one primary 28px pill. */
+html.dark [data-task-composer] [data-part="footer"] {
+  gap: 12px;
+  padding: 4px 12px 12px;
+  border-top: 0;
+}
+
+html.dark [data-task-composer] [data-part="more"] {
+  gap: 8px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-task-composer]:not([data-expanded]) [data-part="fields"] .tiptap {
+  min-height: 3.5rem;
+}
+
+/* ───────────────────────── 5. Tables (projects.png, settings-members.png) ───────────────────────── */
+
+/* No card around a table: the wrapper (TableCard in page.tsx) loses its frame and fill. Dialogs and sheets
+   keep whatever they set. */
+html.dark
+  :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
+    [data-slot="dialog-content"] *,
+    [data-slot="sheet-content"] *
+  ) {
+  padding: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-slot="table"] {
+  font-size: var(--d-mini);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Header: mini/450 --d-text-3, no fill, no rule under it. */
+html.dark [data-slot="table-header"] [data-slot="table-row"] {
+  border: 0;
+  background: none;
+}
+
+html.dark [data-slot="table-header"] {
+  background-color: transparent;
+}
+
+html.dark [data-slot="table-header"]:is(.sticky, [class~="sticky"]),
+html.dark div[data-page-fill] [data-slot="table-header"] {
+  background-color: var(--d-panel);
+}
+
+html.dark [data-slot="table-head"] {
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="table-head"]:first-child {
+  padding-inline-start: 16px;
+}
+
+/* A sortable header is a 24px ghost pill. */
+html.dark [data-slot="table-head"] button[data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  margin-inline-start: -8px;
+  padding-inline: 8px 6px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* Rows: about 48px, no rules between them, an 8px-radius --d-hover. */
+html.dark [data-slot="table-body"] [data-slot="table-row"] {
+  border: 0;
+  background: none;
+}
+
+html.dark [data-slot="table-cell"] {
+  height: 48px;
+  padding: 6px 12px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="table-cell"]:first-child {
+  padding-inline-start: 16px;
+  border-start-start-radius: var(--d-r);
+  border-end-start-radius: var(--d-r);
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="table-cell"]:last-child {
+  border-start-end-radius: var(--d-r);
+  border-end-end-radius: var(--d-r);
+}
+
+html.dark [data-slot="table-cell"]:first-child [data-slot="avatar"] {
+  width: 22px;
+  height: 22px;
+}
+
+html.dark [data-slot="table-cell"] [class~="text-sm"]:not(:first-child *) {
+  font-size: var(--d-mini);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="table-body"] [data-slot="table-row"]:hover > [data-slot="table-cell"] {
+    background-color: var(--d-hover);
+  }
+
+  /* An empty-state row is not a target. */
+  html.dark [data-slot="table-body"] [data-slot="table-row"]:hover > [data-slot="table-cell"][colspan] {
+    background-color: transparent;
+  }
+}
+
+html.dark
+  [data-slot="table-body"]
+  [data-slot="table-row"]:is([data-state="selected"], :has([aria-expanded="true"]))
+  > [data-slot="table-cell"] {
+  background-color: var(--d-selected);
+}
+
+html.dark [data-slot="table-cell"][colspan] {
+  height: 96px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* Row actions: ghost circles that show on hover and focus (always on touch). */
+html.dark [data-slot="table-cell"]:last-child button[data-variant]:not(#d)[data-size^="icon"] {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html.dark
+    [data-slot="table-body"]
+    [data-slot="table-row"]:not(:hover, :focus-within)
+    > [data-slot="table-cell"]:last-child
+    button[aria-haspopup="menu"]:not([aria-expanded="true"]) {
+    opacity: 0;
+  }
+}
+
+html.dark [data-slot="table-footer"] {
+  border-top: 1px solid var(--d-line-2);
+  background: none;
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="table-caption"] {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── 6. Settings rows and cards (settings-profile.png) ───────────────────────── */
+
+/* A settings card: --d-card, radius 10px, faint edge and contact shadow. Rows (page.tsx) and Card. */
+html.dark
+  :is([data-slot="settings-card"], [data-slot="item-group"][class~="bg-card"]):not(
+    [data-slot="dialog-content"] *,
+    [data-slot="sheet-content"] *
+  ),
+html.dark [data-slot="card"] {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+}
+
+/* Rows: min 60px, 16px in, title small/500 --d-text, description mini/450, control at the end. */
+html.dark :is([data-slot="settings-card"], [data-slot="item-group"][class~="bg-card"]) > [data-slot="item"] {
+  min-height: 60px;
+  column-gap: 16px;
+  padding: 12px 16px;
+}
+
+html.dark [data-slot="item-title"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="item-description"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.45;
+  color: var(--data-description);
+}
+
+html.dark [data-slot="item-content"] {
+  gap: 2px;
+}
+
+html.dark [data-slot="item-actions"] {
+  gap: 8px;
+  margin-inline-start: auto;
+  font-size: var(--d-small);
+  color: var(--d-text-2);
+}
+
+/* Dividers inset 16px, one real pixel. */
+html.dark :is([data-slot="settings-card"], [data-slot="item-group"]) > [data-slot="item-separator"] {
+  width: auto;
+  height: 0;
+  margin: 0 16px;
+  border-top: 1px solid var(--data-divider);
+  background-color: transparent;
+}
+
+/* An outlined item on its own (lists of apps, agents, files): the same card surface. */
+html.dark [data-slot="item"][data-variant="outline"]:not([data-comment]) {
+  border-color: var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+}
+
+html.dark [data-slot="item"][data-variant="muted"] {
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+}
+
+@media (hover: hover) {
+  html.dark a[data-slot="item"]:hover,
+  html.dark button[data-slot="item"]:hover {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="item"]:focus-visible {
+  border-color: var(--d-accent);
+  box-shadow: none;
+}
+
+html.dark [data-slot="item-media"][data-variant="image"] {
+  border-radius: var(--d-r-sm);
+}
+
+/* Card parts. */
+html.dark [data-slot="card"] {
+  --tw-ring-shadow: 0 0 #0000;
+  font-size: var(--d-small);
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="card-title"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="card-description"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--data-description);
+}
+
+html.dark [data-slot="card-footer"] {
+  border-top: 1px solid var(--data-divider);
+  background-color: transparent;
+}
+
+/* ───────────────────────── 7. Empty states, stats, charts, load-more, alerts ───────────────────────── */
+
+/* Quiet: no box, small type, one action. */
+html.dark [data-slot="empty"] {
+  gap: 12px;
+  border: 0;
+  background: none;
+}
+
+html.dark [data-slot="empty-icon"] {
+  margin-bottom: 4px;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="empty-icon"][data-variant="icon"] {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: none;
+}
+
+html.dark [data-slot="empty-icon"] svg {
+  width: 20px;
+  height: 20px;
+}
+
+html.dark [data-slot="empty-title"] {
+  font-size: var(--d-small);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="empty-description"] {
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="empty-description"] > a {
+  color: var(--d-accent-text);
+}
+
+html.dark [data-slot="empty-content"] {
+  font-size: var(--d-small);
+}
+
+/* Stats: label mini --d-text-3, value 1.5rem/500 tabular, detail mini. */
+html.dark [data-slot="stat"] {
+  gap: 4px;
+}
+
+html.dark [data-slot="stat-label"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="stat-value"] {
+  font-size: var(--d-title);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="stat-detail"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* Alerts: the card surface, small text, the icon carries the tone. */
+html.dark [data-slot="alert"] {
+  padding: 10px 12px;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="alert-title"] {
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="alert"][data-variant="destructive"] [data-slot="alert-title"],
+html.dark [data-slot="alert"][data-variant="destructive"] > svg {
+  color: var(--destructive);
+}
+
+html.dark [data-slot="alert-description"] {
+  font-size: var(--d-mini);
+  line-height: 1.5;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="alert-action"] {
+  top: 8px;
+  right: 8px;
+}
+
+html.dark [data-slot="load-more"] {
+  color: var(--d-text-3);
+}
+
+/* Charts: mini axis labels in --d-text-3, hairline guides, a quiet hover and an accent focus outline. */
+html.dark :is([data-slot="bar-chart"], [data-slot="chart-legend"]) {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="bar-chart"] div[aria-hidden] {
+  border-color: var(--d-line-2);
+}
+
+html.dark [data-slot="bar-chart-bar"] {
+  border-radius: 3px;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="bar-chart-bar"]:hover {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="bar-chart-bar"]:focus-visible {
+  background-color: var(--d-hover);
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: 1px;
+}
+
+/* An empty state's action is one secondary pill, never a second primary in the view. */
+html.dark
+  [data-slot="empty"]
+  :is(button, a):is([data-variant="default"], :not([data-variant])[class~="bg-primary"]):not(#d) {
+  border-color: var(--d-edge);
+  background-color: var(--d-control);
+  box-shadow: var(--d-contact);
+  color: var(--d-text-2);
+}
+
+@media (hover: hover) {
+  html.dark
+    [data-slot="empty"]
+    :is(button, a):is([data-variant="default"], :not([data-variant])[class~="bg-primary"]):not(#d):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text);
+  }
+}
+
+/* ───────────────────────── 8. App lists (app-list.tsx) ───────────────────────── */
+
+html.dark [data-slot="app-section"] > h2 {
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="app-section"] > h2 > span {
+  color: var(--d-text-3);
+}
+
+html.dark [data-app-row] {
+  border-radius: var(--d-r);
+}
+
+@media (hover: hover) {
+  html.dark [data-app-row]:has([data-slot="app-open"]:hover) {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-app-row] [data-slot="item-title"] {
+  font-weight: 500;
+}
+
+html.dark [data-app-row] [data-slot="app-open"]:focus-visible::after {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+  border-radius: var(--d-r);
+}
+
+html.dark [data-slot="app-facts"] {
+  border-color: var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+}
+
+html.dark [data-slot="app-facts"] > * {
+  border-color: var(--data-divider);
+}
+
+html.dark [data-slot="app-facts"] dt {
+  color: var(--d-text-3);
+}
+
+/* Table names that are link buttons read as names, not links; a row link's focus is a 1px accent outline. */
+html.dark [data-slot="table-cell"]:first-child button[data-variant="link"]:not(#d) {
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="table-body"] [data-slot="table-row"] :is(a, button):focus-visible::after {
+  box-shadow: none;
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+  border-radius: var(--d-r);
+}

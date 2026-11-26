@@ -27,7 +27,7 @@ export function ChannelsSettingsPage() {
   return (
     <Page title="Channels" description="Invoke Ren from where your team already works.">
       {sections.length === 0 ? (
-        <p className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
+        <p data-slot="settings-empty" className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
           No channels are set up on this server yet.
         </p>
       ) : null}

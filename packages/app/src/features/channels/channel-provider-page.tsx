@@ -37,10 +37,12 @@ import { PlaceName } from "../../components/place-name.js"
 import { MappingsTable } from "./mappings-table.js"
 import { MappingDialog } from "./mapping-dialog.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/settings/channels/$provider")
 
 export function ChannelProviderPage() {
+  const deep = DarkUi.useDarkUi()
   const { api, platform } = RouterContext.useRouterContext()
   const params = route.useParams()
   const search = route.useSearch()
@@ -80,7 +82,7 @@ export function ChannelProviderPage() {
   return (
     <Page
       title={provider.title}
-      description={install ? `${install.name} · Connected` : undefined}
+      description={install ? `${install.name} · Connected` : deep ? "Not connected" : undefined}
       back={
         <Link
           to="/settings/channels"

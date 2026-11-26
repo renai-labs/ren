@@ -31,6 +31,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { formatMoney, freePlan, invoiceStatus, planName, planPriceCents, wholeDollars } from "./plan-cards.js"
 import { PlansGrid } from "./plans-grid.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/settings/_admin/billing")
 
@@ -47,6 +48,7 @@ const invoiceTones = { paid: "ok", failed: "error", neutral: "neutral" } as cons
 
 export function BillingPage() {
   const { api } = RouterContext.useRouterContext()
+  const deep = DarkUi.useDarkUi()
   const search = route.useSearch()
   const navigate = route.useNavigate()
   const tab = search.tab ?? "billing"
@@ -58,6 +60,7 @@ export function BillingPage() {
   return (
     <Page
       title="Billing & plans"
+      description={deep ? "Your plan, credits and invoices." : undefined}
       loading={billing.isPending}
       tabs={
         <Tabs value={tab} onValueChange={(value: string) => openTab(value)}>
@@ -69,7 +72,7 @@ export function BillingPage() {
       }
     >
       <ProvidersNotice />
-      <section key={tab} aria-live="polite" className="flex flex-col gap-3">
+      <section key={tab} data-screen="billing" aria-live="polite" className="flex flex-col gap-3">
         {billing.isError ? <EmptyState>Couldn’t load billing.</EmptyState> : null}
         {!billing.isError && tab === "plans" ? (
           <PlansGrid billing={summary} plans={plans.data} loading={plans.isPending} />
@@ -80,6 +83,7 @@ export function BillingPage() {
               <PlanCard billing={summary} plans={plans.data} onChoosePlan={() => openTab("plans")} />
               <CreditsCard billing={summary} />
             </div>
+            {deep ? <h2 data-slot="page-section-title">Invoices</h2> : null}
             <Invoices />
           </>
         ) : null}

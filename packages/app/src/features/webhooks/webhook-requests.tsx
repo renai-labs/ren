@@ -23,6 +23,7 @@ import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Webhooks } from "../../lib/webhooks.js"
 import { useWebhookForm } from "./use-webhook-form.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const route = getRouteApi("/_authed/_shell/spaces/$spaceId/automations/webhooks/$webhookId/")
 
@@ -111,6 +112,7 @@ export function WebhookRequests(props: { webhook: WebhookInfo }) {
 }
 
 function RequestsToolbar(props: { webhook: WebhookInfo; outcome: WebhookRequestOutcome | undefined }) {
+  const deep = DarkUi.useDarkUi()
   const { api } = RouterContext.useRouterContext()
   const navigate = route.useNavigate()
   const counts = useQueries({
@@ -155,6 +157,7 @@ function RequestsToolbar(props: { webhook: WebhookInfo; outcome: WebhookRequestO
         </SelectContent>
       </Select>
       <Button
+        variant={deep ? "outline" : undefined}
         disabled={waiting === 0 || !live || replay.isPending}
         title={live ? undefined : "Turn the webhook on to replay"}
         onClick={() =>

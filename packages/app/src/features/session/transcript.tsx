@@ -261,6 +261,7 @@ function UserBlock(props: {
       fold={transcript.foldMessages === true}
       reveal={transcript.find?.match?.row === props.rowKey}
       person={person}
+      self={person === transcript.viewer}
       status={status}
       editing={props.editing}
       onEdit={edit && (status === undefined || status === "queued") ? () => props.onEditing(message.id) : undefined}

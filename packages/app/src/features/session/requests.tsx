@@ -65,6 +65,7 @@ function PermissionRequest(props: {
   return (
     <section
       aria-label="Permission request"
+      data-chat-request=""
       className="flex animate-in flex-col gap-3 rounded-xl border bg-card p-4 duration-200 ease-out fade-in-0 slide-in-from-bottom-1 motion-reduce:slide-in-from-bottom-0"
     >
       <div className="flex items-start gap-3">
@@ -122,7 +123,7 @@ function QuestionForm(props: {
 }) {
   const questions = props.form.fields.filter(Form.isQuestion)
   return (
-    <Card size="sm">
+    <Card size="sm" data-chat-request="">
       <CardHeader>
         <CardTitle>{questions.length > 1 ? "Ren has a few questions" : "Ren has a question"}</CardTitle>
         {props.expired ? (

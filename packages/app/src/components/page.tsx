@@ -26,6 +26,7 @@ import {
 import { cn } from "cn"
 import { TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Routing } from "../lib/routing.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 export const pageWidths = {
   column: "max-w-200",
@@ -85,8 +86,14 @@ export function PageTabs(props: { children: ReactNode }) {
 function PageHeading(props: Pick<PageProps, "title" | "description">) {
   return (
     <>
-      <h1 className="text-xl font-medium">{props.title}</h1>
-      {props.description ? <p className="text-sm text-muted-foreground">{props.description}</p> : null}
+      <h1 data-slot="page-title" className="text-xl font-medium">
+        {props.title}
+      </h1>
+      {props.description ? (
+        <p data-slot="page-description" className="text-sm text-muted-foreground">
+          {props.description}
+        </p>
+      ) : null}
     </>
   )
 }
@@ -94,9 +101,11 @@ function PageHeading(props: Pick<PageProps, "title" | "description">) {
 function PageTabsRow(props: { tabs: ReactNode; onSlot: (element: HTMLElement | null) => void; actions: ReactNode }) {
   return (
     <div
+      data-slot="page-toolbar"
+      hidden={!props.actions}
       className={cn("flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2", !props.actions && "hidden")}
     >
-      <div className="flex shrink-0 items-center">
+      <div data-slot="page-tabs" className="flex shrink-0 items-center">
         {props.tabs}
         <div ref={(node) => props.onSlot(node)} className="contents" />
       </div>
@@ -110,14 +119,18 @@ function PageTabsRow(props: { tabs: ReactNode; onSlot: (element: HTMLElement | n
 }
 
 function PageToolbar(props: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex min-h-8 shrink-0 items-center gap-2", props.className)}>{props.children}</div>
+  return (
+    <div data-slot="page-actions" className={cn("flex min-h-8 shrink-0 items-center gap-2", props.className)}>
+      {props.children}
+    </div>
+  )
 }
 
 function PageHeader(props: PageProps) {
   const heading = <PageHeading title={props.title} description={props.description} />
   if (props.media)
     return (
-      <header className="flex items-start justify-between gap-4">
+      <header data-slot="page-header" className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {props.media}
           <div className="flex min-w-0 flex-col gap-1">{heading}</div>
@@ -127,17 +140,19 @@ function PageHeader(props: PageProps) {
     )
   if (props.aside)
     return (
-      <header className="flex items-start justify-between gap-4">
+      <header data-slot="page-header" className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">{heading}</div>
         <div className="flex shrink-0 items-center gap-2">{props.aside}</div>
       </header>
     )
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+    <header data-slot="page-header" className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
       <div className="flex min-w-0 flex-col gap-1">
-        <h1 className="text-xl font-medium">{props.title}</h1>
+        <h1 data-slot="page-title" className="text-xl font-medium">
+          {props.title}
+        </h1>
         {props.description ? (
-          <p className="truncate text-sm text-muted-foreground" title={props.description}>
+          <p data-slot="page-description" className="truncate text-sm text-muted-foreground" title={props.description}>
             {props.description}
           </p>
         ) : null}
@@ -148,13 +163,73 @@ function PageHeader(props: PageProps) {
 }
 
 export function Page(props: PageProps) {
+  const deep = DarkUi.useDarkUi()
+  if (deep && (props.width ?? "column") === "full") return <BarPage {...props} />
+  return <ColumnPage {...props} />
+}
+
+function BarPage(props: PageProps) {
+  const shapeId = useShapeId(props.shape ?? "page")
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null)
+  const [mountedTabs, setMountedTabs] = useState(0)
+  const tabbed = props.tabs !== undefined || mountedTabs > 0
+  return (
+    <div data-slot="page" data-page-width="full" className="flex min-h-0 w-full flex-1 flex-col">
+      <header data-slot="page-bar">
+        {props.back}
+        {props.media}
+        <h1 data-slot="page-title">{props.title}</h1>
+        {props.description ? (
+          <p data-slot="page-description" title={props.description}>
+            {props.description}
+          </p>
+        ) : null}
+        {props.menu}
+        <div data-slot="page-actions">
+          {props.aside}
+          {tabbed ? null : props.actions}
+          <div ref={setSlot} className="contents" />
+        </div>
+      </header>
+      <div data-slot="page-toolbar" hidden={!tabbed}>
+        <div data-slot="page-tabs">
+          {props.tabs}
+          <div ref={setTabsSlot} className="contents" />
+        </div>
+        {tabbed && props.actions ? <div data-slot="page-tools">{props.actions}</div> : null}
+      </div>
+      {props.leading ? <div data-slot="page-leading">{props.leading}</div> : null}
+      <Loading
+        id={shapeId}
+        loading={props.loading ?? false}
+        label={`Loading ${props.title}`}
+        className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-y-auto overscroll-contain has-data-[page-fill]:overflow-y-hidden"
+      >
+        <div data-slot="page-body" className="flex flex-1 flex-col has-data-[page-fill]:min-h-0">
+          <PageActionsSlot value={slot}>
+            <PageTabsSlot value={tabsSlot}>
+              <PageTabsCount value={setMountedTabs}>
+                <div className="flex flex-1 flex-col gap-8 has-data-[page-fill]:min-h-0">{props.children}</div>
+              </PageTabsCount>
+            </PageTabsSlot>
+          </PageActionsSlot>
+          {props.footer ? <PageFooter>{props.footer}</PageFooter> : null}
+        </div>
+      </Loading>
+    </div>
+  )
+}
+
+function ColumnPage(props: PageProps) {
+  const deep = DarkUi.useDarkUi()
   const shapeId = useShapeId(props.shape ?? "page")
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [tabsSlot, setTabsSlot] = useState<HTMLElement | null>(null)
   const [mountedTabs, setMountedTabs] = useState(0)
   const width = props.width ?? "column"
   const frame = pageFrames[width]
-  const tabbed = props.tabs !== undefined || mountedTabs > 0
+  const tabbed = deep || props.tabs !== undefined || mountedTabs > 0
   const actions = (
     <>
       {props.actions}
@@ -162,14 +237,20 @@ export function Page(props: PageProps) {
     </>
   )
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div data-slot="page" data-page-width={deep ? "grid" : width} className="flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 scrollbar-thin [scrollbar-gutter:stable] overflow-hidden">
-        <div className={frame.head}>
-          {props.back ? <div className="flex">{props.back}</div> : null}
+        <div data-slot="page-head" className={frame.head}>
+          {props.back ? (
+            <div data-slot="page-back" className="flex">
+              {props.back}
+            </div>
+          ) : null}
           <PageHeader {...props} actions={tabbed ? undefined : actions} />
           <PageTabsRow tabs={props.tabs} onSlot={setTabsSlot} actions={tabbed ? actions : undefined} />
           {props.leading && width !== "full" ? (
-            <div className="flex min-h-8 items-center">{props.leading}</div>
+            <div data-slot="page-leading" className="flex min-h-8 items-center">
+              {props.leading}
+            </div>
           ) : (
             props.leading
           )}
@@ -184,7 +265,7 @@ export function Page(props: PageProps) {
           width === "full" ? "[--scroll-fade-t-size:--spacing(4)]" : "[--scroll-fade-t-size:--spacing(6)]",
         )}
       >
-        <div className={frame.body}>
+        <div data-slot="page-body" className={frame.body}>
           <PageActionsSlot value={slot}>
             <PageTabsSlot value={tabsSlot}>
               <PageTabsCount value={setMountedTabs}>
@@ -244,11 +325,17 @@ export function Section(props: {
   children: ReactNode
 }) {
   return (
-    <section className="flex min-w-0 flex-col gap-3">
+    <section data-slot="page-section" className="flex min-w-0 flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">{props.title}</h2>
-          {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
+          <h2 data-slot="page-section-title" className="text-sm font-medium">
+            {props.title}
+          </h2>
+          {props.description ? (
+            <p data-slot="page-section-description" className="text-xs text-muted-foreground">
+              {props.description}
+            </p>
+          ) : null}
         </div>
         {props.action}
       </div>
@@ -261,10 +348,16 @@ export function ToolbarSection(props: { title: string; description?: string | un
   const [tabs, setTabs] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
   return (
-    <section className="flex flex-col gap-3">
+    <section data-slot="page-section" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-medium">{props.title}</h2>
-        {props.description ? <p className="text-xs text-muted-foreground">{props.description}</p> : null}
+        <h2 data-slot="page-section-title" className="text-sm font-medium">
+          {props.title}
+        </h2>
+        {props.description ? (
+          <p data-slot="page-section-description" className="text-xs text-muted-foreground">
+            {props.description}
+          </p>
+        ) : null}
       </div>
       <div className="flex min-h-8 items-center justify-between gap-4">
         <div ref={setTabs} className="flex min-w-0 items-center" />
@@ -395,6 +488,7 @@ export function PageSkeleton(props: {
   description?: string | undefined
   width?: PageWidth | undefined
   actions?: ReactNode | undefined
+  tabs?: ReactNode | undefined
   shape?: string | undefined
   children?: ReactNode | undefined
 }) {
@@ -405,6 +499,7 @@ export function PageSkeleton(props: {
       description={props.description}
       width={props.width}
       actions={props.actions}
+      tabs={props.tabs}
       loading
     >
       {props.children ?? <RowsSample />}

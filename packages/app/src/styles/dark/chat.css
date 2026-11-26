@@ -1,0 +1,1190 @@
+/*
+ * Chat. (the composer keeps Ren's anatomy).
+ * The new-chat home, the composer's surface and type wherever it appears, the session page (header, transcript,
+ * side panel) and the chat sheet, in the language of Linear's agent screens (linear/agent-thread.png).
+ * Hooks: data-slot="composer" / data-composer-part (prompt-input.tsx), data-slot="chat-home" (home-page.tsx),
+ * data-slot="chat-page" / "chat-column" / "chat-dock" (chat-page.tsx).
+ */
+html.dark {
+  /* The transcript column and the composer share one width (Linear: ~810px of text). */
+  --chat-column: 820px;
+  /* The composer's top-lit hairline, at rest and with focus inside (Linear, measured). */
+  --chat-edge: linear-gradient(#2f3033, #1f2022);
+  --chat-edge-focus: linear-gradient(#45464a, #2c2d30);
+}
+
+/* ───────────────────────── Home (/) ───────────────────────── */
+
+/* A 44px bar with the title (the bar itself is the shell's page-bar), the panel fading to the page colour,
+   and the baseline's centred composer block under it. */
+html.dark [data-slot="chat-home"] {
+  background: linear-gradient(to bottom, var(--d-panel), var(--d-page));
+  border-end-start-radius: calc(var(--d-r-panel) - 1px);
+  border-end-end-radius: calc(var(--d-r-panel) - 1px);
+
+  & [data-slot="page-title"] {
+    margin: 0;
+    padding-inline: 4px;
+    font-size: var(--d-small);
+    font-weight: 500;
+    line-height: var(--d-ctl);
+    letter-spacing: normal;
+    color: var(--d-text-2);
+    white-space: nowrap;
+  }
+
+  /* The bar takes 44px off the top; the same 44px at the bottom keeps the composer at the panel's centre,
+     where the baseline has it. */
+  & > [data-slot="page-bar"] + div {
+    padding-block-end: var(--d-header);
+  }
+}
+
+/* The watermark: present, but no brighter than a structural line. */
+html.dark [data-slot="chat-home-mark"] > svg {
+  color: var(--d-line);
+}
+
+/* "Working in <space>" above the composer: Ren's row, in the system's quiet type. */
+html.dark [data-slot="composer"] > [data-composer-part="header"] {
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── Composer: surface and type only ───────────────────────── */
+
+/* Ren's anatomy, padding and height stay as the baseline has them; the buttons inside are the controls
+   agent's. What changes: the raised fill, the top-lit hairline, the contact shadow, 10px radius, the type. */
+html.dark [data-slot="composer"] {
+  & > [data-slot="input-group"] {
+    border: 1px solid transparent;
+    border-radius: var(--d-r-card);
+    background:
+      linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+      var(--chat-edge) border-box;
+    box-shadow: var(--d-contact);
+  }
+
+  & > [data-slot="input-group"]:focus-within {
+    background:
+      linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+      var(--chat-edge-focus) border-box;
+  }
+
+  /* Shell mode: the edge turns accent (the "$" prefix and the "Shell" label carry the state too). */
+  & > [data-slot="input-group"][data-shell="true"] {
+    background:
+      linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+      linear-gradient(var(--d-accent), var(--d-accent)) border-box;
+  }
+
+  & > [data-slot="input-group"][data-shell="false"] > [data-slot="input-group-control"] {
+    font-size: var(--d-regular);
+    font-weight: 450;
+    line-height: 1.6;
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="input-group-control"]::placeholder {
+    color: var(--d-text-3);
+  }
+
+  & [data-composer-part="shell-prefix"] {
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="mention-overlay"] > div {
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="mention-overlay-label"] {
+    background-color: var(--d-raised);
+  }
+
+  & [data-composer-part="status"] {
+    color: var(--d-text-3);
+  }
+
+  /* The model chip keeps Ren's "Vendor / Model": the vendor at --d-text-3 (Ren's 60% would fall under 4.5:1),
+     so the name steps up to --d-text-2 to keep the hierarchy. */
+  & [data-model-part="vendor"] {
+    color: var(--d-text-3);
+  }
+
+  & [data-composer-part="model"] bdi:not([data-model-part]) {
+    color: var(--d-text-2);
+  }
+}
+
+/* The split send pill is one control drawn as two halves: they take the pill's colour, whatever the ghost
+   recipe says, so the arrow stays white on the accent and quiet on the chip fill. */
+html.dark
+  [data-slot="composer"]
+  [data-composer-part="toolbar"]
+  > span:has(> [data-composer-part="send"])
+  > [class~="group/button"] {
+  color: inherit;
+  background-color: transparent;
+}
+
+html.dark [data-slot="composer"] [data-composer-part="toolbar"] > span:has(> [data-composer-part="send"]) {
+  border: 1px solid var(--d-edge);
+  box-shadow: var(--d-contact);
+}
+
+html.dark
+  [data-slot="composer"]
+  [data-composer-part="toolbar"]
+  > span:has(> [data-composer-part="send"][data-filled="true"]) {
+  border-color: transparent;
+  background-color: var(--d-accent);
+  color: var(--d-accent-fg);
+}
+
+html.dark
+  [data-slot="composer"]
+  [data-composer-part="toolbar"]
+  > span:has(> [data-composer-part="send"][data-filled="false"]) {
+  background-color: var(--d-chip);
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── Session page: header bar ───────────────────────── */
+
+/* The bar itself (44px, hairline, padding) is the shell's [data-slot="page-bar"]. Here: what sits in it. */
+html.dark [data-slot="chat-main"] > [data-slot="page-bar"] {
+  /* The context meter is a circle: its ring is the reading, the count opens on hover with the details. */
+  & [data-chat-part="context"] {
+    width: var(--d-ctl);
+    min-width: var(--d-ctl);
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  & [data-chat-part="context-count"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  & [data-chat-part="panel-toggle"] {
+    width: var(--d-ctl);
+    height: var(--d-ctl);
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 1.5;
+    }
+  }
+}
+
+/* ───────────────────────── Session page: transcript ───────────────────────── */
+
+/* One column for transcript and composer: 820px of content (+ 24px gutters). The "wide" preference keeps 1000px. */
+html.dark:not([data-timeline-width="wide"]) {
+  --container-chat: calc(var(--chat-column) + 48px);
+}
+
+html.dark [data-slot="message-scroller-content"] {
+  gap: 12px;
+  padding: 24px;
+}
+
+html.dark [data-slot="chat-dock"] {
+  padding: 0 24px 16px;
+}
+
+html.dark [data-slot="chat-column"] {
+  max-width: calc(var(--container-chat) - 48px);
+}
+
+/* Rows breathe like Linear's: 12px inside a turn, and a new turn opens 32px down with its timestamp. */
+html.dark [data-slot="message-scroller-item"]:has(> [data-slot="turn-time"]) {
+  margin-block-start: 20px;
+}
+
+html.dark [data-slot="message-scroller-item"]:first-child:has(> [data-slot="turn-time"]) {
+  margin-block-start: 0;
+}
+
+/* The timestamp between turns: centred, mini/500, the quietest text step (it is never the only record). */
+html.dark [data-slot="turn-time"] {
+  display: flex;
+  justify-content: center;
+  margin-block-end: 16px;
+  font-size: var(--d-mini);
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--d-text-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The person's own message: a bubble on the right, no avatar or name (Linear has neither).
+   Messages from other people in a shared chat keep both. */
+html.dark [data-slot="message"][data-align="end"] {
+  gap: 0;
+
+  & [data-slot="message-content"] {
+    gap: 6px;
+  }
+
+  &[data-self] {
+    margin-inline-end: 0;
+
+    & > [data-slot="message-avatar"],
+    & [data-slot="message-header"]:not(:has([tabindex])) {
+      display: none;
+    }
+  }
+
+  & [data-slot="message-header"] {
+    font-size: var(--d-mini);
+    font-weight: 500;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="bubble"] {
+    max-width: min(80%, 600px);
+  }
+
+  & [data-slot="bubble-content"] {
+    padding: 6px 12px;
+    border: 0;
+    border-radius: var(--d-r-card);
+    background-color: var(--d-control-active);
+    font-size: var(--d-regular);
+    font-weight: 450;
+    line-height: 1.6;
+    color: var(--d-text-2);
+
+    & [data-slot="markdown"] {
+      font-size: var(--d-regular);
+      line-height: 1.6;
+      color: var(--d-text-2);
+    }
+  }
+
+  & [data-slot="message-footer"] {
+    min-height: 24px;
+  }
+
+  /* The time is the centred line above the turn; the hover row keeps only the actions. */
+  & [data-slot="message-actions"] > time {
+    display: none;
+  }
+}
+
+html.dark [data-slot="message-scroller-item"]:has(> [data-slot="message"][data-self]) {
+  margin-inline-end: 0;
+  padding-inline-end: 0;
+}
+
+/* The assistant: bare text, regular/450 at 1.6 in the content colour. */
+html.dark
+  [data-slot="message"][data-align="start"]
+  [data-slot="bubble"][data-variant="ghost"]
+  > [data-slot="bubble-content"] {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+}
+
+/* Per-message actions: 24px ghost icons, shown on hover and focus (the reveal is the app's own). */
+html.dark [data-slot="message-footer"] {
+  gap: 2px;
+  min-height: 24px;
+  margin-block-start: -2px;
+
+  & [data-slot="button"][data-size="icon-sm"] {
+    width: var(--d-ctl-sm);
+    height: var(--d-ctl-sm);
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  & [data-slot="button"]:not([data-size^="icon"]) {
+    height: var(--d-ctl-sm);
+  }
+}
+
+/* ───────────────────────── Markdown in the transcript ───────────────────────── */
+
+html.dark [data-slot="message-scroller-content"] [data-slot="markdown"] {
+  font-size: var(--d-regular);
+  font-weight: 450;
+  line-height: 1.6;
+  color: var(--d-text-2);
+
+  & :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1.25em 0.4em;
+    line-height: 1.35;
+    letter-spacing: -0.005em;
+    color: var(--d-text);
+  }
+
+  & h1 {
+    font-size: var(--d-large);
+    font-weight: 600;
+  }
+
+  & h2 {
+    font-size: var(--d-regular);
+    font-weight: 600;
+  }
+
+  & h3 {
+    font-size: var(--d-regular);
+    font-weight: 500;
+  }
+
+  & :is(h4, h5, h6) {
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+
+  & :is(h1, h2, h3, h4, h5, h6):first-child {
+    margin-block-start: 0;
+  }
+
+  & strong {
+    font-weight: 600;
+    color: var(--d-text);
+  }
+
+  & p {
+    margin-block-end: 0.7em;
+  }
+
+  & li::marker {
+    color: var(--d-text-3);
+  }
+
+  & a:not([data-slot]) {
+    color: var(--d-accent-text);
+    text-decoration-color: color-mix(in srgb, var(--d-accent-text) 40%, transparent);
+    text-underline-offset: 0.18em;
+  }
+
+  & blockquote {
+    border-inline-start: 2px solid var(--d-line-3);
+    color: var(--d-text-3);
+  }
+
+  & hr {
+    border-block-start-color: var(--d-line);
+  }
+
+  /* Inline code: a subtle chip, not a grey slab. */
+  & :not(pre) > code {
+    padding: 0.08em 0.36em;
+    border: 1px solid var(--d-line-3);
+    border-radius: var(--d-r-sm);
+    background-color: var(--d-raised);
+    font-size: 0.84em;
+    color: var(--d-text-2);
+  }
+}
+
+/* Tables: the data recipe. Header mini/450 --d-text-3, hairline rows, no fill and no frame. */
+html.dark [data-slot="message-scroller-content"] [data-slot="markdown-table"] {
+  margin-block: 12px 4px;
+  font-size: var(--d-small);
+
+  & tr {
+    border-block-end-color: var(--d-line);
+  }
+
+  & thead tr {
+    border-block-end-color: var(--d-line-2);
+  }
+
+  & th {
+    height: 32px;
+    padding-block: 0;
+    font-size: var(--d-mini);
+    font-weight: 450;
+    color: var(--d-text-3);
+    vertical-align: middle;
+  }
+
+  & td {
+    padding-block: 9px;
+    font-weight: 450;
+    line-height: 1.45;
+    color: var(--d-text-2);
+  }
+
+  & td :not(pre) > code {
+    font-size: 0.9em;
+  }
+}
+
+/* The table's copy button waits for hover or focus, like every per-message action, but keeps its row. */
+html.dark [data-slot="markdown-table-actions"] {
+  margin-block-start: 2px;
+
+  & [data-slot="dropdown-menu-trigger"] {
+    width: var(--d-ctl-sm);
+    height: var(--d-ctl-sm);
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html.dark [data-slot="markdown-table"]:not(:hover, :focus-within) [data-slot="markdown-table-actions"] > * {
+    opacity: 0;
+  }
+}
+
+html.dark [data-slot="markdown-table-actions"] > * {
+  transition: opacity 100ms ease-out;
+}
+
+/* Code blocks: the raised surface with a real faint edge, a mini header and a ghost copy circle. */
+html.dark [data-slot="code-block"] {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  box-shadow: var(--d-contact);
+
+  & [data-slot="code-block-header"] {
+    min-height: 32px;
+    padding: 4px 4px 0 12px;
+  }
+
+  & [data-slot="code-block-title"] {
+    font-size: var(--d-mini);
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="code-block-copy-button"] {
+    width: var(--d-ctl-sm);
+    height: var(--d-ctl-sm);
+    border-radius: var(--d-r-pill);
+    color: var(--d-text-3);
+
+    & svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  & [data-slot="code-block-content"] {
+    padding: 4px 12px 12px;
+  }
+
+  & [data-slot="code-block-header"] + [data-slot="code-block-content"] {
+    padding-block-start: 2px;
+  }
+
+  & [data-slot="code-block-line"] {
+    line-height: 1.6;
+  }
+}
+
+html.dark [data-slot="markdown"] [data-slot="code-block"] {
+  margin-block: 12px;
+}
+
+/* ───────────────────────── Traces: "Worked for", steps, tools ───────────────────────── */
+
+html.dark [data-slot="message-scroller-content"] [data-slot="trace"] {
+  gap: 2px;
+}
+
+html.dark [data-slot="message-scroller-content"] [data-slot="trace-line"] {
+  min-height: 24px;
+  gap: 8px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="message-scroller-content"] [data-slot="trace-icon"] {
+  width: 14px;
+  height: 14px;
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+html.dark [data-slot="trace-title"] + [data-slot="trace-description"]::before {
+  content: "·";
+  margin-inline: -2px 6px;
+  color: var(--d-text-4);
+}
+
+html.dark [data-slot="message-scroller-content"] [data-slot="trace-description"] {
+  font-size: var(--d-mini);
+  color: var(--d-text-3);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="trace"] > :is(button, a):hover [data-slot="trace-line"],
+  html.dark [data-slot="trace-collapsible-trigger"]:hover [data-slot="trace-line"] {
+    color: var(--d-text-2);
+  }
+}
+
+html.dark [data-slot="trace"] > :is(button, a):focus-visible,
+html.dark [data-slot="trace-collapsible-trigger"]:focus-visible {
+  outline: 1px solid var(--d-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* Expanded steps hang on a hairline rail, as Linear's activity timeline does. */
+html.dark [data-slot="trace-collapsible-content-inner"] {
+  margin-inline-start: 6px;
+  padding-inline-start: 17px;
+  border-inline-start: 1px solid var(--d-line-2);
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+/* ───────────────────────── Session page: the workspace side panel ───────────────────────── */
+
+/* A split pane, not an overlay: one hairline between chat and panel, the panel on the panel colour. */
+html.dark [data-slot="chat-panel"][data-open="true"] {
+  border-inline-start: 1px solid var(--d-line);
+}
+
+html.dark [data-slot="workspace-panel"] {
+  background-color: var(--d-panel);
+}
+
+/* Its own 44px bar: pill tabs on the left, ghost circles on the right, a hairline under it. */
+html.dark [data-slot="workspace-bar"] {
+  height: var(--d-header);
+  gap: 4px;
+  padding: 0 8px;
+  border-block-end: 1px solid var(--d-line);
+
+  & > [data-slot="tabs-list"] {
+    gap: 4px;
+  }
+
+  & > :is([data-slot="button"], [data-slot="popover-trigger"]) {
+    width: var(--d-ctl);
+    height: var(--d-ctl);
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 1.5;
+    }
+  }
+}
+
+/* A tab is a 28px pill with room for its close circle inside the right end. */
+html.dark [data-slot="workspace-tab"] > [data-slot="tabs-trigger"] {
+  max-width: 13rem;
+  padding-inline-end: 26px;
+  font-weight: 500;
+
+  & > svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+html.dark [data-slot="workspace-tab"] > [data-workspace-part="close-tab"] {
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--d-r-pill);
+
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* 20px drawn, 24px to hit: the pill's own padding is the gap around it. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+  }
+}
+
+/* Inline code inside the person's bubble sits one step above the bubble, not below it. */
+html.dark [data-slot="message"][data-align="end"] [data-slot="bubble-content"] [data-slot="markdown"] :not(pre) > code {
+  border-color: var(--d-edge-faint);
+  background-color: rgb(255 255 255 / 0.05);
+}
+
+/* Inside a panel tab: a 36px sub-bar on a hairline (breadcrumb small/500), then quiet timeline rows. */
+html.dark [data-slot="workspace-subbar"] {
+  height: 36px;
+  padding-inline: 12px;
+  border-block-end: 1px solid var(--d-line);
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+
+  & nav {
+    font-size: var(--d-small);
+  }
+}
+
+/* Activity: the turn caption is small/450 --d-text-2, its time mini; steps are small rows with 14px icons
+   on the hairline rail the panel already draws. */
+html.dark [data-slot="activity-turn"] {
+  min-height: 28px;
+  margin-block: 12px 2px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-3);
+
+  & > span:first-of-type {
+    color: var(--d-text-2);
+  }
+
+  & > span:last-child {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
+html.dark [data-slot="activity-step"] {
+  padding-block-end: 4px;
+  font-size: var(--d-small);
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  & button:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
+html.dark [data-slot="activity-step-title"] {
+  font-weight: 450;
+  color: var(--d-text-2);
+  text-decoration-color: var(--d-line-3);
+}
+
+html.dark [data-slot="activity-rail"] {
+  background-color: var(--d-line-2);
+}
+
+/* ───────────────────────── The chat sheet (session-sheet.tsx) ───────────────────────── */
+
+/* The floating frame and its 44px title bar are the overlays agent's. Inside: the description is already the
+   sheet's accessible description, so it leaves the screen and the transcript starts under the bar. */
+html.dark [data-chat-sheet] [data-slot="sheet-description"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The transcript and composer hold the sheet's width: 24px gutters, the column never wider than the sheet. */
+html.dark [data-slot="chat-sheet-body"] {
+  --container-chat: 100%;
+
+  & [data-slot="message-scroller-content"] {
+    max-width: calc(var(--chat-column) + 48px);
+  }
+
+  & [data-slot="chat-column"] {
+    max-width: var(--chat-column);
+  }
+}
+
+/* ───────────────────────── Around the composer: queue, to-dos, requests, background work ───────────────────────── */
+
+/* Queued messages: a tray tucked under the composer's top edge, rows small/450, actions as ghost controls. */
+html.dark [data-slot="queued-messages"] {
+  margin-block-end: -14px;
+  padding: 4px 4px 18px;
+  border: 1px solid var(--d-line-2);
+  border-radius: var(--d-r-card) var(--d-r-card) 0 0;
+  background-color: var(--d-panel);
+
+  & > div:first-child {
+    font-size: var(--d-micro);
+    letter-spacing: 0.04em;
+    color: var(--d-text-3);
+  }
+}
+
+html.dark [data-slot="queued-message"] {
+  height: 30px;
+  padding-inline: 10px 4px;
+  border-radius: var(--d-r);
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-2);
+
+  & > span:not([dir]) {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="button"] {
+    height: var(--d-ctl-sm);
+  }
+
+  & [data-slot="button"][data-size="icon-sm"] {
+    width: var(--d-ctl-sm);
+    border-radius: var(--d-r-pill);
+  }
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="queued-message"]:hover {
+    background-color: var(--d-hover);
+  }
+}
+
+/* To-dos and requests: cards on the composer's surface with a faint edge. */
+html.dark :is([data-slot="chat-todos"], [data-chat-request]) {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  box-shadow: var(--d-contact);
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+html.dark [data-slot="chat-todos"] {
+  padding: 8px 12px;
+
+  & [data-slot="trace-line"] {
+    min-height: 24px;
+    font-size: var(--d-small);
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="trace-collapsible-trigger"] [data-slot="trace-title"] {
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="trace-icon"],
+  & [data-slot="trace-icon"] svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  & [data-slot="trace-collapsible-content-inner"] {
+    margin-block-start: 4px;
+    margin-inline-start: 6px;
+    padding-inline-start: 14px;
+    border-inline-start: 1px solid var(--d-line-2);
+  }
+}
+
+html.dark [data-chat-request] {
+  font-size: var(--d-small);
+
+  & [data-slot="card-title"] {
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text);
+  }
+
+  & [data-slot="card-description"] {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+}
+
+/* The questionnaire: choices are 36px rows on the hover tint, the shortcut a 20px key cap, actions 28px pills. */
+html.dark [data-slot="questionnaire"] {
+  gap: 12px;
+
+  & [data-slot="questionnaire-title"] {
+    font-size: var(--d-regular);
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--d-text);
+  }
+
+  & :is([data-slot="questionnaire-description"], [data-slot="questionnaire-progress"]) {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="questionnaire-choices"] {
+    gap: 2px;
+  }
+
+  & [data-slot="questionnaire-choice"] {
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--d-r);
+    background-color: transparent;
+    font-size: var(--d-small);
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="questionnaire-choice"][data-checked] {
+    border-color: var(--d-edge);
+    background-color: var(--d-control-active);
+    color: var(--d-text);
+  }
+
+  & [data-slot="questionnaire-choice"]:has(:focus-visible) {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+  }
+
+  & [data-slot="questionnaire-choice-description"] {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="questionnaire-choice-shortcut"] {
+    width: 20px;
+    height: 20px;
+    border-color: var(--d-line-3);
+    border-radius: var(--d-r-sm);
+    background-color: var(--d-control);
+    font-family: inherit;
+    font-size: var(--d-micro);
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="questionnaire-choice-indicator"] {
+    border-color: var(--d-line-menu);
+  }
+
+  & [data-slot="questionnaire-actions"] {
+    gap: 6px;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="questionnaire-choice"]:not([data-checked]):hover {
+    background-color: var(--d-hover);
+  }
+}
+
+/* Running background work: a 24px chip above the composer. */
+html.dark [data-chat-part="activity-pill"] {
+  height: var(--d-ctl-sm);
+  padding-inline: 8px 10px;
+  gap: 6px;
+  border-color: var(--d-line-3);
+  background-color: transparent;
+  box-shadow: none;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* "Later messages are undone": the composer's surface, a quiet sentence and one secondary pill. */
+html.dark [data-slot="chat-column"] > [data-slot="alert"] {
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-raised);
+  font-size: var(--d-small);
+  color: var(--d-text-2);
+}
+
+/* ───────────────────────── Attachments, file chips, quotes ───────────────────────── */
+
+/* 24px pills: icon or thumb, name mini/500, size or progress mini/450, a 20px remove circle. */
+html.dark
+  :is([data-slot="composer"], [data-slot="message-scroller-content"])
+  [data-slot="attachment"]:not([data-orientation="vertical"]) {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  height: var(--d-ctl-sm);
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-control);
+
+  &[data-state="error"] {
+    border-color: color-mix(in srgb, var(--destructive) 50%, transparent);
+  }
+
+  &:not(:has([data-slot="attachment-actions"])) {
+    padding-inline-end: 10px;
+  }
+
+  & [data-slot="attachment-media"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    border-radius: var(--d-r-pill);
+    overflow: hidden;
+
+    & svg,
+    & [data-slot="file-icon"] {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  & [data-slot="attachment-content"] {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+  }
+
+  & [data-slot="attachment-title"] {
+    max-width: 16rem;
+    font-size: var(--d-mini);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="attachment-description"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1;
+    color: var(--d-text-3);
+    white-space: nowrap;
+  }
+
+  & [data-slot="attachment-actions"] {
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+  }
+
+  & [data-slot="attachment-action"] {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--d-r-pill);
+
+    & svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+}
+
+@media (hover: hover) {
+  html.dark
+    :is([data-slot="composer"], [data-slot="message-scroller-content"])
+    [data-slot="attachment"]:has(> :is(a, button)):hover {
+    background-color: var(--d-control-hover);
+  }
+}
+
+html.dark :is([data-slot="composer"], [data-slot="message-scroller-content"]) [data-slot="attachment-group"] {
+  gap: 6px;
+}
+
+/* File mentions and chips inside text. */
+html.dark [data-slot="message-scroller-content"] [data-slot="file-chip"] {
+  border-radius: var(--d-r-sm);
+}
+
+/* ───────────────────────── Markers, live line, problems, loading ───────────────────────── */
+
+html.dark [data-slot="message-scroller-content"] [data-slot="marker"] {
+  min-height: 24px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  color: var(--d-text-3);
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &[data-variant="separator"]::before,
+  &[data-variant="separator"]::after {
+    background-color: var(--d-line);
+  }
+
+  & [data-slot="button"] {
+    height: var(--d-ctl-sm);
+  }
+
+  & [data-slot="kbd"] {
+    height: 18px;
+    min-width: 18px;
+    font-size: var(--d-micro);
+  }
+}
+
+/* A turn that failed or is waiting: an inline row with a 14px icon, title small/500, the fix small/450. */
+html.dark [data-chat-part="turn-problem"] {
+  font-size: var(--d-small);
+
+  & > svg {
+    width: 14px;
+    height: 14px;
+    translate: 0 3px;
+  }
+
+  & [data-slot="alert-title"] {
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text);
+  }
+
+  & [data-slot="alert-description"] {
+    font-size: var(--d-small);
+    font-weight: 450;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="button"] {
+    height: var(--d-ctl);
+  }
+}
+
+html.dark [data-slot="chat-failed"] {
+  gap: 12px;
+  font-size: var(--d-small);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="chat-skeleton-crumb"] {
+  height: var(--d-ctl);
+  padding-inline: 8px 10px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+
+  & svg {
+    width: 14px;
+    height: 14px;
+    color: var(--d-text-3);
+  }
+}
+
+/* The jump-to-latest control: a 28px chip-filled circle (a pill with a label while Ren works). */
+html.dark [data-slot="message-scroller-button"] {
+  height: var(--d-ctl);
+  min-width: var(--d-ctl);
+  border-color: var(--d-edge);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  box-shadow:
+    var(--d-contact),
+    0 4px 12px rgb(0 0 0 / 0.25);
+  font-size: var(--d-mini);
+  color: var(--d-text-2);
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* ───────────────────────── Find bar, edit-in-place, suggestions ───────────────────────── */
+
+/* The find bar floats like a menu: menu fill, 12px radius, menu edge, 32px row. */
+html.dark [data-slot="message-scroller"] search [data-slot="input-group"] {
+  height: 32px;
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-menu);
+  box-shadow: var(--d-shadow-menu);
+  font-size: var(--d-small);
+
+  & output {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="button"] {
+    width: var(--d-ctl-sm);
+    height: var(--d-ctl-sm);
+    border-radius: var(--d-r-pill);
+  }
+
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Editing a sent message: the composer recipe in place of the bubble. */
+html.dark [data-slot="message"][data-align="end"] [data-slot="input-group"]:has(> textarea) {
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: var(--d-r-card);
+  background:
+    linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+    var(--chat-edge-focus) border-box;
+  box-shadow: var(--d-contact);
+
+  & textarea {
+    min-height: 42px;
+    padding: 0 5px;
+    font-size: var(--d-regular);
+    line-height: 1.6;
+    color: var(--d-text-2);
+  }
+
+  & [data-slot="input-group-addon"] {
+    padding: 8px 0 0;
+    gap: 6px;
+  }
+
+  & + p {
+    font-size: var(--d-mini);
+    color: var(--d-text-3);
+  }
+}
+
+/* @-mentions: the menu surface (the composer's own popup, not a Base UI menu). */
+html.dark [data-slot="composer"] > [data-slot="command"] {
+  padding: 4px;
+  border: 1px solid var(--d-line-menu);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-menu);
+  box-shadow: var(--d-shadow-menu);
+  overscroll-behavior: contain;
+}

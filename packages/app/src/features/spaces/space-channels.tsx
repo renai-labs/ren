@@ -32,6 +32,7 @@ import { useShown } from "../../lib/use-shown.js"
 import { Channels } from "../../lib/channels.js"
 import { useSpace } from "./use-space.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { SpaceFrame } from "./space-frame.js"
 
 function ChannelName(props: { provider: Channels.Provider; name: string }) {
   return (
@@ -79,8 +80,10 @@ export function SpaceChannelsTab() {
     )
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <PageActions>
+      <SpaceFrame.Tools>
         <ToolbarSearch label="Search channels" value={query} onChange={setQuery} />
+      </SpaceFrame.Tools>
+      <PageActions>
         {canLink ? (
           <Button onClick={() => open(true)}>
             <IconPlus data-icon="inline-start" />

@@ -28,7 +28,7 @@ export function Queue(props: { tasks: ReadonlyArray<SessionTasks.Task>; running:
   const done = props.tasks.filter((task) => task.status === "completed").length
   const current = props.tasks.find((task) => task.status === "in_progress")
   return (
-    <div className="rounded-xl border bg-card px-4 py-3">
+    <div data-slot="chat-todos" className="rounded-xl border bg-card px-4 py-3">
       <Trace>
         <TraceCollapsible defaultOpen>
           <TraceCollapsibleTrigger>

@@ -1,0 +1,841 @@
+/*
+ * Shell. The sidebar, the main panel and the page anatomy every screen sits in.
+ *
+ * Slots other areas can rely on (style by slot, never by ancestry):
+ *   [data-slot="page"][data-page-width="full|grid"]   the frame Page renders (two grids only:
+ *                                full = bar + toolbar + full-width content; grid = the Apps column, 59rem)
+ *   [data-slot="page-bar"]       the 44px header bar (Page on full-width pages, Breadcrumb.Header, and any header
+ *                                another area tags): title or breadcrumb left, 28px ghost controls right
+ *   [data-slot="page-title"]     the title inside the bar, or the column title
+ *   [data-slot="page-actions"]   the bar's right-hand controls (column pages: the title row's controls)
+ *   [data-slot="page-toolbar"]   the 44px row under the bar: [data-slot="page-tabs"] left, [data-slot="page-tools"] right
+ *   [data-slot="page-body"]      the content
+ */
+html.dark {
+  --shell-row-gap: 1px;
+  --shell-inset: 12px;
+  --shell-bar-pad: 0 8px 0 10px;
+}
+
+/* ───────────── Sidebar ───────────── */
+
+/* Default width only: a dragged width arrives inline in px and is left alone. */
+html.dark [data-slot="sidebar-wrapper"][style*="--sidebar-width: 16rem"] {
+  --sidebar-width: var(--d-sidebar) !important;
+}
+
+html.dark [data-slot="sidebar-wrapper"] {
+  background-color: var(--d-page);
+}
+
+html.dark [data-slot="sidebar"] {
+  --sidebar: var(--d-page);
+  --sidebar-foreground: var(--d-text-3);
+  --sidebar-accent: var(--d-control-hover);
+  --sidebar-accent-foreground: var(--d-text);
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="sidebar-container"] {
+  padding: 8px 12px 8px var(--shell-inset);
+}
+
+html.dark [data-slot="sidebar"][data-collapsible="icon"] [data-slot="sidebar-container"] {
+  padding-inline: 8px;
+}
+
+html.dark [data-slot="sidebar-inner"] {
+  background-color: transparent;
+}
+
+/* Groups and menus sit flush with the inset: rows span 12px → width − 12px. */
+html.dark [data-slot="sidebar"]:not([data-mobile]) :is([data-slot="sidebar-group"], [data-slot="sidebar-footer"]) {
+  padding-inline: 0;
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-header"] > [data-slot="sidebar-menu"] {
+  padding-inline: 0;
+}
+
+/* Rows: 28px, radius 8px, 1px apart, 16px icons at 8px from the edge, small/500 in text-3. */
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu"] {
+  gap: var(--shell-row-gap);
+}
+
+html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-slot="sidebar-menu-button"][data-size] {
+  height: var(--d-row);
+  gap: 8px;
+  padding-block: 0;
+  padding-inline: 8px;
+  border-radius: var(--d-r);
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--d-text-3);
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+
+  & > svg:first-child,
+  & > span:first-child:has(> [data-slot="icon"], > [data-slot="avatar"], > svg) {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
+  & > span:first-child:has(> [data-slot="avatar"]) > * {
+    width: 16px;
+    height: 16px;
+  }
+
+  & svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-button"][data-size]:is([data-active], [data-active="true"]) {
+  background-color: var(--d-control-hover);
+  color: var(--d-text);
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-button"]:is([data-active], [data-active="true"]) > svg {
+  color: var(--d-text);
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-button"][data-size]:hover:not([data-active]) {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-button"]:focus-visible {
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+  --tw-ring-shadow: 0 0 #0000;
+  box-shadow: none;
+}
+
+/* The space row wraps its button in a hover box of its own. */
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-item"] > div[class*="group/space"] {
+  border-radius: var(--d-r);
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-item"] > div[class*="group/space"][data-active] {
+  background-color: var(--d-control-hover);
+}
+
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-item"] > div[class*="group/space"]:has(:focus-visible) {
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+}
+
+html.dark
+  [data-slot="sidebar"]
+  [data-slot="sidebar-menu-item"]
+  > div[class*="group/space"]
+  [data-slot="sidebar-menu-button"] {
+  background-color: transparent;
+  outline: none;
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-item"] > div[class*="group/space"]:hover:not([data-active]) {
+    background-color: var(--d-hover);
+  }
+}
+
+/* Counts and the chat status dot: mini, text-3, right-aligned. */
+html.dark [data-slot="sidebar"] [data-slot="sidebar-menu-badge"] {
+  top: 50%;
+  translate: 0 -50%;
+  right: 8px;
+  height: 20px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+/* Section labels: mini/500 text-3, a small ▾, 8px above the first row. */
+html.dark [data-slot="sidebar"] [data-slot="sidebar-group"]:has(> [data-sidebar-part="section-head"]) {
+  padding-top: 18px;
+}
+
+html.dark
+  [data-slot="sidebar"]:not([data-collapsible="icon"])
+  [data-slot="sidebar-group"]
+  > [data-sidebar-part="section-head"] {
+  height: var(--d-row);
+  padding: 0 4px 0 0;
+  margin-bottom: 1px;
+
+  & > :is(button[aria-expanded], span:first-child) {
+    height: 24px;
+    padding: 0 8px 0 9px;
+    gap: 6px;
+    border-radius: var(--d-r-sm);
+    font-size: var(--d-mini);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0;
+    color: var(--d-text-3);
+  }
+
+  & > span:first-child {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  & > button:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+    box-shadow: none;
+  }
+
+  & [data-sidebar-part="caret"] {
+    width: 8px;
+    height: 8px;
+    color: var(--d-text-3);
+    opacity: 1;
+  }
+
+  /* The section's own tools (filter, all spaces) are 24px ghost circles that come up on hover. */
+  & > span:last-child :is(button, a) {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--d-r-pill);
+    color: var(--d-text-3);
+
+    & svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="sidebar"] [data-sidebar-part="section-head"] > button:hover {
+    color: var(--d-text-2);
+  }
+}
+
+/* Header: Ren's own (mark + "Ren" left, search right), set in Linear's 44px band under the 8px inset. */
+html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-sidebar-part="brand"] {
+  height: 44px;
+  margin: 0 0 10px;
+  padding: 0 0 0 2px;
+  gap: 4px;
+
+  & > span:first-child {
+    width: 24px;
+    height: 28px;
+    color: var(--d-text);
+  }
+
+  & > span:first-child svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  & > span:nth-child(2) {
+    font-size: var(--d-small);
+    font-weight: 550;
+    letter-spacing: -0.006em;
+    color: var(--d-text);
+  }
+}
+
+/* Search, help and settings: 28px ghost circles, 16px icons, text-3 brightening on hover. */
+html.dark
+  [data-slot="sidebar"]:not([data-collapsible="icon"])
+  :is([data-sidebar-part="search"], [data-sidebar-part="help-settings"])
+  :is(button, a)[class][class][class] {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--d-r-pill);
+  background-color: transparent;
+  color: var(--d-text-3);
+  box-shadow: none;
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+
+  & svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &[aria-expanded="true"],
+  &[data-popup-open] {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+  }
+}
+
+@media (hover: hover) {
+  html.dark
+    [data-slot="sidebar"]
+    :is([data-sidebar-part="search"], [data-sidebar-part="help-settings"])
+    :is(button, a)[class]:hover {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+/* Space sidebar and settings sidebar: back links are ghost pills, not rows. */
+html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-sidebar-part="back"] {
+  width: auto;
+  height: var(--d-ctl);
+  gap: 6px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-2);
+
+  & > svg:first-child {
+    width: 16px;
+    height: 16px;
+    color: var(--d-text-3);
+  }
+}
+
+html.dark [data-slot="sidebar"] [data-sidebar-part="space-switcher"] {
+  color: var(--d-text);
+}
+
+/* Settings: the search field is a 32px input under "Back to app". */
+html.dark [data-slot="sidebar"] [data-sidebar-part="settings-search"] {
+  margin: 8px 0 4px;
+
+  & [data-slot="sidebar-input"] {
+    height: var(--d-ctl-lg);
+    padding-inline: 32px 32px;
+    border: 1px solid var(--d-line-3);
+    border-radius: var(--d-r);
+    background-color: var(--d-control);
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text);
+    box-shadow: none;
+  }
+
+  & [data-slot="sidebar-input"]::placeholder {
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="sidebar-input"]:focus-visible {
+    border-color: var(--d-accent);
+    box-shadow: none;
+  }
+
+  & > svg {
+    left: 10px;
+    width: 14px;
+    height: 14px;
+    color: var(--d-text-3);
+  }
+}
+
+/* Footer: the account row stays where Ren has it (bottom left, opens the organization switcher), at Linear's
+   scale: a 36px row, 20px avatar, name small/500, organization mini text-3. Help and settings sit beside it. */
+html.dark [data-slot="sidebar"] [data-sidebar-part="footer"] {
+  padding: 4px 0 0;
+}
+
+html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-sidebar-part="account"][data-size] {
+  height: 36px;
+  gap: 8px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--d-r);
+
+  & [data-slot="avatar"] {
+    width: 20px;
+    height: 20px;
+    font-size: 0.5625rem;
+  }
+
+  & > span:nth-child(2) {
+    gap: 1px;
+  }
+
+  & > span:nth-child(2) > span:first-child {
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+
+  & > span:nth-child(2) > span:last-child {
+    font-size: var(--d-micro);
+    font-weight: 450;
+    color: var(--d-text-3);
+  }
+
+  & > svg {
+    width: 14px;
+    height: 14px;
+    color: var(--d-text-3);
+  }
+
+  &[data-popup-open] {
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="sidebar"] [data-sidebar-part="help-settings"] {
+  gap: 2px;
+}
+
+/* The rail: a 1px line at the panel's edge while hovered. */
+@media (hover: hover) {
+  html.dark [data-slot="sidebar-rail"]:hover::after {
+    background-color: var(--d-line-3);
+  }
+}
+
+/* ───────────── Main panel ───────────── */
+
+html.dark [data-slot="sidebar-inset"] {
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-r-panel);
+  background-color: var(--d-panel);
+  box-shadow: none;
+  --tw-inset-ring-shadow: 0 0 #0000;
+}
+
+@media (min-width: 768px) {
+  html.dark [data-slot="sidebar-inset"] {
+    height: calc(100svh - 2 * var(--d-gutter));
+    margin: var(--d-gutter) var(--d-gutter) var(--d-gutter) 0;
+  }
+
+  /* The "Tabs" layout: the window tabs sit in a 40px strip above the panel. */
+  html.dark [data-slot="sidebar-wrapper"]:has(> [data-slot="tab-bar"]) > [data-slot="sidebar-inset"] {
+    height: calc(100svh - 40px - var(--d-gutter));
+    margin-top: 40px;
+  }
+
+  html.dark [data-slot="sidebar"][data-collapsible="icon"] ~ [data-slot="sidebar-inset"] {
+    margin-inline-start: 0;
+  }
+}
+
+/* ───────────── Page anatomy ───────────── */
+
+/* The header bar: 44px, full bleed, 1px bottom line; title or breadcrumb left, 28px ghost controls right. */
+html.dark [data-slot="page-bar"] {
+  display: flex;
+  box-sizing: border-box;
+  height: var(--d-header);
+  min-height: var(--d-header);
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: var(--shell-bar-pad);
+  border-bottom: 1px solid var(--d-line);
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="page-bar"] [data-slot="page-bar"] {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  padding: 0;
+  border-bottom: 0;
+}
+
+html.dark [data-slot="page-bar"] > [data-slot="page-title"] {
+  display: inline-flex;
+  height: var(--d-ctl);
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.006em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="page-bar"] > [data-slot="page-description"] {
+  min-width: 0;
+  margin: 0 0 0 4px;
+  overflow: hidden;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="page-bar"] > [data-slot="page-actions"] {
+  display: flex;
+  min-width: 0;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+/* The toolbar row: 44px, 8px side padding, tabs left, tools right. */
+html.dark [data-slot="page-toolbar"]:not([hidden]) {
+  display: flex;
+  box-sizing: border-box;
+  height: var(--d-header);
+  min-height: var(--d-header);
+  flex: none;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+html.dark [data-slot="page-toolbar"] > [data-slot="page-tabs"] {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+/* A tab row that scrolls sideways keeps scrolling, without a scrollbar drawn through the 44px row. */
+html.dark [data-slot="page-toolbar"] [data-slot="tabs"] {
+  scrollbar-width: none;
+}
+
+html.dark [data-slot="page-toolbar"] > :is([data-slot="page-tools"], [data-slot="page-actions"]) {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+html.dark :is([data-slot="page-bar"], [data-slot="page-toolbar"]) [data-slot="input-group"] {
+  width: auto;
+  height: var(--d-ctl);
+  min-width: 9rem;
+  flex: 0 1 14rem;
+}
+
+/* Full-width pages: content runs full bleed with an 8px inset. */
+html.dark [data-page-width="full"] > [data-slot="page-leading"] {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+html.dark [data-page-width="full"] > [data-slot="page-leading"]:not(:has(:not(:empty))) {
+  display: none;
+}
+
+html.dark [data-page-width="full"] [data-slot="page-body"] {
+  gap: 16px;
+  padding: 0 8px 8px;
+}
+
+html.dark [data-page-width="full"]:not(:has(> [data-slot="page-toolbar"]:not([hidden]))) [data-slot="page-body"] {
+  padding-top: 8px;
+}
+
+/* The grid (every page that is not full: Apps, all of Settings, forms, catalogs, a space's settings pages).
+   One centred 59rem column, one top offset, one title block, the view-pill row, then the content. The
+   frame never changes between these pages; only what is inside it does. */
+html.dark [data-page-width="grid"] {
+  & [data-slot="page-head"],
+  & [data-slot="page-body"] {
+    max-width: 59rem;
+    padding-inline: 24px;
+  }
+
+  & [data-slot="page-head"] {
+    gap: 20px;
+    padding-top: 64px;
+  }
+
+  & [data-slot="page-body"] {
+    gap: 24px;
+    padding-top: 24px;
+    padding-bottom: 64px;
+  }
+
+  /* A back link rides in the top offset, so the title still lands on the same line. */
+  & [data-slot="page-back"] {
+    height: var(--d-ctl);
+    margin-top: -44px;
+    margin-bottom: -4px;
+    align-items: center;
+  }
+
+  /* The title sits on one line whatever the header carries; its controls centre on that line. */
+  & [data-slot="page-head"] [data-slot="page-header"] {
+    align-items: flex-start;
+  }
+
+  & [data-slot="page-head"] [data-slot="page-header"] > :last-child:not(:first-child) {
+    margin-top: -2px;
+  }
+
+  & [data-slot="page-head"] [data-slot="page-header"] > div:first-child {
+    gap: 6px;
+  }
+
+  & [data-slot="page-head"] [data-slot="page-title"] {
+    font-size: var(--d-title);
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--d-text);
+  }
+
+  & [data-slot="page-head"] [data-slot="page-description"] {
+    overflow: hidden;
+    font-size: var(--d-small);
+    font-weight: 450;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="page-toolbar"]:not([hidden]) {
+    height: auto;
+    min-height: var(--d-ctl-lg);
+    padding: 0;
+  }
+
+  /* The pill row always holds the page's actions in the grid; with neither pills nor actions it folds away. */
+  &
+    [data-slot="page-toolbar"]:not(
+      :has(> [data-slot="page-tabs"] > :not(:empty), > [data-slot="page-actions"] > :not(:empty))
+    ) {
+    display: none;
+  }
+
+  & [data-slot="page-toolbar"] > [data-slot="page-tabs"] {
+    gap: 4px;
+  }
+}
+
+/* Section headings in a column: regular/500, white; their description small text-3. */
+html.dark [data-slot="page-section-title"] {
+  font-size: var(--d-regular);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--d-text);
+}
+
+html.dark [data-slot="page-section-description"] {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--d-text-3);
+}
+
+/* ───────────── Breadcrumbs (detail pages' header bars) ───────────── */
+
+html.dark [data-slot="page-bar"] [data-slot="breadcrumb"] {
+  min-height: 0;
+  min-width: 0;
+}
+
+html.dark [data-slot="breadcrumb-list"] {
+  gap: 2px;
+  font-size: var(--d-small);
+  font-weight: 500;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="breadcrumb-item"] {
+  color: var(--d-text-2);
+
+  &[aria-current="page"] {
+    color: var(--d-text);
+  }
+
+  & > :is(a, button, [data-slot="breadcrumb-link"]) {
+    display: inline-flex;
+    height: var(--d-ctl);
+    max-width: 16rem;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-radius: var(--d-r-pill);
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+    text-decoration: none;
+    transition:
+      background-color 100ms ease-out,
+      color 100ms ease-out;
+  }
+
+  & > :is(a, button, [data-slot="breadcrumb-link"]):focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+  }
+
+  & > :is(h1, h2, span) {
+    padding-inline: 8px;
+    font-size: var(--d-small);
+    font-weight: 500;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="breadcrumb-item"] > :is(a, button, [data-slot="breadcrumb-link"]):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text);
+  }
+}
+
+html.dark [data-slot="breadcrumb-separator"] {
+  display: inline-flex;
+  width: 10px;
+  justify-content: center;
+  color: var(--d-text-4);
+
+  & > svg {
+    display: none;
+  }
+
+  &::before {
+    content: "›";
+    font-size: var(--d-small);
+    line-height: 1;
+  }
+}
+
+/* ───────────── Window tabs ("Tabs" layout) ─────────────
+ * They switch between sibling views, so they take the switcher recipe: separate 28px pills 4px apart.
+ * Idle: control fill, edge, contact, text-3. Selected: active fill, the same edge, no contact, white text. */
+
+html.dark [data-slot="tab-bar"] {
+  gap: 4px;
+  padding-inline-start: 0;
+
+  & [role="tablist"] {
+    gap: 4px;
+    padding: 3px;
+    margin: -3px;
+  }
+
+  & [data-tab-strip="tab"] {
+    height: var(--d-ctl);
+    gap: 6px;
+    padding-inline: 8px 6px;
+    border: 1px solid var(--d-edge);
+    border-radius: var(--d-r-pill);
+    background-color: var(--d-control);
+    font-size: var(--d-mini);
+    font-weight: 500;
+    color: var(--d-text-3);
+    box-shadow: var(--d-contact);
+    transition:
+      background-color 100ms ease-out,
+      color 100ms ease-out;
+  }
+
+  & [data-tab-strip="tab"][data-pinned] {
+    width: var(--d-ctl);
+    padding: 0;
+  }
+
+  & [data-tab-strip="tab"][data-active] {
+    border-color: var(--d-edge);
+    background-color: var(--d-control-active);
+    color: var(--d-text);
+    box-shadow: none;
+  }
+
+  & [data-tab-strip="tab"] svg {
+    width: 14px;
+    height: 14px;
+    color: currentColor;
+  }
+
+  & [data-tab-strip="tab"] [data-slot="button"] {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--d-r-pill);
+  }
+
+  & [data-tab-strip="tab"] [role="tab"] {
+    border-radius: var(--d-r-pill);
+  }
+
+  & [data-tab-strip="tab"]:has([role="tab"]:focus-visible) {
+    outline: 1px solid var(--d-accent);
+    outline-offset: 1px;
+  }
+
+  & [data-tab-strip="tab"] [role="tab"]:focus-visible {
+    outline: none;
+    box-shadow: none;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="tab-bar"] [data-tab-strip="tab"]:not([data-active]):hover {
+    background-color: var(--d-control-hover);
+    color: var(--d-text-2);
+  }
+}
+
+/* ───────────── Boot screen: the shell's geometry, so nothing jumps when the app arrives ───────────── */
+
+html.dark [data-slot="app-boot"] {
+  background-color: var(--d-page);
+}
+
+html.dark [data-slot="app-boot-sidebar"] {
+  display: none;
+}
+
+html.dark [data-slot="app-boot-panel"] {
+  flex: 1;
+  min-height: 100svh;
+  background-color: var(--d-panel);
+}
+
+@media (min-width: 768px) {
+  html.dark [data-slot="app-boot-sidebar"] {
+    display: block;
+    width: var(--boot-sidebar, var(--d-sidebar));
+    flex: none;
+  }
+
+  html.dark [data-slot="app-boot"][data-sidebar-state="collapsed"] [data-slot="app-boot-sidebar"] {
+    width: calc(3rem + 16px);
+  }
+
+  html.dark [data-slot="app-boot-panel"] {
+    min-height: 0;
+    height: calc(100svh - 2 * var(--d-gutter));
+    margin: var(--d-gutter) var(--d-gutter) var(--d-gutter) 0;
+    border: 1px solid var(--d-line);
+    border-radius: var(--d-r-panel);
+  }
+}

@@ -8,16 +8,39 @@ import { cn } from "cn"
 import { AppIcon } from "./app-icon.js"
 import { AccountList, AppSections } from "./app-list.js"
 import { pageWidths, useShapeId } from "./page.js"
+import { DarkUi } from "../lib/dark-ui.js"
 import type { CatalogApp } from "../lib/apps.js"
 
-export function AppDetailFrame(props: { name: string; children: ReactNode }) {
+export function AppDetailFrame(props: {
+  name: string
+  actions?: ReactNode | undefined
+  aside?: ReactNode | undefined
+  children: ReactNode
+}) {
+  const deep = DarkUi.useDarkUi()
+  const crumbs = (
+    <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>{props.name}</Breadcrumb.Root>
+  )
+  if (deep)
+    return (
+      <div data-screen="app" className="flex min-h-0 flex-1 flex-col">
+        <header data-slot="page-bar">
+          {crumbs}
+          {props.actions ? <div data-slot="page-actions">{props.actions}</div> : null}
+        </header>
+        <div data-slot="app-scroller" className="@container flex min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div data-slot="app-body" className="flex w-full">
+            <div data-slot="app-article" className="flex min-w-0 flex-1 flex-col">
+              {props.children}
+            </div>
+            {props.aside}
+          </div>
+        </div>
+      </div>
+    )
   return (
     <div className="flex flex-1 flex-col">
-      <Breadcrumb.Header>
-        <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>
-          {props.name}
-        </Breadcrumb.Root>
-      </Breadcrumb.Header>
+      <Breadcrumb.Header>{crumbs}</Breadcrumb.Header>
       <div className={cn("mx-auto flex w-full flex-1 flex-col gap-10 px-6 pt-8 pb-12", pageWidths.column)}>
         {props.children}
       </div>
@@ -27,7 +50,10 @@ export function AppDetailFrame(props: { name: string; children: ReactNode }) {
 
 export function AppHeader(props: { name: string; description: string; icon: string | null; actions: ReactNode }) {
   return (
-    <header className="flex items-center justify-between gap-6 max-sm:flex-col max-sm:items-start">
+    <header
+      data-slot="app-header"
+      className="flex items-center justify-between gap-6 max-sm:flex-col max-sm:items-start"
+    >
       <div className="flex min-w-0 items-center gap-4">
         <AppIcon
           name={props.name}
@@ -40,7 +66,7 @@ export function AppHeader(props: { name: string; description: string; icon: stri
           <p className="text-sm/6 text-muted-foreground">{props.description}</p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">{props.actions}</div>
+      {props.actions ? <div className="flex shrink-0 items-center gap-2">{props.actions}</div> : null}
     </header>
   )
 }

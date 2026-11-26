@@ -13,11 +13,13 @@ import { useMe } from "../../lib/use-me.js"
 import { errorMessage } from "../../lib/errors.js"
 import { organizationOptions } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 
 const modelsProbe = Session.ID.create()
 
 export function GeneralSettingsPage() {
   const { api, auth } = RouterContext.useRouterContext()
+  const deep = DarkUi.useDarkUi()
   const me = useMe()
   const queryClient = useQueryClient()
   const models = useSuspenseQuery(api.chat.models.queryOptions({ id: modelsProbe })).data.models
@@ -55,7 +57,10 @@ export function GeneralSettingsPage() {
     ])
   }
   return (
-    <Page title="General">
+    <Page
+      title="General"
+      description={deep ? "Your organization’s name, logo, default model and instructions." : undefined}
+    >
       <Rows>
         {[
           <Row key="logo" title="Logo" description="Shown in the sidebar and wherever your organization appears.">
