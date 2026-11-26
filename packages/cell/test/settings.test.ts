@@ -825,6 +825,39 @@ describe("settings in the cell", () => {
       expect(back.calls[0]?.body.model).toBe("stub-model")
     }),
   )
+  // oxlint-disable-next-line ren/no-comments -- F5: the brain moved such a chat to the default model, mid-turn too, onto a model Ren pays for.
+  it.live(
+    "a chat whose model leaves the list keeps it: its turn stops with model_unavailable, and works again when the model is back",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* open(TestSettings.layers())
+        yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-other" }))
+        const listed = (keep: boolean) =>
+          opened.access.endpoints.map((endpoint) =>
+            endpoint.id === "stub"
+              ? Struct.evolve(endpoint, {
+                  models: (models) => models.filter((model) => keep || model.id !== "stub-other"),
+                })
+              : endpoint,
+          )
+        yield* opened.pull(TestSettings.layers(), { models: listed(false) })
+        const session = yield* opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        expect(String(session.model?.id)).toBe("stub-other")
+        const gone = stub.script()
+        yield* opened.turn(gone)
+        expect(gone.calls).toEqual([])
+        const messages = yield* opened.harness.chat.messages(opened.sessionId, {}).pipe(Effect.orDie)
+        expect(JSON.stringify(messages.items)).not.toContain("no longer available")
+        const failed = messages.items.flatMap((message) =>
+          (message.type === "assistant" || message.type === "idle") && message.error ? [message.error.code] : [],
+        )
+        expect(failed).toContain("model_unavailable")
+        yield* opened.pull(TestSettings.layers(), { models: listed(true) })
+        const back = stub.script()
+        yield* opened.turn(back)
+        expect(back.calls[0]?.body.model).toBe("stub-other")
+      }),
+  )
   it.live(
     "Always lets later calls that a Ren ask rule covers run without asking, and a Ren deny still refuses them",
     () =>
@@ -996,7 +1029,7 @@ describe("settings in the cell", () => {
     }),
   )
   it.live(
-    "a chat that switches between available picks gets no message; one whose picked model is gone falls back to its settings' model and gets a message naming both",
+    "a chat that switches between available picks gets no message, nor one whose picked model is gone (it keeps it)",
     () =>
       Effect.gen(function* () {
         const opened = yield* open(
@@ -1035,10 +1068,8 @@ describe("settings in the cell", () => {
         )
         expect(yield* modelOf).toBe(picked.id)
         yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
-        expect(yield* modelOf).toBe("stub-model")
-        const notes = JSON.stringify(yield* inbox)
-        expect(notes).toContain("stub/stub-picked")
-        expect(notes).toContain("stub/stub-model")
+        expect(yield* modelOf).toBe(picked.id)
+        expect(yield* inbox).toEqual([])
       }),
   )
   it.live("the title request gives the model the chat as data to title, not as a request to act on", () =>

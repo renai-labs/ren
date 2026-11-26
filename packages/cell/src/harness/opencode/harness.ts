@@ -175,27 +175,6 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
 })
 
-// oxlint-disable-next-line ren/no-comments -- A chat whose picked model is gone uses its settings' model; the pick is cleared and the chat is told why (E55).
-const dropPick = Effect.fnUntraced(function* (
-  client: OpenCodeClient,
-  session: Option.Option<Session.Info>,
-  now: Model,
-) {
-  const info = Option.getOrUndefined(session)
-  const saved = Option.getOrUndefined(Option.flatMap(session, SessionSettings.savedOf))
-  if (!info || !saved?.model) return
-  yield* client.session
-    .update({ sessionID: info.id, metadata: SessionSettings.metadata(session, { ...saved, model: null }) })
-    .pipe(Effect.orDie)
-  yield* client.session
-    .synthetic({
-      sessionID: info.id,
-      text: `The model ${saved.model.endpointId}/${saved.model.modelId} is no longer available. This chat now uses ${now.endpointId}/${now.modelId}.`,
-      resume: false,
-    })
-    .pipe(Effect.orDie)
-})
-
 const filesReset = "ren.files-reset"
 
 const rejected = (error: { readonly message: string }) => new BrainRejectedError({ message: error.message })
@@ -644,12 +623,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               return
             }
             const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-            const picked = saved?.model && Option.isSome(lookup(saved.model)) ? saved.model : undefined
             const resolved = BrainSettings.resolve(
               pulled.layers,
               {
                 agent: chat.agent,
-                model: Option.fromUndefinedOr(picked),
+                model: Option.fromUndefinedOr(saved?.model ?? undefined),
                 drives: chat.drives,
                 hasHand: chat.hasHand,
                 defaultModels: saved?.defaultModels,
@@ -661,7 +639,6 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               yield* Effect.logWarning(`Chat ${chat.id} keeps its settings: ${resolved.failure.message}`)
               return
             }
-            if (!picked) yield* dropPick(client, session, resolved.success.primary.model)
             yield* gainWorkspace(server, chat.id, chat.directory)
             yield* applyHandInstructions(client, server, session.value.id, {
               hasHand: chat.hasHand !== false,

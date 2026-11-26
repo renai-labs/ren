@@ -98,11 +98,11 @@ const byCode: Readonly<Record<SessionError.Code, (input: Context) => Problem>> =
       admin: "Switch it on in Providers, or pick another model.",
       member: "Ask an admin to switch it on, or pick another model.",
     }),
-  model_unavailable: (input) => ({
-    title: `${input.model} isn’t available right now.`,
-    fix: "Pick another model to keep going.",
-    actions: ["model"],
-  }),
+  model_unavailable: (input) =>
+    askAdmin(input, `${input.model} isn’t available anymore.`, {
+      admin: `Check ${input.provider} in Providers, or pick another model.`,
+      member: "Pick another model, or ask an admin.",
+    }),
   subscription_limit: (input) => ({
     title: `All ${input.provider} subscriptions that serve ${input.model} are at their limit.`,
     fix: `The next resets ${nextReset(input) ?? "soon"}. Pick another model to keep going.`,

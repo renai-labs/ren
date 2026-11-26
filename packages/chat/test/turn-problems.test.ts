@@ -111,6 +111,24 @@ describe("TurnProblems.of", () => {
     expect(problem.fix).toBe("The next resets Mon 14:00. Pick another model to keep going.")
   })
 
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: the chat keeps its model; the card names it and where to look.
+  test("a model that left the list names the model, and tells an admin where to look", () => {
+    const shown = (admin: boolean) => {
+      const problem = refused({ code: "model_unavailable", admin, providerID: "groq", model: "llama" })
+      return { title: problem.title, fix: problem.fix, actions: problem.actions }
+    }
+    expect(shown(true)).toEqual({
+      title: "llama isn’t available anymore.",
+      fix: "Check Groq in Providers, or pick another model.",
+      actions: ["providers", "model"],
+    })
+    expect(shown(false)).toEqual({
+      title: "llama isn’t available anymore.",
+      fix: "Pick another model, or ask an admin.",
+      actions: ["model"],
+    })
+  })
+
   test("a vendor's own error is named by its code, and an error with no code gets the plain card", () => {
     expect(refused({ code: "rate_limited", admin: true }).title).toBe("Anthropic is getting too many requests.")
     expect(refused({ code: "context_too_long", admin: true }).actions).toEqual(["new", "model"])

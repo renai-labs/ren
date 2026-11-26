@@ -314,15 +314,14 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- A turn's error (an answer's, its retry's, or the turn's end) carries Ren's code (`ErrorCode`).
 export const message = (info: OpenCodeMessage.Info) =>
   readMessage(
-    info.type === "assistant"
-      ? pipe(
-          withMetadata(info),
-          (value) => nested(value, "error", coded),
-          (value) => nested(value, "retry", (retry) => nested(retry, "error", coded)),
-        )
-      : withMetadata(info.type === "compaction" ? withRecent(info) : info),
+    pipe(
+      withMetadata(info.type === "compaction" ? withRecent(info) : info),
+      (value) => nested(value, "error", coded),
+      (value) => nested(value, "retry", (retry) => nested(retry, "error", coded)),
+    ),
   )
 
 export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withMetadata))

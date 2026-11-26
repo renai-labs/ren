@@ -507,6 +507,8 @@ export const make = (
           items: () => copySources.flatMap((source) => source()),
         })
         const models = yield* Ref.make(initial.models)
+        // oxlint-disable-next-line ren/no-comments -- Every endpoint Ren listed since start: one that leaves the list is still Ren's.
+        const known = new Set(initial.models.map((endpoint) => endpoint.id))
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
           for (const integrationID of Ref.getUnsafe(models).map((endpoint) => endpoint.id))
@@ -741,6 +743,9 @@ export const make = (
         yield* context.websearch.transform((editor) => editor.default.set(editor.default.get() ?? "random"))
         yield* context.session.hook("model.request", (event) =>
           Effect.gen(function* () {
+            const gone = BrainSettings.unavailable(Ref.getUnsafe(models), known, event.model)
+            // oxlint-disable-next-line ren/no-comments -- OpenCode's hooks cannot fail; a defect ends the call, and OpenCode ends the turn with its message.
+            if (Option.isSome(gone)) return yield* Effect.die(new Error(gone.value))
             delete event.headers[Models.personHeader]
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
             Object.assign(
@@ -778,6 +783,7 @@ export const make = (
               if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
               const modelChanged = !Equal.equals(snapshot.models, (yield* Ref.get(applied)).models)
               yield* Ref.set(models, snapshot.models)
+              for (const endpoint of snapshot.models) known.add(endpoint.id)
               if (modelChanged) {
                 yield* integration.reload()
                 yield* provider.reload()

@@ -257,11 +257,12 @@ describe("BrainSettings.resolve", () => {
     expect(resolved.subagents.at(0)?.model).toEqual(stub)
   })
 
-  test("an unavailable chat pick falls back to the layers; no available model fails (E61)", () => {
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: the chat keeps its model, and its turns stop until the model is back.
+  test("a chat keeps its pick when the list does not have it; with no pick and no available model it fails (E61)", () => {
     expect(
       resolve({ ren: layer({ model: stub }), agents: [primary()] }, { model: { endpointId: "gone", modelId: "x" } })
         .primary.model,
-    ).toEqual(stub)
+    ).toEqual({ endpointId: "gone", modelId: "x" })
     const failed = BrainSettings.resolve(
       read({ ren: layer({ model: { endpointId: "gone", modelId: "x" } }), agents: [primary()] }),
       { agent: null, model: Option.none() },

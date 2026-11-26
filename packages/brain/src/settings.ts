@@ -126,10 +126,16 @@ export const resolve = (
     )
     return Object.keys(defaults).length ? { defaultModels: defaults } : {}
   }
-  const candidates = [Option.getOrUndefined(chat.model), ...own.toReversed().map((settings) => settings.model)]
-  const model = candidates.reduce<Option.Option<Session.Model>>(
-    (found, candidate) => (Option.isSome(found) ? found : available(lookup, candidate)),
-    Option.none(),
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: a chat keeps the model it picked while the list does not have it; its turns stop with `model_unavailable`, and it works again when the model is back. A layer's model must be listed.
+  const model = Option.orElse(
+    Option.map(chat.model, (picked) => Option.getOrElse(available(lookup, picked), () => picked)),
+    () =>
+      own
+        .toReversed()
+        .reduce<Option.Option<Session.Model>>(
+          (found, settings) => (Option.isSome(found) ? found : available(lookup, settings.model)),
+          Option.none(),
+        ),
   )
   if (Option.isNone(model)) return Result.fail(new Unconfigured({ message: "No available model is set." }))
   const instructions = (all: ReadonlyArray<Settings.Info>) =>
@@ -170,6 +176,19 @@ export const resolve = (
     ...(chat.drives && { drives: chat.drives }),
     ...(chat.hasHand === false && { hasHand: false }),
   })
+}
+
+// oxlint-disable-next-line ren/no-comments -- Providers F5: a call on a model of Ren's endpoints that the list no longer has (switched off, its key removed, its method changed, gone for good) stops its turn with this message; the code at its end is the one clients show a card for. An endpoint that never came from Ren is not Ren's to check.
+export const unavailable = (
+  endpoints: ReadonlyArray<Models.Endpoint>,
+  known: ReadonlySet<string>,
+  model: { readonly providerID: string; readonly id: string; readonly name?: string | undefined },
+): Option.Option<string> => {
+  if (!known.has(model.providerID)) return Option.none()
+  const listed = endpoints.some(
+    (endpoint) => endpoint.id === model.providerID && endpoint.models.some((each) => each.id === model.id),
+  )
+  return listed ? Option.none() : Option.some(`${model.providerID}/${model.id} is not available. (model_unavailable)`)
 }
 
 const rank = { allow: 0, ask: 1, deny: 2 } as const

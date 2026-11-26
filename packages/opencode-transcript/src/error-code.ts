@@ -2,7 +2,7 @@ export * as ErrorCode from "./error-code.js"
 
 // oxlint-disable typescript/no-misused-spread -- schema types are plain readonly structs; Struct.assign would lose the caller's error type
 
-import type { SessionError } from "@ren/schema/session/error"
+import { SessionError } from "@ren/schema/session/error"
 import { Option, Schema } from "effect"
 
 // oxlint-disable-next-line ren/no-comments -- Providers §9.4: the gateway's refusal codes (`gate.py`, `seat.py`) in Ren's words.
@@ -72,6 +72,9 @@ const byKind: Readonly<Record<string, SessionError.Code>> = {
   "provider.internal": "upstream_down",
 }
 
+// oxlint-disable-next-line ren/no-comments -- A brain's own refusal names Ren's code at the end of its message (`BrainSettings.unavailable`).
+const isCode = Schema.is(SessionError.Code)
+
 // oxlint-disable-next-line ren/no-comments -- Final unless the gateway or the kind of error says the same call may work again.
 const retryable = new Set<SessionError.Code>([
   "seat_unavailable",
@@ -85,7 +88,10 @@ export const of = <E extends SessionError.Info>(error: E): E => {
   if (error.code) return error
   const refusal = Option.orElse(fromBody(error.response?.body), () => fromMessage(error.message))
   const named = Option.flatMap(refusal, (found) =>
-    Option.map(Option.fromNullishOr(gateway[found.code]), (code) => ({ ...found, code })),
+    Option.map(Option.fromNullishOr(gateway[found.code] ?? (isCode(found.code) ? found.code : undefined)), (code) => ({
+      ...found,
+      code,
+    })),
   )
   if (Option.isSome(named))
     return {
