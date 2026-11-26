@@ -137,3 +137,15 @@ html.dark [data-slot="role-badge"] > [data-slot="select-trigger"]:not(#d):not(#e
   align-items: center;
   justify-content: space-between;
 }
+
+/* App icons in the catalog span both lines of the row (name and description), as they did before. */
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] {
+  align-self: center;
+}
+
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > span,
+html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > :is(div, svg) {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
