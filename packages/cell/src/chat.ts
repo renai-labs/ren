@@ -163,7 +163,8 @@ const events = (scope: Effect.Success<typeof scopeOf>) =>
                 event.type === "shell.exited" || event.type === "shell.deleted"
                   ? shells.get(event.data.id)
                   : sessionOf(event)
-              return !owner ? event.type.startsWith("server.") : allowed.has(owner)
+              // oxlint-disable-next-line ren/no-comments -- A frame of the whole brain (connected, models changed) reaches every chat's client.
+              return !owner ? event.type.startsWith("server.") || event.type === "models.changed" : allowed.has(owner)
             }),
           )
       const expiring = Option.match(scope.exp, {

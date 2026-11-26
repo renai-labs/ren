@@ -943,3 +943,34 @@ it.effect("the event stream sends heartbeats while a turn runs, and ends once th
     expect(yield* tick).toBe("stream.ended")
   }),
 )
+
+// oxlint-disable-next-line ren/no-comments -- F2: the app subscribes with a token for one chat; the brain's "models changed" frame names no chat and must still reach it.
+test("a client token for one chat gets the brain's models changed frame", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const own = yield* brain.chatAs({ sub: "user_1", sid: brain.id })
+      const frames = yield* Queue.unbounded<SessionEvent.Frame>()
+      yield* (yield* own.event["event.subscribe"]()).pipe(
+        Stream.runForEach((frame) => Queue.offer(frames, frame)),
+        Effect.forkScoped,
+      )
+      yield* Queue.take(frames).pipe(Effect.repeat({ until: (frame) => frame.type === "server.connected" }))
+      const access = Shared.access()
+      yield* brain.install({
+        endpoints: access.endpoints.map((endpoint) => ({
+          ...endpoint,
+          models: [
+            ...endpoint.models,
+            { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
+          ],
+        })),
+      })
+      const changed = yield* Queue.take(frames).pipe(
+        Effect.repeat({ until: (frame) => frame.type === "models.changed" }),
+        Effect.timeoutOption("10 seconds"),
+      )
+      expect(changed._tag).toBe("Some")
+    }),
+  ))
