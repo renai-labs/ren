@@ -1,0 +1,37 @@
+{
+  "artifact": [
+    "tools.ren.artifact_create",
+    "tools.ren.artifact_delete",
+    "tools.ren.artifact_read",
+    "tools.ren.artifact_status",
+    "tools.ren.artifact_update"
+  ],
+  "publish an artifact": [
+    "tools.ren.artifact_create",
+    "tools.ren.artifact_delete",
+    "tools.ren.artifact_read",
+    "tools.ren.artifact_status",
+    "tools.ren.artifact_update"
+  ],
+  "publish a page to share": [
+    "tools.ren.artifact_create",
+    "tools.ren.artifact_delete",
+    "tools.ren.artifact_read",
+    "tools.ren.artifact_status",
+    "tools.ren.artifact_update"
+  ],
+  "dashboard at its own URL": [
+    "tools.ren.artifact_create",
+    "tools.ren.artifact_status",
+    "tools.ren.artifact_update",
+    "tools.ren.artifact_delete",
+    "tools.ren.artifact_read"
+  ],
+  "build a website": [
+    "tools.opencode.read_mcp_resource",
+    "tools.opencode.session_rename",
+    "tools.opencode.worktree_create",
+    "tools.ren.artifact_create",
+    "tools.ren.artifact_delete"
+  ]
+}
