@@ -177,6 +177,8 @@ function Highlight(props: { text: string; query: string }) {
 
 interface Picker {
   readonly current: Choice
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: the chat's model is not in the list now; the chip stays, marked, and the chat keeps it.
+  readonly available: boolean
   readonly variant: string | undefined
   readonly isCurrent: (model: Choice) => boolean
   readonly variantOf: (model: Choice) => string | undefined
@@ -191,11 +193,13 @@ const usePicker = (
   const recent = Preference.usePreference(ChatPreferences.modelRecent)
   const setPreference = Preference.useSetPreference()
   const key = value ? modelKey(value) : undefined
-  const current = models.find((model) => modelKey(model) === key)
+  const listed = models.find((model) => modelKey(model) === key)
+  const current = listed ?? (value && { id: value.id, providerID: value.providerID, name: value.id, variants: [] })
   if (!current) return undefined
   const variant = value?.variant ?? current.variants.at(0)?.id
   return {
     current,
+    available: listed !== undefined,
     variant,
     isCurrent: (model) => modelKey(model) === key,
     variantOf: (model) => (modelKey(model) === key ? variant : defaultEffort(model, undefined)),
@@ -218,8 +222,8 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
     <InputGroupButton
       size="sm"
       disabled={props.disabled}
-      title={providerLabel(current)}
-      aria-label={`Choose model, ${props.picker.current.name}`}
+      title={props.picker.available ? providerLabel(current) : `${current.name} isn’t available anymore`}
+      aria-label={`Choose model, ${props.picker.current.name}${props.picker.available ? "" : ", not available"}`}
       aria-haspopup="dialog"
       className={cn(chipClass, "max-w-72 shrink")}
       onMouseDown={(event) => event.preventDefault()}
@@ -235,6 +239,7 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
           {current.name}
           {current.free ? " · Free" : ""}
         </bdi>
+        {props.picker.available ? null : <span className="ml-1 shrink-0 text-destructive">· Not available</span>}
       </span>
       <IconChevronDown className="-mr-1 -ml-0.5" />
     </InputGroupButton>

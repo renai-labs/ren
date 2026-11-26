@@ -11,6 +11,8 @@ export type SessionEventStreamEnded = {
   data: { reason: "idle" | "closing" }
 }
 
+export type SessionEventModelsChanged = { id: string; created: number; type: "models.changed"; data: {} }
+
 export type SessionID = string
 
 export type SessionModelRef = { id: string; providerID: string; variant?: string }
@@ -1094,6 +1096,7 @@ export type SessionEventFrame =
   | SessionEventServerConnected
   | SessionEventServerHeartbeat
   | SessionEventStreamEnded
+  | SessionEventModelsChanged
   | SessionEventEvent
 
 export type SessionMessageInfo =

@@ -42,6 +42,8 @@ const usage = {
 export const Connected = define("server.connected", {})
 export const Heartbeat = define("server.heartbeat", {})
 export const Ended = define("stream.ended", { reason: Schema.Literals(["idle", "closing"]) })
+// oxlint-disable-next-line ren/no-comments -- Providers F2: the brain's model list changed (a key saved, a model switched off, a seat's list); clients read it again.
+export const ModelsChanged = define("models.changed", {})
 
 export const Created = define("session.created", {
   ...base,
@@ -271,5 +273,7 @@ export type Type = Event["type"]
 
 export const types: ReadonlySet<string> = new Set(definitions.map((definition) => definition.fields.type.literal))
 
-export const Frame = Schema.Union([Connected, Heartbeat, Ended, Event]).annotate({ identifier: "SessionEvent.Frame" })
+export const Frame = Schema.Union([Connected, Heartbeat, Ended, ModelsChanged, Event]).annotate({
+  identifier: "SessionEvent.Frame",
+})
 export type Frame = typeof Frame.Type

@@ -288,3 +288,35 @@ test("the models atom loads again once the connection is back when its first rea
     const models = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
     expect(AsyncResult.isSuccess(models) && models.value.length).toBeGreaterThan(0)
   }).pipe(Effect.scoped, Effect.runPromise))
+
+// oxlint-disable-next-line ren/no-comments -- F2: an open chat read the brain's model list once per connection and never saw a model Ren added or removed.
+test("an open chat reads the brain's model list again when the brain's models change, without a reconnect", () =>
+  Effect.gen(function* () {
+    let streams = 0
+    const made = yield* setupWith(async (path, next) => {
+      if (path.startsWith("/chat/event")) streams++
+      return next()
+    })
+    const id = made.brain.id
+    const unmount = made.registry.mount(made.atoms.status(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmount))
+    const unmountModels = made.registry.mount(made.atoms.models(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmountModels))
+    yield* made.until(made.atoms.status(id), (value) => AsyncResult.isSuccess(value) && value.value === "connected")
+    const first = yield* made.until(made.atoms.models(id), AsyncResult.isSuccess)
+    const ids = (value: typeof first) => (AsyncResult.isSuccess(value) ? value.value.map((model) => model.id) : [])
+    expect(ids(first)).not.toContain("stub-new")
+    const access = Shared.access()
+    yield* made.brain.install({
+      endpoints: access.endpoints.map((endpoint) => ({
+        ...endpoint,
+        models: [
+          ...endpoint.models,
+          { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
+        ],
+      })),
+    })
+    const after = yield* made.until(made.atoms.models(id), (value) => ids(value).includes("stub-new"))
+    expect(ids(after)).toContain("stub-new")
+    expect(streams).toBe(1)
+  }).pipe(Effect.scoped, Effect.runPromise))

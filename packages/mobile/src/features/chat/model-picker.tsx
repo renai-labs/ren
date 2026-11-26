@@ -25,7 +25,7 @@ import chatgpt from "../../../assets/providers/chatgpt.png"
 
 type Choice = SessionModel.Choice
 
-const logos: Readonly<Record<string, number>> = { Anthropic: claude, OpenAI: chatgpt }
+const logos: Readonly<Record<string, number>> = { anthropic: claude, openai: chatgpt }
 
 function ProviderMark(props: { readonly model: Pick<Choice, "providerID" | "id"> }) {
   const logo = logos[ModelChoice.vendorOf(props.model)]
@@ -174,7 +174,7 @@ function ModelSheet(props: {
           return (
             <View key={provider}>
               <Text className="px-5 pt-3 pb-1 text-xs font-medium text-muted-foreground">
-                {ModelChoice.providerName(provider)}
+                {ModelChoice.providerName(provider, props.models)}
               </Text>
               {models.map((model) => (
                 <ModelRow

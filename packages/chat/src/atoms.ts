@@ -172,6 +172,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const retryAt = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.retryAt))
 
+  const modelsRevision = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.modelsRevision))
+
   const boot = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.boot))
 
   const project = (get: Atom.AtomContext, view: View, detail: TimelineDetail.Detail | undefined) =>
@@ -217,6 +219,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
   const models = Atom.family((sessionID: Session.ID) =>
     Atom.make((get) => {
       const connection = get(status(sessionID))
+      get(modelsRevision(sessionID))
       const previous = Option.flatMap(
         get.self<AsyncResult.AsyncResult<Effect.Success<ChatSession.ChatSession["models"]>, unknown>>(),
         AsyncResult.value,

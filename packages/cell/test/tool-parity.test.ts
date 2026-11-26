@@ -522,7 +522,9 @@ it.live("a shell removed on the sandbox while it runs reports one exit, killed, 
   Effect.gen(function* () {
     const opened = yield* Remote
     const session = yield* RemoteHost.begin(opened)
-    const events = yield* Queue.unbounded<SessionEvent.Event | typeof SessionEvent.Connected.Type>()
+    const events = yield* Queue.unbounded<
+      SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.ModelsChanged.Type
+    >()
     yield* opened.harness.chat.events.pipe(
       Stream.runForEach((event) => Queue.offer(events, event)),
       Effect.forkScoped,
@@ -530,7 +532,9 @@ it.live("a shell removed on the sandbox while it runs reports one exit, killed, 
     yield* Queue.take(events).pipe(Effect.repeat({ until: (event) => event.type === "server.connected" }))
     const created = yield* opened.harness.chat.createShell(session.sessionId, { command: "sleep 30" })
     yield* opened.harness.chat.removeShell(session.sessionId, created.id)
-    const seen: Array<SessionEvent.Event | typeof SessionEvent.Connected.Type> = []
+    const seen: Array<
+      SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.ModelsChanged.Type
+    > = []
     yield* Queue.take(events).pipe(
       Effect.tap((event) => Effect.sync(() => seen.push(event))),
       Effect.repeat({ until: (event) => event.type === "shell.deleted" }),

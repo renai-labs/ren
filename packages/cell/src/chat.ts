@@ -65,7 +65,10 @@ const frame = <const Type extends "server.heartbeat">(type: Type) =>
 
 export const frames = (input: {
   readonly live: Stream.Stream<
-    SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.Ended.Type,
+    | SessionEvent.Event
+    | typeof SessionEvent.Connected.Type
+    | typeof SessionEvent.Ended.Type
+    | typeof SessionEvent.ModelsChanged.Type,
     Error
   >
   readonly active: Effect.Effect<boolean>
@@ -111,7 +114,9 @@ export const frames = (input: {
     }),
   )
 
-const sessionOf = (event: SessionEvent.Event | typeof SessionEvent.Connected.Type): string | undefined => {
+const sessionOf = (
+  event: SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.ModelsChanged.Type,
+): string | undefined => {
   const data: unknown = event.data
   if (!Predicate.isObject(data)) return undefined
   if (Predicate.hasProperty(data, "sessionID") && Predicate.isString(data.sessionID)) return data.sessionID

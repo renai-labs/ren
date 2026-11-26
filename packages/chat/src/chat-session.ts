@@ -551,6 +551,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       yield* refresh(command.read)
     })
 
+  // oxlint-disable-next-line ren/no-comments -- Counts the brain's "models changed" frames; the model list is read again on each.
+  const modelsRevision = yield* SubscriptionRef.make(0)
+
   const reread = Effect.suspend(() => {
     reads.invalidate()
     return Effect.forEach([...wanted.values()], refresh, { discard: true })
@@ -561,7 +564,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const commands = yield* SubscriptionRef.modify(state, (current) => {
         const result = frames.reduce<Reducer.Result>(
           (accumulated, frame) => {
-            if (frame.type === "server.heartbeat" || frame.type === "stream.ended") return accumulated
+            if (frame.type === "server.heartbeat" || frame.type === "stream.ended" || frame.type === "models.changed")
+              return accumulated
             const next =
               frame.type === "server.connected"
                 ? Reducer.connected(accumulated.state)
@@ -573,12 +577,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         return [result.commands, result.state]
       })
       if (frames.some((frame) => frame.type === "server.connected")) yield* reread
+      if (frames.some((frame) => frame.type === "models.changed"))
+        yield* SubscriptionRef.update(modelsRevision, (n) => n + 1)
       yield* Effect.forEach(commands, execute, { discard: true })
       yield* PubSub.publishAll(
         events,
         frames.filter(
           (frame): frame is SessionEvent.Event =>
-            frame.type !== "server.connected" && frame.type !== "server.heartbeat" && frame.type !== "stream.ended",
+            frame.type !== "server.connected" &&
+            frame.type !== "server.heartbeat" &&
+            frame.type !== "stream.ended" &&
+            frame.type !== "models.changed",
         ),
       )
     })
@@ -1134,6 +1143,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     state,
     status: connection.status,
     retryAt: connection.retryAt,
+    modelsRevision,
     boot,
     open,
     enrich,

@@ -4,15 +4,14 @@ import { SessionModel } from "@ren/schema/session/model"
 
 type Choice = SessionModel.Choice
 
-const providerNames: Readonly<Record<string, string>> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-}
+// oxlint-disable-next-line ren/no-comments -- D5: a provider's name comes from the brain's list (`providerName`), never from a table here.
+export const providerName = (providerID: string, models: ReadonlyArray<Pick<Choice, "providerID" | "providerName">>) =>
+  models.find((model) => model.providerID === providerID && model.providerName)?.providerName ??
+  providerID.charAt(0).toUpperCase() + providerID.slice(1)
 
-export const providerName = (providerID: string) => providerNames[providerID] ?? providerID
-
+// oxlint-disable-next-line ren/no-comments -- The provider that makes a model: for one of Ren's models, the provider its id starts with.
 export const vendorOf = (model: Pick<Choice, "providerID" | "id">) =>
-  providerNames[model.providerID] ?? providerNames[model.id.split("/").at(0) ?? ""] ?? model.providerID
+  model.providerID === "ren" ? (model.id.split("/").at(0) ?? model.providerID) : model.providerID
 
 const effortOrder = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 

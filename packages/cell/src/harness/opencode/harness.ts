@@ -25,6 +25,7 @@ import {
   Equal,
   Layer,
   Option,
+  PubSub,
   Ref,
   Result,
   Schema,
@@ -591,6 +592,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     models: ReadonlyArray<Models.Endpoint>
   } = { firstAskedAt: new Map(), models: endpoints }
   const mutations = yield* Semaphore.make(1)
+  const modelsChanged = yield* PubSub.unbounded<void>()
   const restate = new Set<string>()
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (
     update: HarnessConfig.Update,
@@ -651,6 +653,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         { discard: true },
       )
     }
+    const changed = encodeModels(models) !== encodeModels(state.models)
     state.models = models
     yield* server.configure({
       models,
@@ -659,6 +662,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       ...(update.channels && { channels: update.channels }),
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
+    if (changed) yield* PubSub.publish(modelsChanged, undefined)
   })
   // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers and memory; an opening resolves each chat from them, not from what the chat had before.
   yield* configure({
@@ -690,6 +694,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     chat: OpenCodeChat.make(
       server,
       Effect.sync(() => Option.some(Models.catalog({ endpoints: state.models }))),
+      Stream.fromPubSub(modelsChanged),
     ),
     configure: (update: HarnessConfig.Update) => mutations.withPermit(configure(update)),
     configuration: server.configuration,

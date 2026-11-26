@@ -67,7 +67,10 @@ interface Command extends Mentions {
 }
 
 export interface Chat {
-  readonly events: Stream.Stream<SessionEvent.Event | typeof SessionEvent.Connected.Type, Error>
+  readonly events: Stream.Stream<
+    SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.ModelsChanged.Type,
+    Error
+  >
   readonly active: Effect.Effect<boolean>
   readonly status: Effect.Effect<SessionStatus.Family>
   readonly models: Effect.Effect<ReadonlyArray<SessionModel.Info>>

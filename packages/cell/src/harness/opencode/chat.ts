@@ -79,6 +79,8 @@ export const make = (
   >,
   // oxlint-disable-next-line ren/no-comments -- Ren's list as the harness applied it: each picker row names its provider, method and price from it (Providers §5.3).
   catalog: Effect.Effect<Option.Option<Models.Catalog>> = Effect.succeed(Option.none()),
+  // oxlint-disable-next-line ren/no-comments -- Providers F2: each change of the model list the harness applied; clients read the list again.
+  modelsChanged: Stream.Stream<void> = Stream.empty,
 ): Harness.Chat => {
   const api = host.client
 
@@ -107,22 +109,34 @@ export const make = (
   const active = api.session.active().pipe(Effect.orDie, Effect.map(Object.keys))
 
   return {
-    events: OpenCodeEvents.stream(host.fetch).pipe(
-      Stream.mapEffect((raw) =>
-        Effect.gen(function* () {
-          const created = yield* Clock.currentTimeMillis
-          const translated = Translate.frame(raw, created)
-          if (Option.isNone(translated) && Translate.isAllowed(raw)) {
-            yield* Effect.logError(
-              "The brain cannot read an OpenCode event Ren supports; clients reread their state",
-              raw,
-            )
-            return [{ id: `evt_resync_${created}`, created, type: "server.connected", data: {} }] as const
-          }
-          return Option.toArray(translated)
-        }),
+    events: Stream.merge(
+      modelsChanged.pipe(
+        Stream.mapEffect(() =>
+          Effect.map(Clock.currentTimeMillis, (created) => ({
+            id: `evt_models_${created}`,
+            created,
+            type: "models.changed" as const,
+            data: {},
+          })),
+        ),
       ),
-      Stream.flattenIterable,
+      OpenCodeEvents.stream(host.fetch).pipe(
+        Stream.mapEffect((raw) =>
+          Effect.gen(function* () {
+            const created = yield* Clock.currentTimeMillis
+            const translated = Translate.frame(raw, created)
+            if (Option.isNone(translated) && Translate.isAllowed(raw)) {
+              yield* Effect.logError(
+                "The brain cannot read an OpenCode event Ren supports; clients reread their state",
+                raw,
+              )
+              return [{ id: `evt_resync_${created}`, created, type: "server.connected", data: {} }] as const
+            }
+            return Option.toArray(translated)
+          }),
+        ),
+        Stream.flattenIterable,
+      ),
     ),
     active: Effect.map(active, (ids) => ids.length > 0),
     status: Effect.map(active, (ids) =>
