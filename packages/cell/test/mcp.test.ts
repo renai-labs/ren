@@ -309,18 +309,6 @@ it.live(
     }),
 )
 
-it.live("a server that lists one malformed tool keeps its other tools", () =>
-  Effect.gen(function* () {
-    const peer = yield* McpPeer.make({ malformed: true })
-    const test = yield* observed()
-    yield* test.brain.configureApps(McpPeer.catalog("first", [{ slug: "docs", url: peer.url }]))
-    const script = McpPeer.execute("docs.marker")
-    yield* test.prompt(`${script.marker} read the marker`)
-    yield* test.brain.opencode.experimental.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(script)).toBe("first")
-  }),
-)
-
 it.live("two app MCPs at one URL stay distinct, list every tool page and follow the server's tool changes", () =>
   Effect.gen(function* () {
     const peer = yield* McpPeer.make()

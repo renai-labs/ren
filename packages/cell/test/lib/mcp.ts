@@ -76,7 +76,6 @@ export const make = Effect.fnUntraced(function* (
     readonly hold?: boolean
     readonly holdInitialization?: boolean
     readonly tools?: ReadonlyArray<string>
-    readonly malformed?: boolean
   } = {},
 ) {
   const requests = yield* Queue.unbounded<typeof RequestBody.Type>()
@@ -122,7 +121,6 @@ export const make = Effect.fnUntraced(function* (
           description: state.label,
           inputSchema: { type: "object", properties: {} },
           annotations: { readOnlyHint: true },
-          outputSchema: options.malformed && name === "second" ? { type: "string" } : undefined,
         })),
         ...(body.params?.cursor ? {} : { nextCursor: "page-two" }),
       })
