@@ -43,7 +43,7 @@ export function CategoryPage(props: { slug: string }) {
     </Breadcrumb.Root>
   )
   return (
-    <div data-screen="apps" className="relative flex flex-1 flex-col">
+    <div data-screen="apps" className="relative flex min-h-0 flex-1 flex-col">
       {deep ? null : (
         <div className="absolute top-0 left-0 z-30">
           <Breadcrumb.Header>{crumbs}</Breadcrumb.Header>

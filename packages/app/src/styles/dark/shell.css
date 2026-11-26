@@ -416,10 +416,10 @@ html.dark [data-slot="sidebar-inset"] {
     margin: var(--d-gutter) var(--d-gutter) var(--d-gutter) 0;
   }
 
-  /* The "Tabs" layout: the window tabs sit in a 40px strip above the panel. */
+  /* The "Tabs" layout: the window tabs sit in a 44px strip above the panel. */
   html.dark [data-slot="sidebar-wrapper"]:has(> [data-slot="tab-bar"]) > [data-slot="sidebar-inset"] {
-    height: calc(100svh - 40px - var(--d-gutter));
-    margin-top: 40px;
+    height: calc(100svh - 44px - var(--d-gutter));
+    margin-top: 44px;
   }
 
   html.dark [data-slot="sidebar"][data-collapsible="icon"] ~ [data-slot="sidebar-inset"] {
