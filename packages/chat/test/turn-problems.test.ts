@@ -76,10 +76,10 @@ describe("TurnProblems.of", () => {
       actions: ["providers", "model"],
     })
     expect(shown({ code: "model_off", admin: false }).actions).toEqual(["model"])
-    expect(shown({ code: "subscription_limit", admin: true })).toEqual({
+    expect(shown({ code: "subscription_limit", admin: false })).toEqual({
       title: "All Anthropic subscriptions that serve Claude Opus 5.5 are at their limit.",
-      fix: "The next resets soon. Pick another model to keep going.",
-      actions: ["model"],
+      fix: "Check your subscriptions in Providers, or pick another model.",
+      actions: ["providers", "model"],
     })
     expect(shown({ code: "inference_unavailable", admin: true })).toEqual({
       title: "Model access is not available now.",
@@ -108,7 +108,7 @@ describe("TurnProblems.of", () => {
       admin: false,
       timeZone: "UTC",
     })
-    expect(problem.fix).toBe("The next resets Mon 14:00. Pick another model to keep going.")
+    expect(problem.fix).toBe("The next resets Mon 14:00. Check your subscriptions in Providers, or pick another model.")
   })
 
   // oxlint-disable-next-line ren/no-comments -- Providers F5: the chat keeps its model; the card names it and where to look.

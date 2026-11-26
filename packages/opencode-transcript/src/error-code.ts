@@ -38,12 +38,22 @@ const fromBody = (body: string | undefined) =>
 
 const instant = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/u
 
-// oxlint-disable-next-line ren/no-comments -- The `claude` program passes on only an error's message; the gateway ends it with its code and names the reset in it.
+// oxlint-disable-next-line ren/no-comments -- A brain's own refusal names Ren's code at the end of its message (`BrainSettings.unavailable`).
+const isCode = Schema.is(SessionError.Code)
+
+// oxlint-disable-next-line ren/no-comments -- The `claude` program passes on only an error's message, in its own words around the gateway's; the gateway ends its message with its code and names the reset in it.
 const fromMessage = (message: string): Option.Option<typeof Refusal.Type> =>
-  Option.map(Option.fromNullishOr(/\(([a-z_]+)\)\s*$/u.exec(message)?.at(1)), (code) => {
-    const resetsAt = instant.exec(message)?.at(0)
-    return { code, ...(resetsAt && { resetsAt }) }
-  })
+  Option.map(
+    Option.fromNullishOr(
+      [...message.matchAll(/\(([a-z_]+)\)/gu)]
+        .map((match) => match.at(1) ?? "")
+        .findLast((code) => code in gateway || isCode(code)),
+    ),
+    (code) => {
+      const resetsAt = instant.exec(message)?.at(0)
+      return { code, ...(resetsAt && { resetsAt }) }
+    },
+  )
 
 // oxlint-disable-next-line ren/no-comments -- A vendor's own answer, for calls on an organization's key or subscription: what it says, then OpenCode's kind of error.
 const byText: ReadonlyArray<{ readonly matches: RegExp; readonly code: SessionError.Code }> = [
@@ -71,9 +81,6 @@ const byKind: Readonly<Record<string, SessionError.Code>> = {
   "provider.transport": "upstream_down",
   "provider.internal": "upstream_down",
 }
-
-// oxlint-disable-next-line ren/no-comments -- A brain's own refusal names Ren's code at the end of its message (`BrainSettings.unavailable`).
-const isCode = Schema.is(SessionError.Code)
 
 // oxlint-disable-next-line ren/no-comments -- Final unless the gateway or the kind of error says the same call may work again.
 const retryable = new Set<SessionError.Code>([

@@ -47,6 +47,13 @@ describe("a model error reaches the chat with Ren's code (providers §9.4)", () 
     )
   })
 
+  test("the claude program wraps the gateway's answer in its own words; the code inside still names it", () => {
+    const wrapped = `API Error: 429 {"type":"error","error":{"type":"rate_limit_error","message":"${limit}"}}`
+    expect(Option.map(failed({ type: "unknown", message: wrapped }), (error) => error?.code)).toEqual(
+      Option.some("subscription_limit"),
+    )
+  })
+
   test("a refusal that may pass on another try says so", () => {
     const error = failed({
       type: "provider.internal",

@@ -103,11 +103,15 @@ const byCode: Readonly<Record<SessionError.Code, (input: Context) => Problem>> =
       admin: `Check ${input.provider} in Providers, or pick another model.`,
       member: "Pick another model, or ask an admin.",
     }),
-  subscription_limit: (input) => ({
-    title: `All ${input.provider} subscriptions that serve ${input.model} are at their limit.`,
-    fix: `The next resets ${nextReset(input) ?? "soon"}. Pick another model to keep going.`,
-    actions: ["model"],
-  }),
+  // oxlint-disable-next-line ren/no-comments -- Providers F9: one card for every case where no seat can serve (full, signed out, both), for everyone: the seats are a pool.
+  subscription_limit: (input) => {
+    const reset = nextReset(input)
+    return {
+      title: `All ${input.provider} subscriptions that serve ${input.model} are at their limit.`,
+      fix: `${reset ? `The next resets ${reset}. ` : ""}Check your subscriptions in Providers, or pick another model.`,
+      actions: ["providers", "model"],
+    }
+  },
   seat_unavailable: (input) => ({
     title: `No ${input.provider} subscription can serve this now.`,
     fix: "Try again, or pick another model.",
