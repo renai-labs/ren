@@ -319,7 +319,7 @@ function Footer(props: {
       {shown ? <Failed key={shown.message} message={shown.message} /> : null}
       <DialogFooter className="m-0 items-center gap-3 px-5 sm:justify-between">
         {props.start}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div data-part="actions" className="flex flex-wrap items-center justify-end gap-2">
           {props.failure?.at === "stale" && props.onReload ? (
             <Button type="button" variant="outline" onClick={props.onReload}>
               Reload
@@ -507,7 +507,7 @@ function Editor(props: {
       />
       {inForm ? (
         <CustomAppForm value={context}>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-1 pb-5">
+          <div data-part="body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-1 pb-5">
             <FieldGroup className="gap-6">
               <McpSection />
               <SkillsSection />
@@ -518,7 +518,7 @@ function Editor(props: {
           </div>
         </CustomAppForm>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col px-5 pt-1 pb-5">
+        <div data-part="body" className="flex min-h-0 flex-1 flex-col px-5 pt-1 pb-5">
           <SpecEditor
             text={spec.text}
             onChange={(text) => {
@@ -557,7 +557,7 @@ function EditApp(props: { appId: string; onClose: () => void }) {
   const error = app.error ?? skills.error
   if (!data && error)
     return (
-      <div className="flex flex-col gap-4 p-5">
+      <div data-part="pending" className="flex flex-col gap-4 p-5">
         <DialogTitle>Edit app</DialogTitle>
         <WorkspacePending
           result={QueryResult.of({ data: undefined, error })}
@@ -569,7 +569,7 @@ function EditApp(props: { appId: string; onClose: () => void }) {
     )
   if (!data)
     return (
-      <div className="flex flex-col gap-4 p-5">
+      <div data-part="pending" className="flex flex-col gap-4 p-5">
         <DialogTitle>Edit app</DialogTitle>
         <SkeletonRows count={4} label="Loading app" />
       </div>
@@ -602,6 +602,7 @@ export function CustomAppDialog(props: {
       }}
     >
       <DialogContent // ast-grep-ignore: require-overlay-title -- the editor and its loading state render the DialogTitle
+        data-dialog="custom-app"
         className="flex max-h-[calc(100dvh-(--spacing(16)))] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
       >
         {props.appId ? (

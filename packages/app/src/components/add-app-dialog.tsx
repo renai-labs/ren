@@ -108,6 +108,7 @@ function AppResults(props: {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a list of Item rows; Item renders a div
       role="list"
       aria-label="Apps"
+      data-part="results"
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-4"
     >
       {loading ? <AppRowsSample count={8} /> : null}
@@ -154,12 +155,16 @@ export function AddAppDialog(props: {
             Add app
           </DialogTrigger>
         ) : null}
-        <DialogContent className="flex h-[min(--spacing(140),calc(100dvh-(--spacing(16))))] flex-col gap-0 p-0 sm:max-w-140">
+        <DialogContent
+          data-dialog="add-app"
+          data-height="fixed"
+          className="flex h-[min(--spacing(140),calc(100dvh-(--spacing(16))))] flex-col gap-0 p-0 sm:max-w-140"
+        >
           <DialogHeader className="px-6 pt-6 pb-4">
             <DialogTitle className="text-base">Add apps to {props.space.name}</DialogTitle>
             <DialogDescription>Pick the apps this space can use. You can add more later.</DialogDescription>
           </DialogHeader>
-          <div className="px-6 pb-3">
+          <div data-part="search" className="px-6 pb-3">
             <InputGroup className="h-9">
               <InputGroupAddon>
                 <IconSearch />
@@ -181,7 +186,10 @@ export function AddAppDialog(props: {
               props.onPick(app)
             }}
           />
-          <p className="flex shrink-0 items-center justify-center gap-1 border-t px-6 py-3 text-sm text-muted-foreground">
+          <p
+            data-part="foot"
+            className="flex shrink-0 items-center justify-center gap-1 border-t px-6 py-3 text-sm text-muted-foreground"
+          >
             Can’t find it?
             <Button
               variant="link"

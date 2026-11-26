@@ -17,7 +17,23 @@ import { PersonAvatar } from "./person-avatar.js"
 import { PermissionRulesSample } from "./permission-rules.js"
 import { Breadcrumb } from "./breadcrumb.js"
 import { TaskLayout } from "./task-layout.js"
-import { Page, PageSkeleton, Row, Rows, RowsSample, Section, TableSample, useShapeId, type PageWidth } from "./page.js"
+import {
+  Page,
+  PageActions,
+  PageSkeleton,
+  PageTabs,
+  PageTabsList,
+  PageTabsTrigger,
+  Row,
+  Rows,
+  RowsSample,
+  Section,
+  TableSample,
+  useShapeId,
+  type PageWidth,
+} from "./page.js"
+import { Tabs } from "@ren/ui/tabs"
+import type { ReactNode } from "react"
 import { DarkUi } from "../lib/dark-ui.js"
 
 type SpaceSection = { title: string; description?: (space: string) => string; width?: PageWidth }
@@ -55,6 +71,32 @@ export const spaceSections: Readonly<Record<string, SpaceSection>> & { readonly 
   repositories: { title: "Repositories", description: (space) => `Repositories Ren can read in ${space}.` },
   channels: { title: "Channels", description: (space) => `Where people mention @Ren to work in ${space}.` },
   credentials: { title: "Secrets", description: (space) => `Secrets every chat in ${space} can use.` },
+}
+
+export const deepSpaceDescriptions: Readonly<Record<string, (space: string) => string>> = {
+  drive: (space) => `Files the chats in ${space} made or were given.`,
+  usage: (space) => `What ${space} spent on models, machines and tools.`,
+}
+
+export const deepSpaceWidths: Readonly<Record<string, PageWidth>> = {
+  inbox: "full",
+  overview: "full",
+  tasks: "full",
+  drive: "column",
+  automations: "full",
+  agents: "full",
+  factory: "full",
+  memory: "column",
+  apps: "column",
+  channels: "column",
+  credentials: "column",
+  repositories: "column",
+  members: "column",
+  instructions: "settings",
+  permissions: "column",
+  compute: "settings",
+  usage: "column",
+  settings: "settings",
 }
 
 export function TasksSample() {
@@ -137,7 +179,45 @@ function TaskSkeleton() {
   )
 }
 
-const tabbedSections = new Set(["inbox", "automations", "apps", "members", "permissions"])
+const deepSpacePills: Readonly<Record<string, ReadonlyArray<string>>> = {
+  members: ["Members", "Requests"],
+  apps: ["Installed", "Custom"],
+  drive: ["Files", "Artifacts"],
+  automations: ["Schedules", "Webhooks"],
+}
+
+const deepSpaceTools = new Set([
+  "members",
+  "apps",
+  "drive",
+  "memory",
+  "usage",
+  "credentials",
+  "channels",
+  "repositories",
+])
+
+const skeletonTools = (
+  <div className="h-8 w-56">
+    <span />
+  </div>
+)
+
+function SkeletonPills(props: { labels: ReadonlyArray<string> }) {
+  return (
+    <div inert className="contents">
+      <Tabs value={props.labels.at(0)}>
+        <PageTabsList>
+          {props.labels.map((label) => (
+            <PageTabsTrigger key={label} value={label}>
+              {label}
+            </PageTabsTrigger>
+          ))}
+        </PageTabsList>
+      </Tabs>
+    </div>
+  )
+}
 
 function TasksSkeleton() {
   const deep = DarkUi.useDarkUi()
@@ -147,13 +227,7 @@ function TasksSkeleton() {
       width="full"
       shape="tasks-first-load"
       actions={<div className="min-h-8" />}
-      tabs={
-        deep ? (
-          <div className="min-h-7">
-            <span />
-          </div>
-        ) : undefined
-      }
+      tabs={deep ? <SkeletonPills labels={["All", "Active", "Backlog", "Needs review", "My tasks"]} /> : undefined}
     >
       <TasksSample />
     </PageSkeleton>
@@ -196,9 +270,12 @@ function SettingsSample() {
 }
 
 function SpaceSectionSample(props: { section: string }) {
+  const deep = DarkUi.useDarkUi()
   const table = (columns: ReadonlyArray<string>) => <TableSample columns={columns} count={3} />
   if (props.section === "permissions") return <PermissionRulesSample />
-  if (props.section === "members") return table(["Name", "Email", "Status", ""])
+  if (props.section === "members") return table(["Name", "Email", deep ? "Role" : "Status", ""])
+  if (deep && props.section === "memory") return table(["Name", "File size", ""])
+  if (deep && props.section === "drive") return table(["Name", "Date modified", "File size", ""])
   if (props.section === "credentials") return table(["Secret", "Hosts", "Owner", ""])
   if (props.section === "repositories") return table(["Repository", "Description", ""])
   if (props.section === "apps") return table(["App", "Used in", "Status", ""])
@@ -220,12 +297,20 @@ function SpaceSectionSample(props: { section: string }) {
 }
 
 export function SpaceSectionSkeleton() {
+  const deep = DarkUi.useDarkUi()
   const path = Routing.useRenderedPath()
   const shapeId = useShapeId("page")
   const parts = path.split("/")
   if (parts.at(3) === "tasks") return parts.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
+  const pills = deep ? deepSpacePills[parts.at(3) ?? "inbox"] : undefined
   return (
     <Loading id={shapeId} label="Loading space">
+      {pills ? (
+        <PageTabs>
+          <SkeletonPills labels={pills} />
+        </PageTabs>
+      ) : null}
+      {deep && deepSpaceTools.has(parts.at(3) ?? "inbox") ? <PageActions>{skeletonTools}</PageActions> : null}
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-8">
           <SpaceSectionSample section={parts.at(3) ?? "inbox"} />
@@ -240,20 +325,37 @@ function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
   const tab = props.path.at(3) ?? "inbox"
   if (tab === "tasks") return props.path.at(4) ? <TaskSkeleton /> : <TasksSkeleton />
   const section = spaceSections[tab] ?? spaceSections.inbox
+  const width = deepSpaceWidths[tab] ?? section.width
+  const pills = deepSpacePills[tab]
+  const inboxTabs =
+    tab === "inbox" ? (
+      <div className="min-h-7">
+        <span />
+      </div>
+    ) : null
+  if (deep)
+    return (
+      <div data-screen={`space-${tab}`} className="contents">
+        {width === "full" ? (
+          <Page title={section.title} width="full" tabs={pills ? <SkeletonPills labels={pills} /> : inboxTabs} loading>
+            <SpaceSectionSample section={tab} />
+          </Page>
+        ) : (
+          <Page
+            title={section.title}
+            description={(deepSpaceDescriptions[tab] ?? section.description)?.("this space")}
+            width={width}
+            tabs={pills ? <SkeletonPills labels={pills} /> : undefined}
+            actions={deepSpaceTools.has(tab) ? skeletonTools : undefined}
+            loading
+          >
+            <SpaceSectionSample section={tab} />
+          </Page>
+        )}
+      </div>
+    )
   return (
-    <Page
-      title={section.title}
-      description={section.description?.("this space")}
-      width={section.width}
-      tabs={
-        deep && tabbedSections.has(tab) ? (
-          <div className="min-h-7">
-            <span />
-          </div>
-        ) : undefined
-      }
-      loading
-    >
+    <Page title={section.title} description={section.description?.("this space")} width={section.width} loading>
       <SpaceSectionSample section={tab} />
     </Page>
   )
@@ -265,7 +367,17 @@ export function RouteSkeleton() {
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
   if (path.startsWith("/tasks/")) return <TaskSkeleton />
   if (deep && (path === "/drive" || path === "/drive/artifacts"))
-    return <PageSkeleton title="Drive" description="Files every chat in your organization can read." width="wide" />
+    return (
+      <PageSkeleton
+        title="Drive"
+        description="Files every chat in your organization can read."
+        width="wide"
+        tabs={<SkeletonPills labels={["Files", "Artifacts"]} />}
+        actions={skeletonTools}
+      >
+        <TableSample columns={["Name", "Date modified", "File size", ""]} />
+      </PageSkeleton>
+    )
   if (path === "/drive") return <PageSkeleton title="Drive" width="full" />
   if (path === "/drive/artifacts") return <PageSkeleton title="Artifacts" width="full" />
   if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
@@ -276,6 +388,12 @@ export function RouteSkeleton() {
       </PageSkeleton>
     )
   if (path === "/tasks") return <TasksSkeleton />
+  if (deep && path === "/automations")
+    return (
+      <PageSkeleton title="Automations" width="full" tabs={<SkeletonPills labels={["Schedules", "Webhooks"]} />}>
+        <TableSample columns={["Name", "Space", "Frequency", "Next run", "Status", ""]} />
+      </PageSkeleton>
+    )
   if (path === "/automations")
     return (
       <PageSkeleton
@@ -291,7 +409,8 @@ export function RouteSkeleton() {
       <PageSkeleton
         title="Apps"
         width="wide"
-        actions={<div className="h-8 w-56" />}
+        tabs={deep ? <SkeletonPills labels={["All", "Managed", "Organization", "Installed"]} /> : undefined}
+        actions={deep ? skeletonTools : <div className="h-8 w-56" />}
         description="Apps give Ren new tools. Add one to a space and every chat there can use it."
       >
         <AppListingSample />
@@ -344,6 +463,7 @@ function HomeSkeleton() {
 }
 
 function SettingsPageSkeleton() {
+  const deep = DarkUi.useDarkUi()
   const path = Routing.useRenderedPath()
   const section = path.split("/").at(2) ?? "preferences"
   const provider = Object.values(Channels.byId).find((provider) => provider.id === path.split("/").at(3))
@@ -504,18 +624,50 @@ function SettingsPageSkeleton() {
         </Section>
       </div>
     )
+  const descriptions: Readonly<Record<string, string>> = {
+    members: "Everyone in your organization.",
+    providers: "Subscriptions your agents run on.",
+    credentials: "App accounts and secrets you can use.",
+    channels: "Invoke Ren from where your team already works.",
+    permissions: "What agents in every space may do, and what they ask first.",
+  }
+  if (deep) {
+    const views: Readonly<Record<string, ReadonlyArray<string>>> = {
+      members: ["Members", "Invitations", "Invite links"],
+      credentials: ["Apps", "Secrets"],
+    }
+    const pills = views[section]
+    const samples: Readonly<Record<string, ReactNode>> = {
+      members: <TableSample columns={["Name", "Email", "Role", "Spaces", ""]} />,
+      memory: <TableSample columns={["Name", "File size", ""]} />,
+      permissions: <PermissionRulesSample />,
+    }
+    return (
+      <Page
+        title={titles[section] ?? "Settings"}
+        description={
+          {
+            ...descriptions,
+            preferences: "Your profile, and how Ren looks and works for you.",
+            general: "Your organization’s name, logo, default model and instructions.",
+            memory: "What every chat in your organization remembers.",
+            usage: "What your organization spent, by space, member and model.",
+            billing: "Your plan, credits and invoices.",
+          }[section]
+        }
+        width={section === "general" || section === "preferences" ? "settings" : "wide"}
+        tabs={pills ? <SkeletonPills labels={pills} /> : undefined}
+        actions={["members", "credentials", "memory", "usage"].includes(section) ? skeletonTools : undefined}
+        loading
+      >
+        {samples[section] ?? body}
+      </Page>
+    )
+  }
   return (
     <Page
       title={titles[section] ?? "Settings"}
-      description={
-        {
-          members: "Everyone in your organization.",
-          providers: "Subscriptions your agents run on.",
-          credentials: "App accounts and secrets you can use.",
-          channels: "Invoke Ren from where your team already works.",
-          permissions: "What agents in every space may do, and what they ask first.",
-        }[section]
-      }
+      description={descriptions[section]}
       tabs={
         ["members", "credentials", "permissions"].includes(section) ? (
           <div className="min-h-8">

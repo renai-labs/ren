@@ -1,10 +1,10 @@
 import type { ReactNode } from "react"
 import type { AppProfileInfo, SpaceInfo } from "@ren/client"
-import { IconArrowRight, IconCheck, IconCopy, IconCube, IconLock } from "@tabler/icons-react"
+import { IconArrowRight, IconCheck, IconCopy, IconCube, IconLock, IconX } from "@tabler/icons-react"
 import { useMutation } from "@tanstack/react-query"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { toast } from "@ren/ui/sonner"
 import { Spinner } from "@ren/ui/spinner"
 import { cn } from "cn"
@@ -79,12 +79,13 @@ function Frame(props: {
         if (!open && !props.pending) props.onClose()
       }}
     >
-      <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-md">
+      <DialogContent showCloseButton={false} data-dialog="share-request" className="gap-0 p-0 sm:max-w-md">
         <div
+          data-part="hero"
           className={cn("flex flex-col items-center gap-8 px-10 pt-12 text-center", props.action ? "pb-6" : "pb-12")}
         >
           {link && LinkIcon ? (
-            <div className="flex items-start justify-center">
+            <div data-part="link" className="flex items-start justify-center">
               <Tile caption={link.account}>{logo}</Tile>
               <div aria-hidden className="flex size-16 items-center">
                 <span className={cn("flex-1 border-t", link.state === "locked" && "border-dashed")} />
@@ -112,7 +113,7 @@ function Frame(props: {
           ) : (
             logo
           )}
-          <div className="flex flex-col gap-2">
+          <div data-part="heading" className="flex flex-col gap-2">
             <DialogTitle className="text-xl/7 font-semibold text-balance">{props.title}</DialogTitle>
             {props.description ? (
               <DialogDescription className="text-balance">{props.description}</DialogDescription>
@@ -120,7 +121,21 @@ function Frame(props: {
           </div>
           {props.details}
         </div>
-        {props.action ? <div className="flex flex-col px-10 pt-2 pb-8">{props.action}</div> : null}
+        {props.action ? (
+          <div data-part="action" className="flex flex-col px-10 pt-2 pb-8">
+            {props.action}
+          </div>
+        ) : null}
+        <DialogClose
+          data-dark="only"
+          data-close="icon"
+          disabled={props.pending === true}
+          className="hidden"
+          render={<Button variant="ghost" size="icon-sm" />}
+        >
+          <IconX />
+          <span className="sr-only">Close</span>
+        </DialogClose>
       </DialogContent>
     </Dialog>
   )

@@ -1,13 +1,19 @@
 import { Suspense, useState } from "react"
-import { SpaceSectionSkeleton, spaceSections } from "../../components/route-skeleton.js"
+import {
+  SpaceSectionSkeleton,
+  deepSpaceDescriptions,
+  deepSpaceWidths,
+  spaceSections,
+} from "../../components/route-skeleton.js"
 import { useMutation } from "@tanstack/react-query"
-import { Outlet } from "@tanstack/react-router"
+import { Outlet, useNavigate } from "@tanstack/react-router"
+import { Tabs } from "@ren/ui/tabs"
 import type { SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { Spinner } from "@ren/ui/spinner"
 import { toast } from "@ren/ui/sonner"
 import { EmptyState } from "../../components/empty-state.js"
-import { Page, type PageWidth } from "../../components/page.js"
+import { Page, PageTabsList, PageTabsTrigger } from "../../components/page.js"
 import { errorMessage } from "../../lib/errors.js"
 import { isSoftwareFactory } from "../../lib/factory.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -17,32 +23,6 @@ import { useSpace } from "./use-space.js"
 import { Routing } from "../../lib/routing.js"
 import { DarkUi } from "../../lib/dark-ui.js"
 import { SpaceFrame } from "./space-frame.js"
-
-const deepDescriptions: Readonly<Record<string, (space: string) => string>> = {
-  drive: (space) => `Files the chats in ${space} made or were given.`,
-  usage: (space) => `What ${space} spent on models, machines and tools.`,
-}
-
-export const deepSpaceWidths: Readonly<Record<string, PageWidth>> = {
-  inbox: "full",
-  overview: "full",
-  tasks: "full",
-  drive: "column",
-  automations: "full",
-  agents: "full",
-  factory: "full",
-  memory: "column",
-  apps: "full",
-  channels: "full",
-  credentials: "full",
-  repositories: "full",
-  members: "full",
-  instructions: "settings",
-  permissions: "column",
-  compute: "settings",
-  usage: "column",
-  settings: "settings",
-}
 
 const sharedReason = (space: SpaceInfo) => {
   if (space.canJoin) return "Join to see its chats, tasks, files and apps."
@@ -94,6 +74,7 @@ const ownPages = new Set(["tasks"])
 export function SpaceLayout() {
   const deep = DarkUi.useDarkUi()
   const [tools, setTools] = useState<HTMLElement | null>(null)
+  const navigate = useNavigate()
   const space = useSpace()
   const path = Routing.useRenderedPath().split("/")
   const tab = path.at(3) ?? "inbox"
@@ -120,7 +101,7 @@ export function SpaceLayout() {
         </SpaceFrame.CrumbInto>
       )
     return (
-      <div data-screen={`space-${tab}`} className="contents">
+      <div data-screen={`space-${tab}`} data-view={path.at(4)} className="contents">
         {width === "full" ? (
           <Page
             title={section.title}
@@ -134,8 +115,25 @@ export function SpaceLayout() {
         ) : (
           <Page
             title={section.title}
-            description={(deepDescriptions[tab] ?? section.description)?.(space.name)}
+            description={(deepSpaceDescriptions[tab] ?? section.description)?.(space.name)}
             width={width}
+            tabs={
+              tab === "drive" ? (
+                <Tabs
+                  value={path.at(4) === "artifacts" ? "artifacts" : "files"}
+                  onValueChange={(value: string) => {
+                    if (value === "artifacts")
+                      void navigate({ to: "/spaces/$spaceId/drive/artifacts", params: { spaceId: space.id } })
+                    else void navigate({ to: "/spaces/$spaceId/drive", params: { spaceId: space.id } })
+                  }}
+                >
+                  <PageTabsList>
+                    <PageTabsTrigger value="files">Files</PageTabsTrigger>
+                    <PageTabsTrigger value="artifacts">Artifacts</PageTabsTrigger>
+                  </PageTabsList>
+                </Tabs>
+              ) : undefined
+            }
           >
             {outlet}
           </Page>

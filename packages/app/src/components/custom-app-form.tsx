@@ -215,11 +215,11 @@ function ToolsDialog(props: { name: string; result: McpInspectionResult; onClose
   ].filter((group) => group.tools.length > 0)
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : props.onClose())}>
-      <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent data-dialog="tools" className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b py-4 pr-14 pl-6">
           <DialogTitle>{props.name} tools</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-3">
+        <div data-part="body" className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-3">
           {groups.map((group) => (
             <ToolGroup key={group.title} title={group.title} tools={group.tools} />
           ))}
@@ -836,6 +836,8 @@ export function SkillsSection() {
     <FieldSet className="gap-3">
       <FieldLegend variant="label">Skills</FieldLegend>
       <Empty
+        data-part="dropzone"
+        data-dragging={dragging || undefined}
         className={cn(
           "gap-3 border p-4 transition-colors duration-150 ease-out",
           dragging && "border-ring bg-muted/50",
@@ -877,7 +879,16 @@ function LogoField() {
   return (
     <Popover>
       <PopoverTrigger
-        render={<Button type="button" variant="ghost" size="icon" aria-label="Change logo" className="shrink-0 p-0" />}
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Change logo"
+            data-part="logo"
+            className="shrink-0 p-0"
+          />
+        }
       >
         <AppIcon name={identity.name || "App"} description={identity.description} icon={identity.icon} />
       </PopoverTrigger>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { Button } from "@ren/ui/button"
 import { cn } from "cn"
 
@@ -7,6 +7,7 @@ export function ReadMore(props: { children: ReactNode; className?: string | unde
   const [open, setOpen] = useState(false)
   const [long, setLong] = useState(false)
   const text = useRef<HTMLDivElement>(null)
+  const id = useId()
   useEffect(() => {
     const element = text.current
     if (!element || open) return
@@ -17,8 +18,14 @@ export function ReadMore(props: { children: ReactNode; className?: string | unde
     return () => observer.disconnect()
   }, [open])
   return (
-    <div className="flex min-w-0 flex-col items-start gap-1">
-      <div ref={text} className={cn(props.className, !open && "line-clamp-5")}>
+    <div data-slot="read-more" className="flex min-w-0 flex-col items-start gap-1">
+      <div
+        ref={text}
+        id={id}
+        data-slot="read-more-text"
+        data-state={open ? "open" : "closed"}
+        className={cn(props.className, !open && "line-clamp-5")}
+      >
         {props.children}
       </div>
       {long || open ? (
@@ -26,6 +33,8 @@ export function ReadMore(props: { children: ReactNode; className?: string | unde
           variant="link"
           size="sm"
           aria-expanded={open}
+          aria-controls={id}
+          data-slot="read-more-toggle"
           className="h-auto px-0 text-foreground"
           onClick={() => setOpen((current) => !current)}
         >

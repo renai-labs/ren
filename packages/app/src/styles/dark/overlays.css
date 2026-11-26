@@ -2,7 +2,9 @@
  * Overlays.
  *
  * Every modal, side panel, menu, popover, picker, palette, tooltip and toast, in Linear's anatomy:
- *  - dialogs float 13vh from the top (a growing dialog never jumps), radius 20px, one of four widths;
+ *  - dialogs sit in the centre of the viewport both ways, radius 20px, one of four widths, one anatomy
+ *    (header 20px: title + close circle on one line, small description; body 20px; footer of 28px pills);
+ *    only the command palette and the "New task" create dialog stay pinned 13vh from the top;
  *  - the command palette is a 720px card with no dimmed backdrop and 46px rows;
  *  - sheets stop being drawers: a panel 8px off the top, right and bottom edges, with a 44px header bar;
  *  - menus, selects, popovers and pickers share one surface: --d-menu, radius 12px, 4px padding, 32px rows.
@@ -49,12 +51,17 @@ html.dark [data-slot="sheet-overlay"] {
 
 /* ---------------------------------------------------------------- Dialog shell */
 
+/* Centred both ways without a transform: inset 0 + margin auto + a content-sized height. Layout pixels
+   snap to the device grid (a -50% translate lands on half pixels at 110% zoom), and the box stays centred
+   as its content grows until the height cap, after which it scrolls inside. */
 html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"]) {
-  top: var(--ov-dialog-top);
-  translate: -50% 0;
+  inset: 0;
+  margin: auto;
+  translate: none;
   width: 100%;
+  height: fit-content;
   max-width: min(var(--ov-w-form), calc(100% - 32px));
-  max-height: calc(100dvh - var(--ov-dialog-top) - 24px);
+  max-height: calc(100dvh - 48px);
   border: 1px solid var(--ov-edge);
   border-radius: var(--d-r-dialog);
   background-color: var(--d-card);
@@ -64,6 +71,27 @@ html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit
   font-weight: 450;
   overscroll-behavior: contain;
   animation: d-ov-fade-in 200ms var(--ov-ease) both;
+}
+
+/* The two exceptions stay pinned 13vh from the top, as Linear's are: the command palette (Control+K) and the
+   "New task" create dialog both grow downward while you type, and a centred box would jump up and down on
+   every keystroke. */
+html.dark
+  [data-slot="dialog-content"]:is([data-dialog="palette"], [data-task-composer]):not(
+    [data-width="fill"],
+    [data-width="fit"]
+  ) {
+  bottom: auto;
+  margin: var(--ov-dialog-top) auto 0;
+  max-height: calc(100dvh - var(--ov-dialog-top) - 24px);
+}
+
+/* The one anatomy: a 20px shell, 20px between header, body and footer. Dialogs that draw their own
+   sections (p-0, data-flush) keep a zero shell and take the same insets per section below. */
+html.dark
+  [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"], [data-flush], [data-task-composer]) {
+  gap: 20px;
+  padding: 20px;
 }
 
 html.dark [data-slot="dialog-content"]:not([data-width="fill"], [data-width="fit"])[data-closed] {
@@ -94,64 +122,708 @@ html.dark [data-slot="dialog-content"][data-width="full"] {
   max-width: min(var(--ov-w-full), calc(100% - 32px));
 }
 
-/* Header: title large/600 with the close circle on its line. */
+/* Header: title large/600 at the start on a 28px line, the 28px close circle at the end of the same line,
+   the description directly under the title in small --d-text-3 (regular reads oversized at an 18px root). */
 html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-header"] {
-  gap: 6px;
-  padding-inline-end: 36px;
+  gap: 2px;
+  padding-inline-end: 28px;
+  text-align: start;
 }
 
 html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-title"] {
   color: var(--d-text);
   font-size: var(--d-large);
   font-weight: 600;
-  line-height: 1.4;
+  line-height: var(--d-ctl);
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-description"] {
   color: var(--d-text-3);
-  font-size: var(--d-regular);
+  font-size: var(--d-small);
   font-weight: 450;
-  line-height: 1.6;
+  line-height: 1.5;
   text-wrap: pretty;
 }
 
-/* A dialog that draws its own padding (p-0) gets the same header inset as the rest, so its title lines up
-   with the close circle. */
-html.dark [data-slot="dialog-content"][data-flush]:not([data-width="fill"]) > [data-slot="dialog-header"] {
-  padding-block: 1rem 14px;
-  padding-inline: 1.5rem 52px;
+/* A dialog that draws its own sections (p-0) gets the same 20px header inset, so its title lines up with
+   the close circle and with every other dialog. */
+html.dark
+  [data-slot="dialog-content"][data-flush]:not([data-width="fill"], [data-task-composer])
+  > [data-slot="dialog-header"] {
+  padding: 20px 48px 16px 20px;
+  border-color: var(--d-line-2);
 }
 
-/* The built-in close: a 28px ghost circle, centred on the title line. */
+/* The built-in close: a 28px ghost circle on the title's line; its 16px glyph ends 20px from the edge,
+   on the content's edge. */
 html.dark [data-slot="dialog-content"] > [data-close="icon"] {
-  /* The content's 1rem padding plus half the title's line box, less half the circle. */
-  top: calc(1rem + var(--d-large) * 0.7 - 14px);
-  right: 12px;
+  top: 20px;
+  right: 14px;
   width: var(--d-ctl);
   height: var(--d-ctl);
   border-radius: var(--d-r-pill);
   color: var(--d-text-3);
 }
 
-/* Footer: no rule above it, actions on the right as 28px pills, primary last. A non-button lead item
-   (a note, a "start" slot) is pushed to the left. */
+html.dark [data-slot="dialog-content"] > [data-close="icon"] > svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Body: fields with small/500 labels 6px above 32px inputs, 16px between fields, mini helper text. */
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="field-group"] {
+  gap: 16px;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="field"][data-orientation="vertical"] {
+  gap: 6px;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="field-description"] {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Footer: no rule, no band, no negative margins; actions on the right as 28px pills, primary last. A
+   tertiary action (data-footer="start") or a non-button lead item (a note) sits on the left of the same
+   line. */
 html.dark [data-slot="dialog-content"]:not([data-width="fill"]) [data-slot="dialog-footer"] {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 4px;
-  padding-block: 4px 14px;
+  margin: 0;
+  padding: 0;
   border-top: 0;
+  border-radius: 0;
   background-color: transparent;
 }
 
 html.dark
   [data-slot="dialog-footer"]
-  > :first-child:not(:last-child, button, [data-slot="button"], [data-slot="dialog-close"]) {
+  > :first-child:not(:last-child, button, [data-slot="button"], [data-slot="dialog-close"]),
+html.dark [data-slot="dialog-footer"] > [data-footer="start"] {
   margin-inline-end: auto;
+}
+
+/* Footer actions are sized to their label, never stretched into full-width blocks. */
+html.dark :is([data-slot="dialog-footer"], [data-slot="sheet-footer"]) > [class~="group/button"][class] {
+  width: auto;
+  border-radius: var(--d-r-pill);
+}
+
+/* One secondary look: a ghost "Cancel" beside the primary is the secondary pill (fill, edge, contact), so
+   every dialog's second action reads the same; only the tertiary action on the left stays ghost. */
+html.dark
+  :is([data-slot="dialog-footer"], [data-slot="sheet-footer"])
+  > [class~="group/button"][data-variant="ghost"]:not([data-footer="start"], :only-child) {
+  border-color: var(--d-edge);
+  background-color: var(--d-chip);
+  color: var(--d-text-2);
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark
+    :is([data-slot="dialog-footer"], [data-slot="sheet-footer"])
+    > [class~="group/button"][data-variant="ghost"]:not([data-footer="start"], :only-child):hover {
+    background-color: var(--c-chip-hover);
+    color: var(--d-text);
+  }
+}
+
+/* A long form (data-scroll="body"): the header and the footer stay put and only the body between them
+   scrolls, so the title, the close circle and the actions never leave the box. The body bleeds to the
+   shell's edges so its scrollbar sits at the edge and focus rings have room. */
+html.dark [data-slot="dialog-content"][data-scroll="body"]:not([data-width="fill"], [data-width="fit"]) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+html.dark
+  [data-slot="dialog-content"][data-scroll="body"]
+  :is([data-slot="dialog-header"], [data-slot="dialog-footer"]) {
+  flex: none;
+}
+
+html.dark [data-slot="dialog-content"][data-scroll="body"] [data-part="body"] {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 0;
+  margin: -4px -20px;
+  padding: 4px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--d-line-menu) transparent;
+}
+
+/* Parts a dialog renders for one mode only: data-dark="only" is hidden in light mode (Tailwind `hidden`)
+   and shown here; data-dark="hide" is the light-mode part it replaces. */
+html.dark [data-dark="only"]:is([data-slot="dialog-footer"], [data-slot="sheet-footer"]) {
+  display: flex;
+}
+
+html.dark [data-dark="hide"] {
+  display: none;
+}
+
+/* Read-only copy fields (Copyable: invite links, keys, URLs): a 32px field, the value in mini mono so a
+   whole link fits, the 24px ghost copy circle inside it 4px from its end. */
+html.dark [data-slot="dialog-content"] [data-slot="input-group"]:has(> input[readonly]) > input {
+  height: 100%;
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+/* Invite link: the helper line sits 6px under the field. */
+html.dark [data-dialog="invite-link"] [data-part="meta"] {
+  margin-top: 6px;
+}
+
+/* App account dialog (profile-dialog.tsx, "New GitHub account" and its steps): the same anatomy with the
+   app's 40px icon beside the title instead of a hero, a back circle before it on later steps, the body
+   scrolling between a fixed header and footer, the actions as 28px pills on the right, primary last. */
+html.dark [data-slot="dialog-content"][data-dialog="profile"] {
+  min-height: 0;
+}
+
+html.dark [data-dialog="profile"] [data-part="screen"] > [data-slot="dialog-header"] {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 14px 0 20px;
+}
+
+html.dark [data-dialog="profile"]:has(> [data-back]) [data-part="screen"] > [data-slot="dialog-header"] {
+  padding-inline-start: 52px;
+}
+
+html.dark [data-dialog="profile"] [data-part="screen"] > [data-slot="dialog-header"] > :first-child {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--d-r-card);
+}
+
+html.dark [data-dialog="profile"] [data-part="heading"] {
+  justify-content: center;
+  gap: 0;
+  min-height: 40px;
+}
+
+html.dark [data-dialog="profile"] [data-part="heading"] [data-slot="dialog-description"] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html.dark [data-dialog="profile"] [data-part="screen"] > [data-slot="dialog-header"] > [data-close="icon"],
+html.dark [data-dialog="profile"] > [data-back] {
+  flex: none;
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+  margin-top: 6px;
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+}
+
+html.dark [data-dialog="profile"] > [data-back] {
+  top: 20px;
+  left: 16px;
+}
+
+html.dark [data-dialog="profile"] [data-part="body"] {
+  gap: 16px;
+  padding: 20px;
+}
+
+html.dark [data-dialog="profile"] [data-part="screen"] > [data-slot="dialog-footer"] {
+  display: flex;
+  flex: none;
+  padding: 4px 20px 20px;
+}
+
+html.dark [data-dialog="profile"] [data-part="screen"] > [data-slot="dialog-header"]:not(:has(~ [data-part="body"])) {
+  padding-bottom: 20px;
+}
+
+/* The step buttons are written as full-width 40px blocks; here they are pills, primary last, an error on
+   the left of the same line. */
+html.dark [data-dialog="profile"] [data-slot="dialog-footer"] > [class~="group/button"] {
+  order: 1;
+  width: auto;
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+}
+
+html.dark [data-dialog="profile"] [data-slot="dialog-footer"] > [class~="group/button"][type="submit"] {
+  order: 2;
+}
+
+html.dark [data-dialog="profile"] [data-slot="dialog-footer"] > [data-footer="start"] {
+  order: 0;
+}
+
+html.dark [data-dialog="profile"] [data-footer="start"] > [class~="group/button"] {
+  width: auto;
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+}
+
+html.dark [data-footer="start"][data-tone="destructive"] > [class~="group/button"][data-variant],
+html.dark [class~="group/button"][data-variant][data-footer="start"][data-tone="destructive"] {
+  color: var(--c-danger);
+}
+
+@media (hover: hover) {
+  html.dark [data-footer="start"][data-tone="destructive"] > [class~="group/button"][data-variant]:hover,
+  html.dark [class~="group/button"][data-variant][data-footer="start"][data-tone="destructive"]:hover {
+    background-color: var(--c-danger-tint);
+    color: var(--c-danger);
+  }
+}
+
+html.dark [data-dialog="profile"] [data-slot="dialog-footer"] > [data-slot="field-error"] {
+  order: 0;
+  margin-inline-end: auto;
+  text-align: start;
+}
+
+html.dark [data-dialog="profile"] [data-part="body"] [class~="group/button"][class~="h-10"] {
+  height: var(--d-ctl-lg);
+}
+
+/* "Pick a space": menu-style rows, no frame: 16px glyph, name small/500, the state at the end ("Added"
+   with a check, or an "Add" ghost pill). The hover fill bleeds 8px past the text column. */
+html.dark [data-dialog="profile"] [data-part="spaces"] {
+  gap: 1px;
+  width: auto;
+  margin-inline: -8px;
+}
+
+html.dark [data-dialog="profile"] [data-part="spaces"] > [class~="group/button"][data-variant] {
+  height: 36px;
+  gap: 10px;
+  padding-inline: 8px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-dialog="profile"] [data-part="spaces"] > [class~="group/button"] > svg:first-child {
+  width: 16px;
+  height: 16px;
+  color: var(--d-text-3);
+}
+
+html.dark [data-dialog="profile"] [data-part="spaces"] [data-part="state"] {
+  gap: 6px;
+  padding-inline-end: 8px;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 450;
+}
+
+html.dark [data-dialog="profile"] [data-part="spaces"] [data-part="state"] > svg {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-dialog="profile"] [data-part="spaces"] [data-part="add"] {
+  display: inline-flex;
+  align-items: center;
+  height: var(--d-ctl-sm);
+  padding-inline: 10px;
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  html.dark [data-dialog="profile"] [data-part="spaces"] > [class~="group/button"][data-variant]:hover {
+    background-color: var(--d-hover);
+    color: var(--d-text);
+  }
+
+  html.dark [data-dialog="profile"] [data-part="spaces"] > [class~="group/button"]:hover [data-part="add"] {
+    background-color: var(--d-control-hover);
+    color: var(--d-text-2);
+  }
+}
+
+/* A cmdk picker inside a dialog (add members, add repositories): the search is a 32px field on the content
+   edges like every other input, the rows are menu rows whose highlight bleeds 8px past the text column. */
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command"] {
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-input-wrapper"] {
+  margin: 0 0 8px;
+  border-bottom: 0;
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-dialog="palette"])
+  [data-slot="command-input-wrapper"]
+  > [data-slot="input-group"] {
+  height: var(--d-ctl-lg);
+  border: 1px solid var(--d-line-3);
+  border-radius: var(--d-r);
+  background-color: var(--d-control);
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-dialog="palette"])
+  [data-slot="command-input-wrapper"]
+  > [data-slot="input-group"]:focus-within {
+  border-color: var(--d-accent);
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-dialog="palette"])
+  [data-slot="command-input-wrapper"]
+  [data-slot="input-group-addon"] {
+  padding-inline-start: 10px;
+  color: var(--d-text-3);
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-dialog="palette"])
+  [data-slot="command-input-wrapper"]
+  [data-slot="input-group-addon"]
+  svg {
+  width: 14px;
+  height: 14px;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-input"] {
+  color: var(--d-text);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-list"] {
+  margin-inline: -8px;
+  padding: 0;
+  scroll-padding-block: 4px;
+  overscroll-behavior: contain;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-item"] {
+  min-height: 36px;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: var(--d-r);
+  color: var(--d-text-2);
+  font-size: var(--d-small);
+  font-weight: 500;
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-item"][data-selected="true"] {
+  background-color: var(--d-hover);
+  color: var(--d-text);
+}
+
+html.dark [data-slot="dialog-content"]:not([data-dialog="palette"]) [data-slot="command-empty"] {
+  padding: 24px 8px;
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+}
+
+/* Rows (page.tsx) inside a dialog: a plain list on the content edges with hairlines between rows, not a
+   card inside the card (the settings-card frame is for pages). */
+html.dark :is([data-slot="dialog-content"], [data-slot="sheet-content"]) [data-slot="item-group"][class~="bg-card"] {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+html.dark [data-slot="dialog-content"] [data-slot="item-group"][class~="bg-card"] > [data-slot="item"] {
+  min-height: 52px;
+  padding-inline: 0;
+}
+
+html.dark [data-slot="dialog-content"] [data-slot="item-group"][class~="bg-card"] > [data-slot="item-separator"] {
+  margin-inline: 0;
+}
+
+/* The spaces picker inside a dialog or sheet (spaces-field.tsx: invite members, invite links, account
+   access): 40px rows and a 40px search row in px, not rem, so the box keeps its size at an 18px root. */
+html.dark
+  :is([data-slot="dialog-content"], [data-slot="sheet-content"])
+  :is(
+    div:has(> [data-slot="field-label"][for^="spaces-"]),
+    [data-slot="input-group"]:has(> input[aria-label="Search spaces"])
+  ) {
+  height: 40px;
+}
+
+/* Add apps to a space (add-app-dialog.tsx): a fixed height so the box does not jump while results load
+   or filter; a 32px search field on the content edge; the rows scroll between it and the foot line. */
+html.dark [data-slot="dialog-content"][data-dialog="add-app"] {
+  height: min(35rem, calc(100dvh - 48px));
+}
+
+html.dark [data-dialog="add-app"] > [data-part="search"] {
+  padding: 0 20px 8px;
+}
+
+html.dark [data-dialog="add-app"] > [data-part="search"] > [data-slot="input-group"] {
+  height: var(--d-ctl-lg);
+}
+
+html.dark [data-dialog="add-app"] > [data-part="results"] {
+  padding: 0 12px 8px;
+}
+
+html.dark [data-dialog="add-app"] > [data-part="foot"] {
+  min-height: 48px;
+  padding: 0 20px;
+  border-top: 1px solid var(--d-line-2);
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+}
+
+html.dark [data-dialog="add-app"] > [data-part="foot"] > [class~="group/button"] {
+  font-size: var(--d-mini);
+}
+
+/* Create / edit app (custom-app-dialog.tsx): header with the Form / Spec pills before the close circle,
+   a scrolling body, a footer with "Add to" on the left and the actions on the right, all on 20px insets. */
+html.dark [data-slot="dialog-content"][data-dialog="custom-app"] form > [data-slot="dialog-header"] {
+  min-height: 68px;
+  padding: 20px 56px 12px 20px;
+}
+
+html.dark
+  [data-slot="dialog-content"][data-dialog="custom-app"]
+  form
+  > [data-slot="dialog-header"]
+  [data-slot="tabs-list"] {
+  gap: 4px;
+}
+
+html.dark [data-dialog="custom-app"] [data-part="body"] {
+  padding: 4px 20px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--d-line-menu) transparent;
+}
+
+html.dark [data-dialog="custom-app"] [data-part="body"] > [data-slot="field-group"] {
+  gap: 20px;
+}
+
+html.dark [data-dialog="custom-app"] [data-part="pending"] {
+  gap: 16px;
+  padding: 20px;
+}
+
+html.dark [data-slot="dialog-content"][data-dialog="custom-app"] form > [data-slot="dialog-footer"] {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--d-line-2);
+}
+
+html.dark [data-dialog="custom-app"] [data-part="actions"] {
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+html.dark [data-dialog="custom-app"] [data-part="actions"] > [class~="group/button"][data-variant="ghost"] {
+  border-color: var(--d-edge);
+  background-color: var(--d-chip);
+  color: var(--d-text-2);
+  box-shadow: var(--d-contact);
+}
+
+@media (hover: hover) {
+  html.dark [data-dialog="custom-app"] [data-part="actions"] > [class~="group/button"][data-variant="ghost"]:hover {
+    background-color: var(--c-chip-hover);
+    color: var(--d-text);
+  }
+}
+
+/* A shared app link (share-request.tsx): no centred hero. The app → space link shrinks to 40px tiles at the
+   start of the header, the title and description sit left-aligned under it, the close circle at the end of
+   the first line, the action a 28px pill on the right. */
+html.dark [data-dialog="share-request"] [data-dark="only"][data-close] {
+  display: inline-flex;
+  position: absolute;
+  top: 26px;
+}
+
+html.dark [data-dialog="share-request"] > [data-part="hero"] {
+  align-items: stretch;
+  gap: 16px;
+  padding: 20px;
+  text-align: start;
+}
+
+html.dark [data-dialog="share-request"] [data-part="hero"] > :first-child:not([data-part="heading"]) {
+  align-self: flex-start;
+}
+
+html.dark [data-dialog="share-request"] [data-part="hero"] > [data-slot="avatar"],
+html.dark [data-dialog="share-request"] [data-part="link"] figure > :first-child {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--d-r-card);
+  font-size: var(--d-regular);
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] {
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] figure {
+  width: auto;
+  max-width: 120px;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] figure svg {
+  width: 18px;
+  height: 18px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] figcaption {
+  text-align: start;
+  color: var(--d-text-3);
+  font-size: var(--d-mini);
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] > [aria-hidden] {
+  width: 56px;
+  height: 40px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] > [aria-hidden] > span:not(:nth-child(2)) {
+  border-color: var(--d-line-menu);
+}
+
+html.dark [data-dialog="share-request"] [data-part="link"] > [aria-hidden] > span:nth-child(2) {
+  width: 24px;
+  height: 24px;
+  border-color: var(--d-line-menu);
+  background-color: var(--d-card);
+}
+
+html.dark [data-dialog="share-request"] [data-part="heading"] {
+  gap: 2px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="action"] {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 20px 20px;
+}
+
+html.dark [data-dialog="share-request"] [data-part="action"] [class~="group/button"] {
+  width: auto;
+  height: var(--d-ctl);
+  border-radius: var(--d-r-pill);
+}
+
+/* The app form's parts (custom-app-form.tsx): the skills drop zone is a dashed 10px box that turns accent
+   while a folder is over it; the logo button is the 32px tile beside the 32px name field. */
+html.dark [data-slot="empty"][data-part="dropzone"] {
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--d-line-menu);
+  border-radius: var(--d-r-card);
+}
+
+html.dark [data-slot="empty"][data-part="dropzone"][data-dragging] {
+  border-style: solid;
+  border-color: var(--d-accent);
+  background-color: var(--d-accent-tint);
+}
+
+html.dark [data-part="dropzone"] [data-slot="empty-description"] {
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+}
+
+html.dark [class~="group/button"][data-part="logo"] {
+  width: var(--d-ctl-lg);
+  height: var(--d-ctl-lg);
+  border-radius: var(--d-r);
+}
+
+html.dark [class~="group/button"][data-part="logo"] > * {
+  width: var(--d-ctl-lg);
+  height: var(--d-ctl-lg);
+  border-radius: var(--d-r);
+}
+
+/* Tools of an MCP server (custom-app-form.tsx): the list scrolls under the header's hairline. */
+html.dark [data-dialog="tools"] > [data-part="body"] {
+  padding: 8px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--d-line-menu) transparent;
+}
+
+/* A header that leads with an icon (skill and tool dialogs, app-list.tsx): the icon at 40px beside the title
+   and description, left-aligned like every other header, never a centred hero. */
+html.dark [data-slot="dialog-content"]:not([data-width="fill"]) {
+  justify-items: stretch;
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-width="fill"])
+  [data-slot="dialog-header"]:has(> :first-child + [data-slot="dialog-title"]) {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  justify-items: start;
+  gap: 0 12px;
+  padding-inline-start: 0;
+  text-align: start;
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-width="fill"])
+  [data-slot="dialog-header"]:has(> :first-child + [data-slot="dialog-title"])
+  > :first-child {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--d-r-card);
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-width="fill"])
+  [data-slot="dialog-header"]:has(> :first-child + [data-slot="dialog-title"])
+  > :not(:first-child) {
+  grid-column: 2;
+}
+
+html.dark
+  [data-slot="dialog-content"]:not([data-width="fill"])
+  [data-slot="dialog-header"]:has(> :first-child + [data-slot="dialog-title"] + [data-slot="dialog-description"])
+  > :first-child {
+  grid-row: 1 / span 2;
+}
+
+/* A flush dialog's own footer takes the shell's 20px inset. */
+html.dark
+  [data-slot="dialog-content"][data-flush]:not([data-width="fill"], [data-task-composer])
+  > [data-slot="dialog-footer"] {
+  padding: 16px 20px 20px;
 }
 
 /* Destructive confirmations: a red mark beside the question, and the red action. */
@@ -439,12 +1111,15 @@ html.dark [data-slot="sheet-content"][data-side="right"]:is([data-starting-style
 }
 
 /* The 44px header bar: title small/500, the close circle at its right end, a hairline under it. */
-html.dark [data-slot="sheet-header"] {
+html.dark :is([data-slot="sheet-content"], [data-slot="sheet-content"] > form) > [data-slot="sheet-header"] {
   gap: 0;
   padding: 0 0 16px;
 }
 
-html.dark [data-slot="sheet-title"] {
+html.dark
+  :is([data-slot="sheet-content"], [data-slot="sheet-content"] > form)
+  > [data-slot="sheet-header"]
+  > [data-slot="sheet-title"] {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -457,12 +1132,39 @@ html.dark [data-slot="sheet-title"] {
   line-height: 1.3;
 }
 
-html.dark [data-slot="sheet-description"] {
+html.dark
+  :is([data-slot="sheet-content"], [data-slot="sheet-content"] > form)
+  > [data-slot="sheet-header"]
+  > [data-slot="sheet-description"] {
   padding: 12px 16px 0;
   color: var(--d-text-3);
   font-size: var(--d-small);
   font-weight: 450;
   line-height: 1.6;
+}
+
+/* A sheet whose header sits inside its own scrolling body (the app details sheet, app-list.tsx): no bar;
+   the title is a large/600 heading and the description small --d-text-3, like a dialog's. */
+html.dark
+  [data-slot="sheet-content"]
+  :not([data-slot="sheet-content"], form)
+  > [data-slot="sheet-header"]
+  [data-slot="sheet-title"] {
+  color: var(--d-text);
+  font-size: var(--d-large);
+  font-weight: 600;
+  line-height: var(--d-ctl);
+  letter-spacing: -0.01em;
+}
+
+html.dark
+  [data-slot="sheet-content"]
+  :not([data-slot="sheet-content"], form)
+  > [data-slot="sheet-header"]
+  [data-slot="sheet-description"] {
+  color: var(--d-text-3);
+  font-size: var(--d-small);
+  line-height: 1.5;
 }
 
 html.dark [data-slot="sheet-content"] > [data-close="icon"] {
@@ -480,12 +1182,25 @@ html.dark [data-slot="sheet-footer"] {
   justify-content: flex-end;
   gap: 8px;
   min-height: 52px;
-  padding: 0 12px;
+  margin: 0;
+  padding: 0 16px;
   border-top: 1px solid var(--d-line);
 }
 
+/* The body: the same 16px inset as the bar's title, fields 16px apart, labels 6px above their inputs. */
 html.dark [data-slot="sheet-content"] [data-slot="field-group"] {
+  gap: 16px;
+  padding-inline: 16px;
   overscroll-behavior: contain;
+}
+
+html.dark [data-slot="sheet-content"] [data-slot="field"][data-orientation="vertical"] {
+  gap: 6px;
+}
+
+html.dark [data-slot="sheet-content"] [data-slot="field-description"] {
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ---------------------------------------------------------------- Menus, selects, popovers, pickers */
@@ -527,6 +1242,35 @@ html.dark
 /* A select that sits on its trigger does not travel. */
 html.dark [data-slot="select-content"][data-align-trigger="true"] {
   animation: none;
+}
+
+/* Linear's arrow-less offset: a menu or popover floats 7px off its trigger (the components place it at 4px;
+   the last 3px are a translate away from the trigger, so collision handling and alignment are untouched).
+   Sub-menus, context menus and selects that sit on their trigger keep their own placement. */
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]:not([data-align-trigger="true"])
+  )[data-side="bottom"] {
+  translate: 0 3px;
+}
+
+html.dark
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="popover-content"],
+    [data-slot="select-content"]:not([data-align-trigger="true"])
+  )[data-side="top"] {
+  translate: 0 -3px;
+}
+
+html.dark :is([data-slot="dropdown-menu-content"], [data-slot="popover-content"])[data-side="right"] {
+  translate: 3px 0;
+}
+
+html.dark :is([data-slot="dropdown-menu-content"], [data-slot="popover-content"])[data-side="left"] {
+  translate: -3px 0;
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -11,12 +11,7 @@ import { pageWidths, useShapeId } from "./page.js"
 import { DarkUi } from "../lib/dark-ui.js"
 import type { CatalogApp } from "../lib/apps.js"
 
-export function AppDetailFrame(props: {
-  name: string
-  actions?: ReactNode | undefined
-  aside?: ReactNode | undefined
-  children: ReactNode
-}) {
+export function AppDetailFrame(props: { name: string; children: ReactNode }) {
   const deep = DarkUi.useDarkUi()
   const crumbs = (
     <Breadcrumb.Root ancestors={[{ key: "apps", content: <Link to="/apps">Apps</Link> }]}>{props.name}</Breadcrumb.Root>
@@ -24,16 +19,10 @@ export function AppDetailFrame(props: {
   if (deep)
     return (
       <div data-screen="app" className="flex min-h-0 flex-1 flex-col">
-        <header data-slot="page-bar">
-          {crumbs}
-          {props.actions ? <div data-slot="page-actions">{props.actions}</div> : null}
-        </header>
+        <header data-slot="page-bar">{crumbs}</header>
         <div data-slot="app-scroller" className="@container flex min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div data-slot="app-body" className="flex w-full">
-            <div data-slot="app-article" className="flex min-w-0 flex-1 flex-col">
-              {props.children}
-            </div>
-            {props.aside}
+          <div data-slot="app-article" className="flex w-full min-w-0 flex-col">
+            {props.children}
           </div>
         </div>
       </div>
@@ -48,7 +37,28 @@ export function AppDetailFrame(props: {
   )
 }
 
-export function AppHeader(props: { name: string; description: string; icon: string | null; actions: ReactNode }) {
+export function AppHeader(props: {
+  name: string
+  description: string
+  icon: string | null
+  actions: ReactNode
+  meta?: ReactNode | undefined
+}) {
+  const deep = DarkUi.useDarkUi()
+  if (deep)
+    return (
+      <header data-slot="app-header">
+        <div data-slot="app-header-icon">
+          <AppIcon name={props.name} description={props.description} icon={props.icon} />
+        </div>
+        <div data-slot="app-header-text">
+          <h1>{props.name}</h1>
+          <p data-slot="app-header-description">{props.description}</p>
+          {props.meta}
+        </div>
+        {props.actions ? <div data-slot="app-header-actions">{props.actions}</div> : null}
+      </header>
+    )
   return (
     <header
       data-slot="app-header"
@@ -94,9 +104,10 @@ const sampleApp: CatalogApp = {
 }
 
 export function AppDetailsSample() {
+  const deep = DarkUi.useDarkUi()
   return (
-    <div className="flex flex-col gap-10">
-      <div className="min-h-64 rounded-2xl bg-muted sm:min-h-80" />
+    <div data-slot="app-sections" className="flex flex-col gap-10">
+      {deep ? null : <div className="min-h-64 rounded-2xl bg-muted sm:min-h-80" />}
       <p className="text-sm/6 text-muted-foreground">What this app does and how to set it up.</p>
       <AccountList
         title="Accounts"

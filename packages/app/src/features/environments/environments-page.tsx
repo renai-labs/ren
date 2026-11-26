@@ -145,7 +145,7 @@ function TemplateDialog(props: {
         })
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-lg">
+      <DialogContent data-scroll="body" className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-lg">
         <form
           className="contents"
           onSubmit={(event) => {
@@ -164,7 +164,7 @@ function TemplateDialog(props: {
             <DialogTitle>{props.template ? "Edit machine" : "Create machine"}</DialogTitle>
             <DialogDescription>Packages, size and network for a space’s brain or tools.</DialogDescription>
           </DialogHeader>
-          <FieldGroup className="gap-4">
+          <FieldGroup data-part="body" className="gap-4">
             <Field>
               <FieldLabel htmlFor="environment-name">Name</FieldLabel>
               <Input

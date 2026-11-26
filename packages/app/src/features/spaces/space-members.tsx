@@ -1,7 +1,7 @@
 import { RelativeTime } from "@ren/util/relative-time"
 import { useState } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
-import { IconPlus } from "@tabler/icons-react"
+import { IconPlus, IconShield } from "@tabler/icons-react"
 import { getRouteApi } from "@tanstack/react-router"
 import type { SpaceInfo, SpaceJoinRequestInfo } from "@ren/client"
 import { toast } from "@ren/ui/sonner"
@@ -21,6 +21,12 @@ import { Spinner } from "@ren/ui/spinner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs } from "@ren/ui/tabs"
 import { formatDateTime } from "@ren/ui/time"
+import { FilterMenu, type Filters } from "../../components/filter-menu.js"
+import { FilterMatch } from "@ren/util/filter-match"
+import { roles } from "../../components/settings-shared.js"
+import { isRole, roleLabel } from "../../lib/format.js"
+import { DarkUi } from "../../lib/dark-ui.js"
+import { useMembers } from "../../lib/use-members.js"
 import { LoadMore } from "../../components/load-more.js"
 import {
   PageActions,
@@ -149,6 +155,8 @@ export function SpaceMembersTab() {
   const navigate = route.useNavigate()
   const tab = route.useSearch({ select: (search) => search.tab ?? "members" })
   const requests = useInfiniteQuery({ ...Pages.spaceJoinRequests(client, space.id), ...Loader.required })
+  const members = useInfiniteQuery({ ...Pages.spaceMembers(client, space.id), ...Loader.required })
+  const deep = DarkUi.useDarkUi()
   return (
     <div className="flex flex-1 flex-col gap-4">
       {space.kind === "private" ? null : (
@@ -160,7 +168,9 @@ export function SpaceMembersTab() {
             }
           >
             <PageTabsList>
-              <PageTabsTrigger value="members">Members</PageTabsTrigger>
+              <PageTabsTrigger value="members" count={deep ? members.data?.pages.at(0)?.total : undefined}>
+                Members
+              </PageTabsTrigger>
               <PageTabsTrigger value="requests" count={requests.data?.pages.at(0)?.total}>
                 Requests
               </PageTabsTrigger>
@@ -284,6 +294,9 @@ function SpaceMembers() {
     enabled: adding,
   })
   const organization = useOrganization()
+  const orgMembers = useMembers()
+  const deep = DarkUi.useDarkUi()
+  const [filters, setFilters] = useState<Filters>({})
   const create = useMutation(api["space-member"].create.mutationOptions())
   const remove = useMutation(api["space-member"].archive.mutationOptions())
   const joined = new Set(
@@ -322,15 +335,29 @@ function SpaceMembers() {
             image: member.image ?? undefined,
             you: member.userId === me.user.id,
             pending: false,
+            role: orgMembers.member(member.userId)?.role,
           }
-        : { id: member.id, name: member.email, email: member.email, you: false, pending: true },
+        : {
+            id: member.id,
+            name: member.email,
+            email: member.email,
+            you: false,
+            pending: true,
+            note: deep ? "Invited" : undefined,
+            role: organization.invitations
+              .filter((invitation) => invitation.email.toLowerCase() === member.email.toLowerCase())
+              .map((invitation) => invitation.role)
+              .find(isRole),
+          },
     )
+    .filter((row) => !deep || FilterMatch.passes(filters, { role: row.role ? [row.role] : [] }))
   const sampleRows = Array.from({ length: Math.min(space.memberCount, pageSize) }, (_, index) => ({
     id: `sample-${index}`,
     name: "Team member",
     email: "member@company.com",
     you: false,
     pending: false,
+    role: undefined,
   }))
   const shapeId = useShapeId("members")
   const candidatesLoading = everyone.isPending
@@ -360,6 +387,14 @@ function SpaceMembers() {
     <>
       <SpaceFrame.Tools>
         <ToolbarSearch label="Search members" value={query} onChange={setQuery} />
+        {deep ? (
+          <FilterMenu
+            label="Filter members"
+            properties={[{ key: "role", label: "Role", any: "Any", icon: IconShield, options: roles }]}
+            value={filters}
+            onChange={setFilters}
+          />
+        ) : null}
       </SpaceFrame.Tools>
       <PageActions>
         {space.membershipId && space.kind === "shared" ? <InviteLinkDialog /> : null}
@@ -377,15 +412,33 @@ function SpaceMembers() {
       <Loading id={shapeId} loading={members.isPending} label="Loading members">
         <MembersTable
           rows={(members.isPending ? sampleRows : rows).filter((row) => Search.matches(query, row.name, row.email))}
-          column={{
-            heading: "Status",
-            cell: (row) =>
-              row.pending ? (
-                <StatusBadge tone="neutral">Pending</StatusBadge>
-              ) : (
-                <StatusBadge tone="ok">Active</StatusBadge>
-              ),
-          }}
+          column={
+            deep
+              ? {
+                  heading: "Role",
+                  cell: (row) =>
+                    row.role ? (
+                      <span
+                        data-slot="role-badge"
+                        data-role={row.role}
+                        className="flex h-7 items-center text-muted-foreground"
+                      >
+                        {roleLabel[row.role]}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    ),
+                }
+              : {
+                  heading: "Status",
+                  cell: (row) =>
+                    row.pending ? (
+                      <StatusBadge tone="neutral">Pending</StatusBadge>
+                    ) : (
+                      <StatusBadge tone="ok">Active</StatusBadge>
+                    ),
+                }
+          }
           remove={(row) =>
             row.you || !space.canRemoveMember
               ? undefined
@@ -408,7 +461,25 @@ function SpaceMembers() {
               },
             )
           }
-          empty={Search.empty(query, "No members")}
+          empty={
+            deep && Object.values(filters).some((values) => values.length > 0) ? (
+              <span className="flex flex-col items-center gap-2">
+                {Search.empty(query, "No members match these filters")}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFilters({})
+                    setQuery("")
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </span>
+            ) : (
+              Search.empty(query, "No members")
+            )
+          }
         />
       </Loading>
       <LoadMore

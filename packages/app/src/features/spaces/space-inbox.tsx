@@ -3,7 +3,7 @@ import { ChatReact } from "@ren/chat/react"
 import { SessionPages } from "@ren/client/react"
 import { RelativeTime } from "@ren/util/relative-time"
 import type { SessionInfo } from "@ren/client"
-import { IconCircle, IconHandStop, IconPlus, IconProgress } from "@tabler/icons-react"
+import { IconPlus } from "@tabler/icons-react"
 import { keepPreviousData, useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Loading } from "@ren/ui/loading"
@@ -30,6 +30,9 @@ import { pickerPageSize } from "../../lib/pagination.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useNow } from "../../lib/use-now.js"
+import { DarkUi } from "../../lib/dark-ui.js"
+import { ChatAttention } from "./chat-attention.js"
+import { InboxPanes } from "./inbox-panes.js"
 import { useSpace } from "./use-space.js"
 
 const columnWidths: Readonly<Record<string, string>> = {
@@ -39,15 +42,9 @@ const columnWidths: Readonly<Record<string, string>> = {
   "Last activity": "w-36",
 }
 
-const attentionLabels = {
-  asking: { label: "Needs input", icon: IconHandStop, className: "text-chart-3" },
-  running: { label: "Working", icon: IconProgress, className: "text-chart-2" },
-  idle: { label: "Idle", icon: IconCircle, className: "text-muted-foreground" },
-} as const
-
 export function ChatState(props: { chat: SessionInfo }) {
   const attention = ChatReact.useAttention(props.chat.id, { busy: props.chat.status === "busy" })
-  const state = attentionLabels[attention]
+  const state = ChatAttention.labels[attention]
   return (
     <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
       <state.icon className={cn("size-3.5", state.className)} />
@@ -104,15 +101,40 @@ function ChatRow(props: { chat: SessionInfo; agent: string; now: number }) {
   )
 }
 
-export function SpaceInbox(props: { mine: boolean; onMineChange: (mine: boolean) => void }) {
-  const { api, client } = RouterContext.useRouterContext()
+export function SpaceInbox(props: {
+  mine: boolean
+  onMineChange: (mine: boolean) => void
+  session: string | undefined
+  onSessionChange: (session: string | undefined, options: { replace: boolean }) => void
+}) {
+  const { api } = RouterContext.useRouterContext()
   const space = useSpace()
-  const me = useMe()
-  const now = useNow()
+  const deep = DarkUi.useDarkUi()
   const agents = useSuspenseQuery(api.agent.list.queryOptions({ spaceId: space.id, page: 1, pageSize: pickerPageSize }))
     .data.items
   const agentName = (agentId: string | null) =>
     agentId === null ? "Ren" : (agents.find((agent) => agent.id === agentId)?.name ?? "Archived agent")
+  return deep ? (
+    <InboxPanes
+      {...props}
+      agentName={agentName}
+      agentIcon={(agentId) => agents.find((agent) => agent.id === agentId)?.icon}
+    />
+  ) : (
+    <InboxTable mine={props.mine} onMineChange={props.onMineChange} agentName={agentName} />
+  )
+}
+
+function InboxTable(props: {
+  mine: boolean
+  onMineChange: (mine: boolean) => void
+  agentName: (agentId: string | null) => string
+}) {
+  const { client } = RouterContext.useRouterContext()
+  const space = useSpace()
+  const me = useMe()
+  const now = useNow()
+  const agentName = props.agentName
   const shapeId = useShapeId("inbox")
   const list = useInfiniteQuery({
     ...SessionPages.options(client, { spaceId: [space.id], ...(props.mine && SessionPages.own(me.user.id)) }),

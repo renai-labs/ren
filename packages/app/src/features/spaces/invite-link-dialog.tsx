@@ -1,8 +1,16 @@
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { IconLink } from "@tabler/icons-react"
+import { IconCopy, IconLink } from "@tabler/icons-react"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@ren/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@ren/ui/dialog"
 import { FieldDescription } from "@ren/ui/field"
 import { toast } from "@ren/ui/sonner"
 import { Loading } from "@ren/ui/loading"
@@ -31,7 +39,7 @@ export function InviteLinkDialog() {
           <IconLink />
           Invite link
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent data-dialog="invite-link">
           <DialogHeader>
             <DialogTitle>Invite link</DialogTitle>
             <DialogDescription>Anyone who opens this link joins {space.name}.</DialogDescription>
@@ -40,15 +48,32 @@ export function InviteLinkDialog() {
             {link.data ? (
               <Copyable id="space-invite-link" label="Link" value={`${platform.appUrl}/join/${link.data.token}`} />
             ) : null}
-            <div className="flex items-center justify-between gap-2">
+            <div data-part="meta" className="flex items-center justify-between gap-2">
               <FieldDescription>
                 Only for people in {me.organization.name} · Used {uses} {uses === 1 ? "time" : "times"}
               </FieldDescription>
-              <Button variant="ghost" disabled={!link.data} onClick={() => setResetting(true)}>
+              <Button variant="ghost" data-dark="hide" disabled={!link.data} onClick={() => setResetting(true)}>
                 Reset link
               </Button>
             </div>
           </Loading>
+          <DialogFooter data-dark="only" className="hidden">
+            <Button variant="ghost" data-footer="start" disabled={!link.data} onClick={() => setResetting(true)}>
+              Reset link
+            </Button>
+            <Button
+              disabled={!link.data || !platform.writeClipboardText}
+              onClick={() =>
+                void platform.writeClipboardText?.(`${platform.appUrl}/join/${link.data?.token ?? ""}`).then(
+                  () => toast.success("Link copied"),
+                  () => toast.error("Couldn’t copy the link"),
+                )
+              }
+            >
+              <IconCopy data-icon="inline-start" />
+              Copy link
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <ConfirmDialog

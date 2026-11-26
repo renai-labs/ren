@@ -9,7 +9,7 @@ html.dark {
   /* A drive row's icon column: 16px glyphs, 10px to the name (projects.png). */
   --lib-icon: 16px;
   --lib-icon-gap: 10px;
-  /* The detail page's properties panel and the viewer's panel. */
+  /* The Drive viewer's properties panel. */
   --lib-aside: 280px;
 }
 
@@ -362,39 +362,44 @@ html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > span[cl
   outline-offset: -1px;
 }
 
-/* ───────────────────────── 5. An app's page (issue-detail.png: bar, ~730px column, properties panel) ───────────────────────── */
+/* ───────────────────────── 5. An app's page (the Apps grid: bar, one 59rem column; issue-detail.png's type) ───────────────────────── */
 
-html.dark [data-screen="app"] > [data-slot="page-bar"] > [data-slot="page-actions"] {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-inline-start: auto;
-}
-
+/* One column, the Apps grid's: /apps and /apps/<id> share their frame, so opening an app never moves the edge
+   the eye is on. The properties live in the header's meta line instead of a side column: four facts do not
+   earn a 280px column, and at 1280px that column had to hide them. */
 html.dark [data-screen="app"] [data-slot="app-article"] {
-  gap: 32px;
-  padding: 56px clamp(24px, 6cqw, 96px) 96px;
-}
-
-html.dark [data-screen="app"] [data-slot="app-article"] > *,
-html.dark [data-screen="app"] [data-slot="app-article"] > * > * {
-  width: 100%;
-  max-width: 730px;
+  max-width: 59rem;
+  gap: 24px;
   margin-inline: auto;
+  padding: 40px 24px 96px;
 }
 
-/* Title block: a 40px icon with a faint real edge, title 1.5rem/600, description regular/450 text-3. */
-html.dark [data-screen="app"] [data-slot="app-header"] > div:first-child {
-  gap: 16px;
+html.dark [data-screen="app"] [data-slot="app-article"] > * {
+  min-width: 0;
 }
 
-html.dark [data-screen="app"] [data-slot="app-header"] > div:first-child > span:first-child {
-  width: 40px;
-  height: 40px;
+/* Header: 44px icon, then name 1.5rem/600, the one-liner small text-3 and the meta line mini text-3;
+   the page's actions sit at the end of the name's line. */
+html.dark [data-screen="app"] [data-slot="app-header"] {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  column-gap: 14px;
+  align-items: start;
+}
+
+html.dark [data-screen="app"] [data-slot="app-header-icon"] > * {
+  width: 44px;
+  height: 44px;
   border-radius: var(--d-r-card);
   box-shadow: none;
-  outline: 1px solid var(--d-edge-faint);
+  outline: 1px solid rgb(255 255 255 / 0.1);
   outline-offset: -1px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-header-text"] {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
 }
 
 html.dark [data-screen="app"] [data-slot="app-header"] h1 {
@@ -403,34 +408,123 @@ html.dark [data-screen="app"] [data-slot="app-header"] h1 {
   line-height: 1.25;
   letter-spacing: -0.01em;
   color: var(--d-text);
+  overflow-wrap: anywhere;
 }
 
-html.dark [data-screen="app"] [data-slot="app-header"] p {
-  font-size: var(--d-regular);
+html.dark [data-screen="app"] [data-slot="app-header-description"] {
+  margin-top: 2px;
+  font-size: var(--d-small);
   font-weight: 450;
+  line-height: 1.5;
   color: var(--d-text-3);
+  text-wrap: pretty;
 }
 
-/* Body copy: regular/450, 1.6, text-2. */
-html.dark [data-screen="app"] [data-slot="app-article"] [class~="whitespace-pre-line"] {
-  font-size: var(--d-regular);
+html.dark [data-screen="app"] [data-slot="app-header-meta"] {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.5;
+  color: var(--d-text-3);
+
+  & > li + li::before {
+    content: "·" / "";
+    margin-inline: 6px;
+  }
+}
+
+/* Centred on the name's line, whatever the root size. */
+html.dark [data-screen="app"] [data-slot="app-header-actions"] {
+  display: flex;
+  min-height: calc(var(--d-title) * 1.25);
+  align-items: center;
+  gap: 6px;
+}
+
+/* The details: about text, Try it, then the sections, 40px apart (2x the 8–20px inside each). */
+html.dark [data-screen="app"] [data-slot="app-sections"] {
+  gap: 40px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-sections"] > [data-slot="read-more"]:first-child {
+  margin-bottom: -8px;
+}
+
+/* About: body text, not a hero. small/450, 1.6, text-2, ~70 characters a line, three lines, then Read more. */
+html.dark [data-screen="app"] [data-slot="read-more"] {
+  gap: 4px;
+}
+
+html.dark [data-screen="app"] [data-slot="read-more-text"] {
+  max-width: 70ch;
+  font-size: var(--d-small);
   font-weight: 450;
   line-height: 1.6;
   color: var(--d-text-2);
+  text-wrap: pretty;
 }
 
-/* Sections: heading regular/600 (Linear's "Activity"); their actions are 24px pills, ghost-quiet. */
-html.dark [data-screen="app"] [data-slot="app-detail-section"] {
+html.dark [data-screen="app"] [data-slot="read-more-text"][data-state="closed"] {
+  -webkit-line-clamp: 3;
+}
+
+html.dark [data-screen="app"] [data-slot="read-more-toggle"][data-variant]:not(#d) {
+  height: var(--d-ctl-sm);
+  margin-inline-start: -8px;
+  padding: 0 8px;
+  border-radius: var(--d-r-pill);
+  font-size: var(--d-mini);
+  font-weight: 500;
+  color: var(--d-text-3);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="app"] [data-slot="read-more-toggle"][data-variant]:not(#d):hover {
+    background-color: var(--d-hover);
+    color: var(--d-text-2);
+  }
+}
+
+/* One section header for Try it, Accounts, MCPs, Skills and Apps: title regular/500, count mini text-3,
+   the section's action a 24px pill at the end. */
+html.dark [data-screen="app"] :is([data-slot="app-prompts"], [data-slot="app-detail-section"]) {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+html.dark
+  [data-screen="app"]
+  :is([data-slot="app-section-head"], [data-slot="app-detail-section"] > div:first-child:has(> h3)) {
+  display: flex;
+  min-height: var(--d-ctl);
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-html.dark [data-screen="app"] [data-slot="app-detail-section"] h3 {
+html.dark [data-screen="app"] :is([data-slot="app-prompts-title"], [data-slot="app-detail-section"] h3) {
   font-size: var(--d-regular);
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--d-text);
 }
 
 html.dark [data-screen="app"] [data-slot="app-detail-section"] h3 > span {
+  margin-inline-start: 6px;
+  font-size: var(--d-mini);
+  font-weight: 450;
+  color: var(--d-text-3);
+}
+
+html.dark [data-screen="app"] [data-slot="app-section-note"] {
+  font-size: var(--d-mini);
   font-weight: 450;
   color: var(--d-text-3);
 }
@@ -460,22 +554,62 @@ html.dark
   }
 }
 
+/* A section's intro or empty line: small text-3, on the header text's edge. */
 html.dark [data-screen="app"] [data-slot="app-detail-section"] > p {
-  margin-top: -4px;
+  margin: 0;
   font-size: var(--d-small);
+  line-height: 1.5;
   color: var(--d-text-3);
 }
 
-/* MCP / skill / dependency tiles: 48px rows, 24px icon, name small/500, caption mini text-3; 8px hover. */
-html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] {
-  gap: 2px 8px;
+/* Lists that carry no count in their heading (MCPs, Skills, Apps) show their size beside it. */
+@supports (anchor-scope: all) {
+  html.dark [data-screen="app"] [data-slot="app-detail-section"] {
+    anchor-scope: --app-section-title;
+  }
+
+  html.dark [data-screen="app"] [data-slot="app-detail-section"] h3:not(:has(> span)) {
+    anchor-name: --app-section-title;
+  }
+
+  html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] {
+    counter-reset: app-rows;
+
+    & > * {
+      counter-increment: app-rows;
+    }
+
+    &::after {
+      content: counter(app-rows) / "";
+      position: absolute;
+      position-anchor: --app-section-title;
+      left: calc(anchor(right) + 6px);
+      bottom: anchor(bottom);
+      font-size: var(--d-mini);
+      font-weight: 450;
+      line-height: 1.75;
+      color: var(--d-text-3);
+      pointer-events: none;
+    }
+  }
+}
+
+/* One row recipe for every list on the page (menu rows): 44px, 8px radius, the hover shape 8px past the
+   column's edge so the row's content stays on it; 20px leading mark, name small/500 text-2, caption mini text-3. */
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > :is(div[class~="grid"], div:has(> [data-slot="account-row"])) {
+  gap: 2px 16px;
   margin-inline: -8px;
 }
 
-html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] button[data-variant]:not(#d) {
-  height: 48px;
+html.dark [data-screen="app"] [data-slot="app-detail-section"] > div[class~="grid"] button[data-variant]:not(#d),
+html.dark [data-screen="app"] [data-slot="account-row"] {
+  min-height: 44px;
+  height: auto;
   gap: 10px;
-  padding: 0 8px;
+  padding: 6px 8px;
   border-radius: var(--d-r);
 }
 
@@ -485,9 +619,45 @@ html.dark
   > div[class~="grid"]
   button[data-variant]:not(#d)
   > :first-child {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+/* Resource icons are coloured glyphs with no tile (the owner's rule); a real logo keeps its own shape. */
+html.dark
+  [data-screen="app"]
+  [data-slot="app-detail-section"]
+  > div[class~="grid"]
+  button
+  > span[aria-hidden]:first-child:is(
+    [class~="bg-chart-1"],
+    [class~="bg-chart-2"],
+    [class~="bg-chart-3"],
+    [class~="bg-chart-4"]
+  ) {
+  background: none;
+
+  & > svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &[class~="bg-chart-1"] {
+    color: var(--chart-1);
+  }
+
+  &[class~="bg-chart-2"] {
+    color: var(--chart-2);
+  }
+
+  &[class~="bg-chart-3"] {
+    color: var(--chart-3);
+  }
+
+  &[class~="bg-chart-4"] {
+    color: var(--chart-4);
+  }
 }
 
 html.dark
@@ -499,6 +669,7 @@ html.dark
   > span:first-child {
   font-size: var(--d-small);
   font-weight: 500;
+  line-height: 1.4;
   color: var(--d-text-2);
 }
 
@@ -511,120 +682,19 @@ html.dark
   > span
   + span {
   font-size: var(--d-mini);
+  line-height: 1.4;
   color: var(--d-text-3);
 }
 
-/* Account rows: 44px, 8px hover. */
+/* An account's status dot sits centred in the 20px mark column. */
+html.dark [data-screen="app"] [data-slot="account-row"] > :first-child {
+  margin-inline: 6px;
+}
+
 html.dark [data-slot="account-row"] {
   min-height: 44px;
   padding-block: 6px;
   border-radius: var(--d-r);
-}
-
-/* Example prompts: no shader wash; a label and the prompts as raised rows (the composer surface). */
-html.dark [data-screen="app"] [data-slot="app-prompts"] {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0;
-  overflow: visible;
-  border-radius: 0;
-  background: none;
-}
-
-html.dark [data-slot="app-prompts-title"] {
-  margin-bottom: 4px;
-  font-size: var(--d-regular);
-  font-weight: 600;
-  color: var(--d-text);
-}
-
-html.dark [data-screen="app"] [data-slot="app-prompts"] ul {
-  max-width: none;
-  margin: 0;
-  gap: 6px;
-}
-
-html.dark [data-screen="app"] [data-slot="app-prompts"] li > :is(button, p):not(#d) {
-  min-height: 44px;
-  padding: 6px 6px 6px 14px;
-  border: 1px solid var(--d-edge-faint);
-  border-radius: var(--d-r-card);
-  background-color: var(--d-raised);
-  box-shadow: var(--d-contact);
-  backdrop-filter: none;
-  font-size: var(--d-small);
-  font-weight: 450;
-  line-height: 1.5;
-  color: var(--d-text-2);
-}
-
-@media (hover: hover) {
-  html.dark [data-screen="app"] [data-slot="app-prompts"] li > button:not(#d):hover {
-    border-color: var(--d-edge);
-    background-color: var(--d-control-hover);
-    color: var(--d-text);
-  }
-}
-
-html.dark [data-screen="app"] [data-slot="app-prompts"] li > button > span:last-child {
-  width: 24px;
-  height: 24px;
-  background-color: transparent;
-  color: var(--d-text-3);
-}
-
-/* Properties panel: no card; labels small/500 text-3; 30px rows small/500 text-2 with 16px icons. */
-html.dark [data-slot="app-aside"] {
-  display: flex;
-  width: var(--lib-aside);
-  flex: none;
-  flex-direction: column;
-  gap: 28px;
-  padding: 60px 24px 48px 8px;
-
-  & h2 {
-    margin: 0 0 6px;
-    font-size: var(--d-small);
-    font-weight: 500;
-    color: var(--d-text-3);
-  }
-
-  & section {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  & [data-property] {
-    display: flex;
-    min-height: 30px;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--d-small);
-    font-weight: 500;
-    color: var(--d-text-2);
-  }
-
-  & [data-property] > svg {
-    width: 16px;
-    height: 16px;
-    flex: none;
-    color: var(--d-text-3);
-  }
-
-  & [data-slot="app-chips"] {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-}
-
-@container (width < 52rem) {
-  html.dark [data-slot="app-aside"] {
-    display: none;
-  }
 }
 
 html.dark [data-slot="account-row"] [data-slot="account-open"][data-variant]:not(#d) {
@@ -658,4 +728,128 @@ html.dark [data-slot="account-row"] [data-slot="badge"] {
   font-size: var(--d-mini);
   font-weight: 450;
   color: var(--d-text-3);
+}
+
+/* Try it: each example is a compact prompt on the composer's surface (raised, top-lit hairline, 10px), sized
+   to its text so it reads as "start a chat with this", not as a search field; the arrow is a 24px ghost circle. */
+html.dark [data-screen="app"] [data-slot="app-prompts-list"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & > li {
+    max-width: 100%;
+  }
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompt"] {
+  display: flex;
+  max-width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 5px 5px 5px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--d-r-card);
+  background:
+    linear-gradient(var(--d-raised), var(--d-raised)) padding-box,
+    var(--chat-edge) border-box;
+  box-shadow: var(--d-contact);
+  font: inherit;
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.5;
+  text-align: start;
+  color: var(--d-text-2);
+  transition:
+    background 100ms ease-out,
+    color 100ms ease-out;
+}
+
+/* Without a space to start in, the examples are plain text on the column's edge: no surface, no arrow. */
+html.dark [data-screen="app"] p[data-slot="app-prompt"] {
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompt-text"] {
+  min-width: 0;
+  padding-block: 2px;
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompt"] [data-app-mention] {
+  margin-inline-end: 2px;
+  font-weight: 500;
+  color: var(--d-text-3);
+
+  & > :first-child {
+    width: 16px;
+    height: 16px;
+    margin-inline-end: 6px;
+    vertical-align: -3px;
+    border-radius: 4px;
+  }
+}
+
+html.dark [data-screen="app"] [data-slot="app-prompt-go"] {
+  display: grid;
+  width: var(--d-ctl-sm);
+  height: var(--d-ctl-sm);
+  flex: none;
+  place-items: center;
+  border-radius: var(--d-r-pill);
+  color: var(--d-text-3);
+  transition:
+    background-color 100ms ease-out,
+    color 100ms ease-out;
+
+  & > svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+html.dark [data-screen="app"] button[data-slot="app-prompt"] {
+  cursor: pointer;
+}
+
+html.dark [data-screen="app"] button[data-slot="app-prompt"]:focus-visible {
+  outline: 1px solid var(--c-ring);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  html.dark [data-screen="app"] button[data-slot="app-prompt"]:hover {
+    background:
+      linear-gradient(var(--d-control-hover), var(--d-control-hover)) padding-box,
+      var(--chat-edge-focus) border-box;
+    color: var(--d-text);
+
+    & [data-app-mention] {
+      color: var(--d-text-2);
+    }
+
+    & [data-slot="app-prompt-go"] {
+      background-color: var(--d-hover);
+      color: var(--d-text-2);
+    }
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html.dark [data-screen="app"] [data-slot="app-prompt-go"] > svg {
+    transition: translate 150ms ease-out;
+  }
+
+  html.dark [data-screen="app"] button[data-slot="app-prompt"]:hover [data-slot="app-prompt-go"] > svg {
+    translate: 2px 0;
+  }
 }

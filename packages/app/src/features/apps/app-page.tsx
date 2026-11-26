@@ -37,7 +37,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { ReadMore } from "../../components/read-more.js"
 import { errorMessage } from "../../lib/errors.js"
-import { AccountList, AppFacts, AppSections } from "../../components/app-list.js"
+import { AccountList, AppSections } from "../../components/app-list.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { useShapeId } from "../../components/page.js"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
@@ -45,7 +45,17 @@ import { Drafts } from "../../lib/drafts.js"
 import { useApp } from "../../lib/use-app.js"
 import { useSpaces } from "../../lib/use-spaces.js"
 import { useAppProfiles } from "../../lib/use-app-profiles.js"
-import { fromRegistry, isBundle, listsSpace, statusOf, type CatalogApp, type Status } from "../../lib/apps.js"
+import {
+  categoryLabel,
+  fromRegistry,
+  hasManaged,
+  isBundle,
+  listsSpace,
+  statusOf,
+  type CatalogApp,
+  type Status,
+} from "../../lib/apps.js"
+import { plural } from "../../lib/format.js"
 import { ReducedMotion } from "../../lib/reduced-motion.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { ShareRequest } from "./share-request.js"
@@ -358,38 +368,74 @@ function OwnerMenu(props: { app: CatalogApp }) {
   )
 }
 
-function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => void) | undefined }) {
+function ExamplePrompts(props: {
+  app: CatalogApp
+  added?: boolean | undefined
+  onStart: ((prompt: string) => void) | undefined
+}) {
   const isReduced = ReducedMotion.useReduced()
   const deep = DarkUi.useDarkUi()
   const prompts = props.app.listing?.examplePrompts ?? []
   if (prompts.length === 0) return null
   const start = props.onStart
+  if (deep)
+    return (
+      <section data-slot="app-prompts">
+        <div data-slot="app-section-head">
+          <h2 data-slot="app-prompts-title">Try it</h2>
+          {start ? null : (
+            <p data-slot="app-section-note">
+              {props.added ? "Connect an account to try these" : "Add to a space to try these"}
+            </p>
+          )}
+        </div>
+        <ul data-slot="app-prompts-list">
+          {prompts.map((prompt) => {
+            const text = (
+              <span data-slot="app-prompt-text">
+                <AppMention app={props.app} /> {withoutMention(prompt)}
+              </span>
+            )
+            return (
+              <li key={prompt}>
+                {start ? (
+                  <button type="button" data-slot="app-prompt" onClick={() => start(prompt)}>
+                    {text}
+                    <span aria-hidden data-slot="app-prompt-go">
+                      <IconArrowRight />
+                    </span>
+                  </button>
+                ) : (
+                  <p data-slot="app-prompt">{text}</p>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+    )
   return (
     <section
       aria-label="Example prompts"
       data-slot="app-prompts"
       className="relative isolate grid min-h-64 overflow-hidden rounded-2xl bg-muted px-4 py-12 sm:min-h-80 sm:px-12"
     >
-      {deep ? (
-        <h2 data-slot="app-prompts-title">Try it</h2>
-      ) : (
-        <Suspense fallback={null}>
-          <MeshGradient
-            aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10 size-full"
-            width="100%"
-            height="100%"
-            colors={promptColors}
-            distortion={0.34}
-            swirl={0.22}
-            grainMixer={0.01}
-            grainOverlay={0.035}
-            speed={isReduced ? 0 : 0.06}
-            scale={1.2}
-            rotation={18}
-          />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <MeshGradient
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 size-full"
+          width="100%"
+          height="100%"
+          colors={promptColors}
+          distortion={0.34}
+          swirl={0.22}
+          grainMixer={0.01}
+          grainOverlay={0.035}
+          speed={isReduced ? 0 : 0.06}
+          scale={1.2}
+          rotation={18}
+        />
+      </Suspense>
       <ul className="m-auto flex w-full max-w-xl flex-col gap-3">
         {prompts.map((prompt) => {
           const body = (
@@ -426,6 +472,31 @@ function ExamplePrompts(props: { app: CatalogApp; onStart: ((prompt: string) => 
   )
 }
 
+function AppMeta(props: { app: CatalogApp }) {
+  const app = props.app
+  const spaceName = useSpaces().spaceName
+  const mcps = Object.values(app.mcps ?? {}).filter((mcp) => mcp.transport.type !== "managed")
+  const tools = Object.values(app.listing?.toolCounts ?? {}).reduce((total, count) => total + count, 0)
+  const skills = Object.keys(app.skills ?? {}).length
+  const items = [
+    app.source === "registry" ? "Ren registry" : `Made in ${spaceName(app.ownerSpaceId)}`,
+    [...new Set(Object.values(app.listing?.categories ?? {}).flat())].map(categoryLabel).join(", "),
+    hasManaged(app) ? "Managed by Ren" : "",
+    mcps.some((mcp) => mcp.auth.type === "oauth" || mcp.transport.type === "provider") ? "OAuth sign-in" : "",
+    mcps.some((mcp) => mcp.auth.type !== "none" && mcp.auth.type !== "oauth") ? "API key" : "",
+    tools > 0 ? plural(tools, "tool") : "",
+    tools === 0 && mcps.length > 0 ? plural(mcps.length, "MCP") : "",
+    skills > 0 ? plural(skills, "skill") : "",
+  ].filter((item) => item !== "")
+  return (
+    <ul data-slot="app-header-meta" aria-label={`About ${app.name}`}>
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  )
+}
+
 function AppDetail(props: { app: CatalogApp; loading: boolean }) {
   const app = props.app
   const uses = useSpaceUses(app)
@@ -442,24 +513,35 @@ function AppDetail(props: { app: CatalogApp; loading: boolean }) {
       <OpenInChat app={app} uses={uses} onStart={(spaceId) => start(spaceId)} onProfile={setEditing} />
     </>
   )
+  const prompts = (
+    <ExamplePrompts
+      app={app}
+      added={uses.some((use) => use.status)}
+      onStart={first ? (prompt) => start(first.id, prompt) : undefined}
+    />
+  )
+  const about =
+    body && body !== app.description ? (
+      <ReadMore className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</ReadMore>
+    ) : null
   return (
-    <AppDetailFrame
-      name={app.name}
-      actions={deep ? actions : undefined}
-      aside={deep && !props.loading ? <AppFacts app={app} /> : undefined}
-    >
+    <AppDetailFrame name={app.name}>
       <Loading id={headerShape} loading={false} label="Loading app">
-        <AppHeader name={app.name} description={app.description} icon={app.icon} actions={deep ? null : actions} />
+        <AppHeader
+          name={app.name}
+          description={app.description}
+          icon={app.icon}
+          actions={actions}
+          meta={deep && !props.loading ? <AppMeta app={app} /> : undefined}
+        />
       </Loading>
       <Loading id={detailsShape} loading={props.loading} label="Loading app details">
         {props.loading ? (
           <AppDetailsSample />
         ) : (
-          <div className="flex flex-col gap-10">
-            <ExamplePrompts app={app} onStart={first ? (prompt) => start(first.id, prompt) : undefined} />
-            {body && body !== app.description ? (
-              <ReadMore className="text-sm/6 whitespace-pre-line text-muted-foreground">{body}</ReadMore>
-            ) : null}
+          <div data-slot="app-sections" className="flex flex-col gap-10">
+            {deep ? about : prompts}
+            {deep ? prompts : about}
             <AppAccounts app={app} onProfile={setEditing} />
             <AppSections app={app} facts={!deep} />
           </div>

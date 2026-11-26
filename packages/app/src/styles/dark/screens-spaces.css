@@ -372,9 +372,18 @@ html.dark
     [data-slot="dialog-content"] *,
     [data-slot="sheet-content"] *,
     [data-slot="card"] *,
-    [data-slot="item-group"] *
+    [data-slot="item-group"] *,
+    :has(> [data-slot="table-container"] > [data-file-table])
   ) {
   width: auto;
+  max-width: none;
+  margin-inline: calc(var(--settings-outset) * -1);
+}
+
+/* A space's Drive bleeds its file table the way the organization's Drive does (screens-library.css), on the
+   table itself, so its loading shape and its rows are one width. */
+html.dark [data-screen="space-drive"] [data-slot="table-container"]:has(> [data-file-table]) {
+  width: calc(100% + 32px);
   max-width: none;
   margin-inline: calc(var(--settings-outset) * -1);
 }
@@ -403,4 +412,29 @@ html.dark [data-screen="spaces"] [data-slot="avatar-group"] {
 html.dark [data-screen="spaces"] td[title=""],
 html.dark [data-screen="spaces"] td:not([title]):is(:nth-child(2)) {
   color: var(--d-text-4);
+}
+
+/* ───────────── A space's Drive: the same Files / Artifacts pills as /drive ─────────────
+ * The pills take over from the pinned Artifacts row and the `Drive › Artifacts` crumb, as on the organization's
+ * Drive. */
+
+html.dark [data-screen="space-drive"] [data-slot="page-body"] tr:has(a[href$="/drive/artifacts"]),
+html.dark
+  [data-screen="space-drive"][data-view="artifacts"]
+  [data-slot="page-body"]
+  > div
+  > [data-slot="breadcrumb"]:first-child {
+  display: none;
+}
+
+/* ───────────── A space's Instructions: the same card as the Instructions block on General ───────────── */
+
+html.dark [data-screen="space-instructions"] [data-slot="page-body"] [class~="group/instructions"] {
+  padding: 14px 18px;
+  border-color: var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+  font-size: var(--d-small);
+  color: var(--d-text-2);
 }

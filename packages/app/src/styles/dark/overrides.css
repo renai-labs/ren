@@ -149,3 +149,13 @@ html.dark [data-screen="apps"] [data-app-row] [data-slot="item-media"] > :is(div
   height: 36px;
   border-radius: 8px;
 }
+
+/* The composer's own text sits between chrome (0.8125rem) and reading text (0.9375rem): at the larger
+   interface sizes the reading size looked oversized inside the box. */
+html.dark
+  [data-slot="composer"]
+  > [data-slot="input-group"][data-shell="false"]
+  > [data-slot="input-group-control"]:not(#d) {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}

@@ -6,6 +6,7 @@ import type { Confirmation } from "./confirm-dialog.js"
 import { TableCard, TableEmpty } from "./page.js"
 import { PersonAvatar } from "./person-avatar.js"
 import { RowMenu, type RowMenuItem } from "./row-menu.js"
+import { DarkUi } from "../lib/dark-ui.js"
 
 export type MemberRow = {
   id: string
@@ -13,6 +14,7 @@ export type MemberRow = {
   email: string
   image?: string | undefined
   you?: boolean | undefined
+  note?: string | undefined
 }
 
 const beforeAt = /(?=@)/u
@@ -29,12 +31,14 @@ export function MembersTable<Row extends MemberRow>(props: {
   stale?: boolean | undefined
 }) {
   const [descending, setDescending] = useState(false)
+  const deep = DarkUi.useDarkUi()
+  const narrow = props.spaces !== undefined || deep
   return (
     <TableCard className={props.stale ? "opacity-60 transition-opacity" : "transition-opacity"}>
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className={props.spaces ? "w-1/4" : "w-1/3"} aria-sort={descending ? "descending" : "ascending"}>
+            <TableHead className={narrow ? "w-1/4" : "w-1/3"} aria-sort={descending ? "descending" : "ascending"}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -46,7 +50,7 @@ export function MembersTable<Row extends MemberRow>(props: {
               </Button>
             </TableHead>
             <TableHead>Email</TableHead>
-            <TableHead className={props.spaces ? "w-36" : "w-1/4"}>{props.column.heading}</TableHead>
+            <TableHead className={narrow ? "w-36" : "w-1/4"}>{props.column.heading}</TableHead>
             {props.spaces ? <TableHead className="w-1/5">Spaces</TableHead> : null}
             <TableHead className="w-15" />
           </TableRow>
@@ -65,6 +69,7 @@ export function MembersTable<Row extends MemberRow>(props: {
                       <PersonAvatar name={row.name} image={row.image} />
                       <span className="truncate">{row.name}</span>
                       {row.you ? <span className="text-xs text-muted-foreground">You</span> : null}
+                      {row.note ? <span className="text-xs text-muted-foreground">{row.note}</span> : null}
                     </span>
                   </TableCell>
                   <TableCell className="[overflow-wrap:anywhere] whitespace-normal text-muted-foreground">

@@ -6,7 +6,9 @@ import { Loader } from "../../../../../lib/loader.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/")({
   head: () => ({ meta: [{ title: "Inbox · Space · Ren" }] }),
-  validateSearch: Schema.toStandardSchemaV1(Schema.Struct({ chats: Schema.optional(Schema.Literals(["mine"])) })),
+  validateSearch: Schema.toStandardSchemaV1(
+    Schema.Struct({ chats: Schema.optional(Schema.Literals(["mine"])), session: Schema.optional(Schema.String) }),
+  ),
   loaderDeps: (options) => ({ mine: options.search.chats === "mine" }),
   loader: (options) => {
     Loader.start(
@@ -24,11 +26,21 @@ export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/")({
 
 function Inbox() {
   const navigate = Route.useNavigate()
+  const search = Route.useSearch()
   return (
     <SpaceInbox
       key={Route.useParams().spaceId}
-      mine={Route.useSearch({ select: (search) => search.chats === "mine" })}
-      onMineChange={(mine) => void navigate({ search: mine ? { chats: "mine" } : {}, replace: true })}
+      mine={search.chats === "mine"}
+      onMineChange={(mine) =>
+        void navigate({
+          search: (previous) => ({ ...previous, chats: mine ? ("mine" as const) : undefined }),
+          replace: true,
+        })
+      }
+      session={search.session}
+      onSessionChange={(session, options) =>
+        void navigate({ search: (previous) => ({ ...previous, session }), replace: options.replace })
+      }
     />
   )
 }

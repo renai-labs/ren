@@ -15,10 +15,16 @@ export function SessionSheet(props: {
           <SheetTitle>{props.title}</SheetTitle>
           <SheetDescription>{props.description}</SheetDescription>
         </SheetHeader>
-        <div data-slot="chat-sheet-body" className="flex min-h-0 flex-1 flex-col [--container-chat:--spacing(192)]">
-          {props.children}
-        </div>
+        <SessionSheetBody>{props.children}</SessionSheetBody>
       </SheetContent>
     </Sheet>
+  )
+}
+
+export function SessionSheetBody(props: { children: ReactNode }) {
+  return (
+    <div data-slot="chat-sheet-body" className="flex min-h-0 flex-1 flex-col [--container-chat:--spacing(192)]">
+      {props.children}
+    </div>
   )
 }

@@ -14,10 +14,11 @@ import {
   IconCopy,
   IconCube,
   IconLock,
+  IconX,
 } from "@tabler/icons-react"
 import { Alert, AlertDescription } from "@ren/ui/alert"
 import { Button } from "@ren/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@ren/ui/dialog"
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia } from "@ren/ui/empty"
 import {
   Field,
@@ -68,6 +69,7 @@ import {
   type Status,
 } from "../lib/apps.js"
 import { cn } from "cn"
+import { DarkUi } from "../lib/dark-ui.js"
 import { RouterContext } from "../lib/router-context.js"
 
 type App = CatalogApp
@@ -118,6 +120,7 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
   const [section, setSection] = useState<"edit" | "connection">("edit")
   const [motion, setMotion] = useState<keyof typeof slides>("none")
   const signIn = useSignIn(() => setWaiting(true))
+  const deep = DarkUi.useDarkUi()
   const profile = useQuery({
     ...api["app-profile"].get.queryOptions({ idOrSlug: profileId ?? "" }),
     enabled: Boolean(profileId),
@@ -179,9 +182,22 @@ export function ProfileDialog(props: ProfileTarget & { onClose: () => void }) {
     >
       <DialogContent // ast-grep-ignore: require-overlay-title -- each step renders its DialogTitle through Screen
         showCloseButton={false}
+        data-dialog="profile"
         className="flex max-h-[calc(100dvh-(--spacing(8)))] min-h-[min(--spacing(120),calc(100dvh-(--spacing(8))))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
       >
-        {back ? (
+        {back && deep ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            data-back=""
+            aria-label="Back"
+            className="absolute z-10"
+            onClick={back}
+          >
+            <IconChevronLeft />
+          </Button>
+        ) : null}
+        {back && !deep ? (
           <Button variant="ghost" size="sm" className="absolute top-3 left-3 z-10 text-muted-foreground" onClick={back}>
             <IconChevronLeft data-icon="inline-start" />
             Back
@@ -1175,6 +1191,7 @@ function SpacesStep(props: { app: App; newAccount: boolean; onPick: (space: From
   const joined = useSpaces().joined
   const profiles = useAppProfiles([props.app.id])
   const app = props.app
+  const deep = DarkUi.useDarkUi()
   const added = (space: (typeof joined)[number]) =>
     profiles
       .of(app.id)
@@ -1193,7 +1210,13 @@ function SpacesStep(props: { app: App; newAccount: boolean; onPick: (space: From
       {profiles.pending ? (
         <SkeletonRows count={3} label="Loading spaces" />
       ) : (
-        <div className="flex w-full flex-col divide-y overflow-hidden rounded-lg border bg-card text-left">
+        <div
+          data-part="spaces"
+          className={cn(
+            "flex w-full flex-col text-left",
+            !deep && "divide-y overflow-hidden rounded-lg border bg-card",
+          )}
+        >
           {joined.map((space) => {
             const isAdded = added(space)
             return (
@@ -1221,12 +1244,15 @@ function SpacesStep(props: { app: App; newAccount: boolean; onPick: (space: From
                 )}
                 <span className="min-w-0 flex-1 truncate text-left">{space.name}</span>
                 {isAdded ? (
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span data-part="state" className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <IconCheck className="text-chart-2" />
                     Added
                   </span>
                 ) : null}
-                <IconChevronRight className="text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
+                {!isAdded && deep ? <span data-part="add">Add</span> : null}
+                {deep ? null : (
+                  <IconChevronRight className="text-muted-foreground transition-transform duration-150 ease-out group-hover/row:translate-x-0.5" />
+                )}
               </Button>
             )
           })}
@@ -1245,6 +1271,37 @@ function Screen(props: {
   note?: ReactNode
   onSubmit?: () => void
 }) {
+  const deep = DarkUi.useDarkUi()
+  if (deep)
+    return (
+      <form
+        data-part="screen"
+        className="relative flex min-h-0 flex-1 flex-col"
+        onSubmit={(event) => {
+          event.preventDefault()
+          props.onSubmit?.()
+        }}
+      >
+        <div data-slot="dialog-header" className="flex">
+          <AppIcon name={props.app.name} description={props.app.description} icon={props.app.icon} size="lg" />
+          <div data-part="heading" className="flex min-w-0 flex-1 flex-col">
+            <DialogTitle>{props.title}</DialogTitle>
+            {props.description ? <DialogDescription>{props.description}</DialogDescription> : null}
+          </div>
+          <DialogClose data-close="icon" render={<Button variant="ghost" size="icon-sm" />}>
+            <IconX />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+        </div>
+        {props.children || props.note ? (
+          <div data-part="body" className="flex min-h-0 flex-col overflow-y-auto overscroll-contain">
+            {props.children}
+            {props.note ? <p data-slot="field-description">{props.note}</p> : null}
+          </div>
+        ) : null}
+        {props.action ? <div data-slot="dialog-footer">{props.action}</div> : null}
+      </form>
+    )
   return (
     <form
       className="relative flex min-h-0 flex-1 flex-col"
@@ -1357,6 +1414,7 @@ function EditStep(props: {
   onDone: () => void
 }) {
   const profile = props.profile
+  const deep = DarkUi.useDarkUi()
   const spaces = useSpaces().joined.filter((space) => space.kind !== "private")
   const edit = useEditProfile(profile, props.onDone)
   const included = useApps(props.app.dependsOn)
@@ -1373,7 +1431,13 @@ function EditStep(props: {
             {edit.pending ? <Spinner data-icon="inline-start" /> : null}
             Save
           </Button>
-          <DeleteAccount profile={profile} app={props.app} onDeleted={props.onDone} />
+          {deep ? (
+            <div data-footer="start" data-tone="destructive">
+              <DeleteAccount profile={profile} app={props.app} onDeleted={props.onDone} />
+            </div>
+          ) : (
+            <DeleteAccount profile={profile} app={props.app} onDeleted={props.onDone} />
+          )}
         </>
       }
     >

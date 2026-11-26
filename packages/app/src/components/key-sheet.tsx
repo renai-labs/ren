@@ -178,7 +178,14 @@ function KeyForm(props: { credential: Key; onClose: () => void }) {
         {error ? <FieldError>{error}</FieldError> : null}
       </FieldGroup>
       <SheetFooter className="flex-row">
-        <Button type="button" variant="ghost" className="mr-auto text-destructive" onClick={() => setDeleting(true)}>
+        <Button
+          type="button"
+          variant="ghost"
+          data-footer="start"
+          data-tone="destructive"
+          className="mr-auto text-destructive"
+          onClick={() => setDeleting(true)}
+        >
           <IconTrash data-icon="inline-start" />
           Delete
         </Button>

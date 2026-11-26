@@ -1,0 +1,336 @@
+/* The space inbox: a two-pane list and reader (linear/inbox.png). inbox-panes.tsx renders it in dark mode only.
+ * Hooks: data-slot="inbox" (root; data-narrow under 1100px of panel, data-reading with a chat open),
+ * "inbox-list" / "inbox-reader" (the panes), "inbox-bar" (each pane's 44px bar), "inbox-views" (the pills),
+ * "inbox-row" (role=option), "inbox-idle" (the reader with nothing selected). */
+html.dark {
+  --inbox-list: 400px;
+  --inbox-row: 56px;
+  --inbox-avatar: 32px;
+  --inbox-badge: 16px;
+  /* The row fills composited over the panel: the badge's cut-out ring matches the row behind it. */
+  --inbox-ring: var(--d-panel);
+  --inbox-ring-hover: color-mix(in srgb, var(--d-panel), white 4%);
+  --inbox-ring-selected: color-mix(in srgb, var(--d-panel), white 7%);
+}
+
+/* The page's own bar and toolbar give way: each pane has its own 44px bar, as Linear's inbox does. */
+html.dark [data-screen="space-inbox"] > [data-slot="page"] {
+  & > :is([data-slot="page-bar"], [data-slot="page-toolbar"]) {
+    display: none;
+  }
+
+  & [data-slot="page-body"] {
+    gap: 0;
+    padding: 0;
+  }
+
+  & [data-slot="page-body"] > div {
+    gap: 0;
+  }
+}
+
+html.dark [data-slot="inbox"] {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: var(--inbox-list) minmax(0, 1fr);
+
+  &[data-narrow] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &[data-narrow][data-reading] > [data-slot="inbox-list"],
+  &[data-narrow]:not([data-reading]) > [data-slot="inbox-reader"] {
+    display: none;
+  }
+}
+
+html.dark :is([data-slot="inbox-list"], [data-slot="inbox-reader"]) {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+html.dark [data-slot="inbox-list"] {
+  border-inline-end: 1px solid var(--d-line);
+}
+
+html.dark [data-slot="inbox"][data-narrow] > [data-slot="inbox-list"] {
+  border-inline-end: 0;
+}
+
+/* Each pane's bar: the shell's 44px header recipe, title small/500 --d-text-2, 28px ghost circles. */
+html.dark [data-slot="inbox-bar"] {
+  display: flex;
+  box-sizing: border-box;
+  height: var(--d-header);
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: var(--shell-bar-pad);
+  border-bottom: 1px solid var(--d-line);
+}
+
+html.dark [data-slot="inbox-title"] {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: var(--d-ctl);
+  letter-spacing: -0.006em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--d-text-2);
+}
+
+html.dark [data-slot="inbox-bar"] > [data-slot="button"] + [data-slot="inbox-title"] {
+  padding-inline-start: 2px;
+}
+
+/* The view pills: Linear's 44px row under the bar, pills 8px in. */
+html.dark [data-slot="inbox-views"] {
+  display: flex;
+  height: var(--d-header);
+  flex: none;
+  align-items: center;
+  padding: 0 8px;
+}
+
+html.dark [data-slot="inbox-scroll"] {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-block-end: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--d-line-3) transparent;
+}
+
+html.dark [data-slot="inbox-empty"] {
+  max-width: 28ch;
+  margin: auto;
+  padding: 24px 16px;
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="inbox-rows"] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A row: 56px, two lines beside a 32px avatar; fills from the tokens, 8px radius, 8px side inset. */
+html.dark [data-slot="inbox-row"] {
+  display: flex;
+  box-sizing: border-box;
+  min-height: var(--inbox-row);
+  align-items: center;
+  gap: 12px;
+  margin: 0 8px;
+  padding: 8px 10px 8px 9px;
+  border-radius: var(--d-r);
+  cursor: default;
+  outline: none;
+  user-select: none;
+  transition: background-color 100ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus-visible {
+    outline: 1px solid var(--d-accent);
+    outline-offset: -1px;
+  }
+
+  &[aria-selected="true"] {
+    --inbox-ring: var(--inbox-ring-selected);
+    background-color: var(--d-selected);
+  }
+}
+
+@media (hover: hover) {
+  html.dark [data-slot="inbox-row"][role="option"]:not([aria-selected="true"]):hover {
+    --inbox-ring: var(--inbox-ring-hover);
+    background-color: var(--d-hover);
+  }
+}
+
+html.dark [data-slot="inbox-avatar"] {
+  position: relative;
+  display: grid;
+  width: var(--inbox-avatar);
+  height: var(--inbox-avatar);
+  flex: none;
+  place-items: center;
+
+  & > [data-slot="avatar"] {
+    width: var(--inbox-avatar);
+    height: var(--inbox-avatar);
+  }
+}
+
+/* A chat that came from a channel (Slack, GitHub, a schedule …) wears the channel's mark. */
+html.dark [data-slot="inbox-mark"] {
+  display: grid;
+  width: var(--inbox-avatar);
+  height: var(--inbox-avatar);
+  place-items: center;
+  border: 1px solid var(--d-edge-faint);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  color: var(--d-text-2);
+
+  & > svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* The source badge, where Linear puts its notification type: a 16px disc cut out of the avatar's corner. */
+html.dark [data-slot="inbox-badge"] {
+  position: absolute;
+  inset-block-end: -3px;
+  inset-inline-end: -3px;
+  display: grid;
+  box-sizing: border-box;
+  width: var(--inbox-badge);
+  height: var(--inbox-badge);
+  place-items: center;
+  border: 2px solid var(--inbox-ring);
+  border-radius: var(--d-r-pill);
+  background-color: var(--d-chip);
+  color: var(--d-text-2);
+  transition: border-color 100ms ease-out;
+
+  & > svg {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+html.dark [data-slot="inbox-lines"] {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+html.dark [data-slot="inbox-line"] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Line one: the title, small/500. Bright when the chat needs the reader (or is the one open), quiet otherwise. */
+html.dark [data-slot="inbox-row-title"] {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: var(--d-small);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="inbox-row"]:is([data-attention="asking"], [aria-selected="true"]) [data-slot="inbox-row-title"] {
+  color: var(--d-text);
+}
+
+/* Keyboard focus shows the whole title: the row grows to fit it instead of the hover-only native tooltip. */
+html.dark [data-slot="inbox-row"]:focus-visible {
+  & [data-slot="inbox-line"]:first-child {
+    align-items: flex-start;
+  }
+
+  & [data-slot="inbox-row-title"] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  & [data-slot="inbox-state"] {
+    margin-block-start: 2px;
+  }
+}
+
+html.dark [data-slot="inbox-state"] {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+
+  & > svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  & > svg.text-muted-foreground {
+    color: var(--d-text-3);
+  }
+}
+
+/* Line two: agent · started by · source in mini, the age at the far right. */
+html.dark :is([data-slot="inbox-context"], [data-slot="inbox-age"]) {
+  font-size: var(--d-mini);
+  font-weight: 450;
+  line-height: 1.4;
+  color: var(--d-text-3);
+}
+
+html.dark [data-slot="inbox-context"] {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+html.dark [data-slot="inbox-age"] {
+  min-width: 16px;
+  flex: none;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The reader: the chat itself under its bar, or Linear's quiet empty state. */
+html.dark [data-slot="inbox-reader"] > [data-slot="chat-sheet-body"] {
+  min-height: 0;
+  flex: 1;
+}
+
+html.dark [data-slot="inbox-idle"] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding-block-end: var(--d-header);
+
+  & > svg {
+    width: 96px;
+    height: 96px;
+    stroke-width: 0.6;
+    color: var(--d-text-3);
+  }
+
+  & > p {
+    margin: 0;
+    font-size: var(--d-small);
+    font-weight: 450;
+    color: var(--d-text-3);
+    font-variant-numeric: tabular-nums;
+  }
+}
