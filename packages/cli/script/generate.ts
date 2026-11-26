@@ -491,6 +491,8 @@ const elsewhere = new Map([
   ["join-link.preview", "The join page shows a space invite link to the person who opens it."],
   ["join-link.accept", "The join page adds the person to the space, then opens it."],
   ["ren-inference.connect", "The provider sign-in returns to the app in a browser."],
+  ["ren-inference.signIn.start", "A subscription sign-in opens the vendor's page from the app's Connect dialog."],
+  ["ren-inference.signIn.complete", "The code the vendor's page shows is pasted in the app's Connect dialog."],
   ["ren-inference.key.secret", "ren inference setup"],
   ["ren-inference.harness-plan", "ren inference setup"],
   ["drive.startUpload", "The upload posts its file to the bucket with the returned form; the app does it."],
