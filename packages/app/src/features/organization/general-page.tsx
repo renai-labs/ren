@@ -59,6 +59,7 @@ export function GeneralSettingsPage() {
   return (
     <Page
       title="General"
+      width="settings"
       description={deep ? "Your organization’s name, logo, default model and instructions." : undefined}
     >
       <Rows>

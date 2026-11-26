@@ -30,6 +30,7 @@ import { DarkUi } from "../lib/dark-ui.js"
 
 export const pageWidths = {
   column: "max-w-200",
+  settings: "max-w-200",
   wide: "max-w-236",
 } as const
 
@@ -40,6 +41,7 @@ const columnBody = "mx-auto flex w-full flex-1 flex-col gap-6 px-6 pt-6 pb-12 ha
 
 const pageFrames: Record<PageWidth, { readonly head: string; readonly body: string }> = {
   column: { head: cn(columnHead, pageWidths.column), body: cn(columnBody, pageWidths.column) },
+  settings: { head: cn(columnHead, pageWidths.settings), body: cn(columnBody, pageWidths.settings) },
   wide: { head: cn(columnHead, pageWidths.wide), body: cn(columnBody, pageWidths.wide) },
   full: {
     head: "flex shrink-0 flex-col gap-4 px-8 pt-8",
@@ -237,7 +239,12 @@ function ColumnPage(props: PageProps) {
     </>
   )
   return (
-    <div data-slot="page" data-page-width={deep ? "grid" : width} className="flex min-h-0 w-full flex-1 flex-col">
+    <div
+      data-slot="page"
+      data-page-width={deep ? "grid" : width === "settings" ? "column" : width}
+      data-page-grid={deep && width === "settings" ? "settings" : undefined}
+      className="flex min-h-0 w-full flex-1 flex-col"
+    >
       <div className="shrink-0 scrollbar-thin [scrollbar-gutter:stable] overflow-hidden">
         <div data-slot="page-head" className={frame.head}>
           {props.back ? (

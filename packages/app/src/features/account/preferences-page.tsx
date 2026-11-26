@@ -129,6 +129,7 @@ export function PreferencesPage() {
   return (
     <Page
       title="Preferences"
+      width="settings"
       description={deep ? "Your profile, and how Ren looks and works for you." : undefined}
       actions={
         <Button

@@ -37,11 +37,11 @@ export const deepSpaceWidths: Readonly<Record<string, PageWidth>> = {
   credentials: "full",
   repositories: "full",
   members: "full",
-  instructions: "column",
+  instructions: "settings",
   permissions: "column",
-  compute: "column",
+  compute: "settings",
   usage: "column",
-  settings: "column",
+  settings: "settings",
 }
 
 const sharedReason = (space: SpaceInfo) => {

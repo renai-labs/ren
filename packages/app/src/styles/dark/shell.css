@@ -562,6 +562,12 @@ html.dark [data-page-width="full"]:not(:has(> [data-slot="page-toolbar"]:not([hi
 /* The grid (every page that is not full: Apps, all of Settings, forms, catalogs, a space's settings pages).
    One centred 59rem column, one top offset, one title block, the view-pill row, then the content. The
    frame never changes between these pages; only what is inside it does. */
+/* Settings-style pages (Preferences, General, a space's Settings, Compute and Instructions) take Linear's
+   settings column: cards 640px wide. The cards hang 16px outside the text column, hence 604 + 48. */
+html.dark [data-page-width="grid"][data-page-grid="settings"] :is([data-slot="page-head"], [data-slot="page-body"]) {
+  max-width: 652px;
+}
+
 html.dark [data-page-width="grid"] {
   & [data-slot="page-head"],
   & [data-slot="page-body"] {
