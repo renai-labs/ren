@@ -226,13 +226,19 @@ function useSessionModel(id: Session.ID, info: SessionInfo.Info | undefined) {
   const catalog = useQuery(Api.query.chat.models.queryOptions({ id })).data?.models ?? []
   const models = AsyncResult.isSuccess(live) ? live.value : catalog
   const [saved, setSaved] = Preferences.usePreference(Preferences.model)
-  const model = ModelChoice.pick(models, [saved, info?.model])
+  const [picked, setPicked] = useState<SessionModel.Ref>()
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: a chat whose model left the list keeps it; the chip shows it, marked, until the person picks another.
+  const gone = info?.model && models.length > 0 && !ModelChoice.find(models, info.model) ? info.model : undefined
+  const model = picked ?? gone ?? ModelChoice.pick(models, [saved, info?.model])
   return {
     models,
     model,
-    selection: model ? { model } : {},
+    selection: model && model !== gone ? { model } : {},
     choosable: info?.capabilities.model !== false,
-    choose: setSaved,
+    choose: (next: SessionModel.Ref) => {
+      setPicked(next)
+      setSaved(next)
+    },
   }
 }
 
@@ -248,14 +254,17 @@ function ModelPicker(props: {
     setOpen(next)
     props.onOpenChange?.(next)
   }
-  const current = ModelChoice.find(props.models, props.value)
+  const listed = ModelChoice.find(props.models, props.value)
+  const current =
+    listed ??
+    (props.value && { id: props.value.id, providerID: props.value.providerID, name: props.value.id, variants: [] })
   if (!current) return null
   const variant = props.value?.variant ?? current.variants.at(0)?.id
   const effort = variant && current.variants.length > 1 ? ModelChoice.effortLabel(variant) : undefined
   return (
     <>
       <Chip
-        label={effort ? `Model: ${current.name}, ${effort}` : `Model: ${current.name}`}
+        label={`Model: ${current.name}${effort ? `, ${effort}` : ""}${listed ? "" : ", not available"}`}
         disabled={props.disabled === true}
         onPress={() => toggle(true)}
       >
@@ -263,6 +272,7 @@ function ModelPicker(props: {
         <Text className="shrink text-sm text-muted-foreground" numberOfLines={1}>
           {current.name}
           {effort ? <Text className="text-sm text-muted-foreground/70"> · {effort}</Text> : null}
+          {listed ? null : <Text className="text-sm text-destructive"> · Not available</Text>}
         </Text>
         <Icon as={ChevronDownIcon} className="size-4 text-muted-foreground" />
       </Chip>
