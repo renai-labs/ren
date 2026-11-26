@@ -306,7 +306,12 @@ export function useChat(
   SessionPages.useLive(api, root, SessionLive.of(state, root))
 
   const chatModel = ChatState.model(state, root)
-  const model = pickModel(modelList, [draft.model, chatModel, catalog.fallback])
+  // oxlint-disable-next-line ren/no-comments -- Providers F5: a chat whose model left the list keeps it; the composer shows it (marked) instead of another model.
+  const keptModel =
+    !draft.model &&
+    chatModel &&
+    !modelList.some((each) => each.id === chatModel.id && each.providerID === chatModel.providerID)
+  const model = keptModel ? chatModel : pickModel(modelList, [draft.model, chatModel, catalog.fallback])
   const switchTo = Composer.switching(draft, chatModel)
   const suggestions = useChatSuggestions({
     root,
