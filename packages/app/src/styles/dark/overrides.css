@@ -125,3 +125,15 @@ html.dark [data-screen="apps"] [data-app-row]:not(#d):has(:focus-visible) {
     box-shadow: var(--d-contact);
   }
 }
+
+/* Role badges in a members table are one column of equal chips, whether the role can be changed (a select
+   with a chevron) or not (a plain badge): same width, label at the start, chevron at the end. */
+html.dark [data-slot="role-badge"]:not(.contents),
+html.dark [data-slot="role-badge"] > [data-slot="select-trigger"]:not(#d):not(#e) {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 4.75rem;
+  min-width: 4.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
