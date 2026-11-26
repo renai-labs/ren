@@ -205,14 +205,16 @@ export function ArtifactsPage() {
   const space = route.useSearch({ select: (search) => search.space })
   const home = { kind: "org" } as const
   const deep = DarkUi.useDarkUi()
-  const crumbs = <DriveCrumbs home={home} space={space} folder={undefined} last="Artifacts" />
+  const spaces = useSpaces()
+  const here = space ? spaces.spaceName(space) : "Drive"
   return (
     <div data-screen="drive-artifacts" className="contents">
       <Page
-        title="Artifacts"
+        title={deep ? here : "Artifacts"}
+        description={deep && here === "Drive" ? "Files every chat in your organization can read." : undefined}
         width={deep ? "wide" : "full"}
-        back={deep ? crumbs : undefined}
-        leading={deep ? undefined : crumbs}
+        back={deep ? <DriveCrumbs home={home} space={space} folder={undefined} /> : undefined}
+        leading={deep ? undefined : <DriveCrumbs home={home} space={space} folder={undefined} last="Artifacts" />}
         tabs={deep ? <DriveViews page="artifacts" space={space} /> : undefined}
       >
         <ArtifactList key={space ?? ""} space={space} />

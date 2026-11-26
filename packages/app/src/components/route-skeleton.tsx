@@ -261,8 +261,11 @@ function SpaceRouteSkeleton(props: { path: ReadonlyArray<string> }) {
 
 export function RouteSkeleton() {
   const path = Routing.useRenderedPath()
+  const deep = DarkUi.useDarkUi()
   if (path.startsWith("/sessions/")) return <ChatSkeleton />
   if (path.startsWith("/tasks/")) return <TaskSkeleton />
+  if (deep && (path === "/drive" || path === "/drive/artifacts"))
+    return <PageSkeleton title="Drive" description="Files every chat in your organization can read." width="wide" />
   if (path === "/drive") return <PageSkeleton title="Drive" width="full" />
   if (path === "/drive/artifacts") return <PageSkeleton title="Artifacts" width="full" />
   if (path.startsWith("/spaces/")) return <SpaceRouteSkeleton path={path.split("/")} />
