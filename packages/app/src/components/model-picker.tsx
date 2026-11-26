@@ -69,6 +69,17 @@ export function pickModel(
   return { id: choice.id, providerID: choice.providerID, ...(variant && { variant }) }
 }
 
+// oxlint-disable-next-line ren/no-comments -- Providers F5: a chat whose model left the list keeps it; the composer shows it (marked) until the person picks another.
+export function pickChatModel(
+  models: ReadonlyArray<Choice>,
+  draft: SessionModel.Ref | undefined,
+  chat: SessionModel.Ref | undefined,
+  fallback: SessionModel.Ref | undefined,
+): SessionModel.Ref | undefined {
+  if (!draft && chat && !models.some((model) => modelKey(model) === modelKey(chat))) return chat
+  return pickModel(models, [draft, chat, fallback])
+}
+
 const providerOf = (model: Choice) => model.providerName ?? capitalize(model.providerID)
 
 // oxlint-disable-next-line ren/no-comments -- Providers P24: Ren sends a method only for a provider with two, so only those rows say which one serves.

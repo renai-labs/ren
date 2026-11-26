@@ -9,6 +9,12 @@ const utcMonthFormat = new Intl.DateTimeFormat("en", { month: "short", year: "nu
 const shortDateFormat = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" })
 const dateTimeFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" })
 const clockFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+const weekdayTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+})
 const narrowRelativeFormat = new Intl.RelativeTimeFormat("en", { style: "narrow", numeric: "auto" })
 
 export const formatDate = (value: string | Date) => dateFormat.format(new Date(value))
@@ -22,6 +28,9 @@ export const formatShortDate = (value: string | Date) => shortDateFormat.format(
 export const formatDateTime = (value: string | Date) => dateTimeFormat.format(new Date(value))
 
 export const formatClock = (value: number | Date) => clockFormat.format(value)
+
+// oxlint-disable-next-line ren/no-comments -- A reset within the week, such as a limit's: "Thu 18:38".
+export const formatWeekdayTime = (value: string | Date) => weekdayTimeFormat.format(new Date(value)).replace(",", "")
 
 export function formatCountdown(value: string, now: number) {
   const minutes = Math.round((Date.parse(value) - now) / 60_000)

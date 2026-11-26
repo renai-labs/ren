@@ -23,3 +23,17 @@ describe("ModelChoice", () => {
     expect(ModelChoice.vendorOf(choice("openai", "gpt-6-luna"))).toBe("openai")
   })
 })
+
+// oxlint-disable-next-line ren/no-comments -- Providers F5: the composer keeps a chat's model that left the list until the person picks another.
+describe("ModelChoice.forChat", () => {
+  const models = [choice("groq", "llama")]
+  test("a chat whose model left the list shows it as gone; a pick replaces it", () => {
+    const chat = { id: "old", providerID: "groq" }
+    expect(ModelChoice.forChat(models, { picked: undefined, saved: undefined, chat })).toEqual({
+      model: chat,
+      gone: true,
+    })
+    const picked = { id: "llama", providerID: "groq" }
+    expect(ModelChoice.forChat(models, { picked, saved: undefined, chat })).toEqual({ model: picked, gone: false })
+  })
+})

@@ -46,6 +46,29 @@ export const pick = (
 export const find = (models: ReadonlyArray<Choice>, value: SessionModel.Ref | undefined) =>
   value ? models.find((model) => SessionModel.key(model) === SessionModel.key(value)) : undefined
 
+// oxlint-disable-next-line ren/no-comments -- Providers F5: the model a chat's composer shows. A chat whose model left the list keeps it (`gone`) until the person picks another; else the pick, the saved choice, the chat's model, the first.
+export const forChat = (
+  models: ReadonlyArray<Choice>,
+  input: {
+    readonly picked: SessionModel.Ref | undefined
+    readonly saved: SessionModel.Ref | null | undefined
+    readonly chat: SessionModel.Ref | undefined
+  },
+): { readonly model: SessionModel.Ref | undefined; readonly gone: boolean } => {
+  if (input.picked) return { model: input.picked, gone: false }
+  if (input.chat && models.length > 0 && !find(models, input.chat)) return { model: input.chat, gone: true }
+  return { model: pick(models, [input.saved, input.chat]), gone: false }
+}
+
+// oxlint-disable-next-line ren/no-comments -- The row a chip shows for a value: the listed model, else a stand-in named by its id.
+export const shown = (models: ReadonlyArray<Choice>, value: SessionModel.Ref | undefined) => {
+  const listed = find(models, value)
+  if (listed) return { current: listed, listed: true }
+  return value
+    ? { current: { id: value.id, providerID: value.providerID, name: value.id, variants: [] }, listed: false }
+    : undefined
+}
+
 export const choose = (model: Choice, variant: string | undefined): SessionModel.Ref => {
   const chosen = defaultEffort(efforts(model), variant)
   return { id: model.id, providerID: model.providerID, ...(chosen && { variant: chosen }) }

@@ -227,13 +227,12 @@ function useSessionModel(id: Session.ID, info: SessionInfo.Info | undefined) {
   const models = AsyncResult.isSuccess(live) ? live.value : catalog
   const [saved, setSaved] = Preferences.usePreference(Preferences.model)
   const [picked, setPicked] = useState<SessionModel.Ref>()
-  // oxlint-disable-next-line ren/no-comments -- Providers F5: a chat whose model left the list keeps it; the chip shows it, marked, until the person picks another.
-  const gone = info?.model && models.length > 0 && !ModelChoice.find(models, info.model) ? info.model : undefined
-  const model = picked ?? gone ?? ModelChoice.pick(models, [saved, info?.model])
+  const shown = ModelChoice.forChat(models, { picked, saved, chat: info?.model })
+  const model = shown.model
   return {
     models,
     model,
-    selection: model && model !== gone ? { model } : {},
+    selection: model && !shown.gone ? { model } : {},
     choosable: info?.capabilities.model !== false,
     choose: (next: SessionModel.Ref) => {
       setPicked(next)
@@ -254,11 +253,10 @@ function ModelPicker(props: {
     setOpen(next)
     props.onOpenChange?.(next)
   }
-  const listed = ModelChoice.find(props.models, props.value)
-  const current =
-    listed ??
-    (props.value && { id: props.value.id, providerID: props.value.providerID, name: props.value.id, variants: [] })
-  if (!current) return null
+  const shown = ModelChoice.shown(props.models, props.value)
+  if (!shown) return null
+  const current = shown.current
+  const listed = shown.listed
   const variant = props.value?.variant ?? current.variants.at(0)?.id
   const effort = variant && current.variants.length > 1 ? ModelChoice.effortLabel(variant) : undefined
   return (

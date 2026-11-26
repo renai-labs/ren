@@ -4,7 +4,7 @@ import { BrainTest } from "@ren/cell/testing/brain"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { readdirSync } from "node:fs"
-import { DateTime, Effect, Layer, Option, Stream } from "effect"
+import { DateTime, Effect, Layer, Option, Stream, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import { ChatAtoms } from "../src/atoms.js"
@@ -308,13 +308,14 @@ test("an open chat reads the brain's model list again when the brain's models ch
     expect(ids(first)).not.toContain("stub-new")
     const access = Shared.access()
     yield* made.brain.install({
-      endpoints: access.endpoints.map((endpoint) => ({
-        ...endpoint,
-        models: [
-          ...endpoint.models,
-          { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
-        ],
-      })),
+      endpoints: access.endpoints.map((endpoint) =>
+        Struct.evolve(endpoint, {
+          models: (models) => [
+            ...models,
+            { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
+          ],
+        }),
+      ),
     })
     const after = yield* made.until(made.atoms.models(id), (value) => ids(value).includes("stub-new"))
     expect(ids(after)).toContain("stub-new")

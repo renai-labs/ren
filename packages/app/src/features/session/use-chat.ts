@@ -25,7 +25,7 @@ import { toast } from "@ren/ui/sonner"
 import { Preference } from "../../lib/preference.js"
 import type { PromptInputBoot } from "./prompt-input.js"
 import { quoteOf } from "./use-chat-quote.js"
-import { pickModel } from "../../components/model-picker.js"
+import { pickChatModel } from "../../components/model-picker.js"
 import { useMe } from "../../lib/use-me.js"
 import { useMembers } from "../../lib/use-members.js"
 import { useModels } from "../../lib/use-models.js"
@@ -306,12 +306,7 @@ export function useChat(
   SessionPages.useLive(api, root, SessionLive.of(state, root))
 
   const chatModel = ChatState.model(state, root)
-  // oxlint-disable-next-line ren/no-comments -- Providers F5: a chat whose model left the list keeps it; the composer shows it (marked) instead of another model.
-  const keptModel =
-    !draft.model &&
-    chatModel &&
-    !modelList.some((each) => each.id === chatModel.id && each.providerID === chatModel.providerID)
-  const model = keptModel ? chatModel : pickModel(modelList, [draft.model, chatModel, catalog.fallback])
+  const model = pickChatModel(modelList, draft.model, chatModel, catalog.fallback)
   const switchTo = Composer.switching(draft, chatModel)
   const suggestions = useChatSuggestions({
     root,

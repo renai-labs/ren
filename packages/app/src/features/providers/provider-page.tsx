@@ -14,7 +14,7 @@ import { toast } from "@ren/ui/sonner"
 import { Switch } from "@ren/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@ren/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
-import { formatDateTime, formatUtcDate, formatUtcMonth } from "@ren/ui/time"
+import { formatDateTime, formatUtcDate, formatUtcMonth, formatWeekdayTime } from "@ren/ui/time"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ren/ui/tooltip"
 import { ConfirmDialog } from "../../components/confirm-dialog.js"
 import { EditableText } from "../../components/editable-text.js"
@@ -47,15 +47,6 @@ const tokens = (value: number | undefined) => {
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`
   return `${Math.round(value / 1000)}K`
 }
-
-const resetFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-})
-
-const formatReset = (at: string) => resetFormat.format(new Date(at)).replace(",", "")
 
 // oxlint-disable-next-line ren/no-comments -- models.dev dates are `YYYY-MM-DD` or `YYYY-MM`; a month shows as a month, not as its first day.
 const released = (value: string | undefined) => {
@@ -424,14 +415,14 @@ function ChatsUse(props: { provider: ProviderInfo }) {
   const usable = provider.seats.filter((seat) => seat.status.tone !== "error")
   const resets = usable
     .flatMap((seat) => seat.limits.flatMap((window) => (window.resetsAt ? [window.resetsAt] : [])))
-    .toSorted()
-    .at(0)
+    .reduce<string | undefined>((soonest, at) => (soonest === undefined || at < soonest ? at : soonest), undefined)
   const full = usable.length > 0 && usable.every((seat) => seat.status.tone === "warn")
   const ready: Record<Method, boolean> = { subscription: usable.length > 0, key: provider.key !== null }
   const seatsSummary = () => {
     if (provider.seats.length === 0) return "None connected"
     if (usable.length < provider.seats.length) return `${usable.length} of ${provider.seats.length} ready`
-    if (full) return `${provider.seats.length} connected · at its limit${resets ? ` until ${formatReset(resets)}` : ""}`
+    if (full)
+      return `${provider.seats.length} connected · at its limit${resets ? ` until ${formatWeekdayTime(resets)}` : ""}`
     return `${provider.seats.length} connected`
   }
   const signedOut = provider.seats.filter((seat) => seat.status.tone === "error").map((seat) => seat.label)

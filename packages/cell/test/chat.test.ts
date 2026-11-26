@@ -8,7 +8,7 @@ import { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Exit, Layer, Logger, Predicate, Queue, Ref, type Scope, Stream } from "effect"
+import { Effect, Exit, Layer, Logger, Predicate, Queue, Ref, type Scope, Stream, Struct } from "effect"
 import { TestClock } from "effect/testing"
 import { HttpApi } from "effect/http-api"
 import { Chat } from "../src/chat.js"
@@ -959,13 +959,14 @@ test("a client token for one chat gets the brain's models changed frame", () =>
       yield* Queue.take(frames).pipe(Effect.repeat({ until: (frame) => frame.type === "server.connected" }))
       const access = Shared.access()
       yield* brain.install({
-        endpoints: access.endpoints.map((endpoint) => ({
-          ...endpoint,
-          models: [
-            ...endpoint.models,
-            { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
-          ],
-        })),
+        endpoints: access.endpoints.map((endpoint) =>
+          Struct.evolve(endpoint, {
+            models: (models) => [
+              ...models,
+              { id: "stub-new", type: "chat" as const, protocol: "openai-chat" as const, name: "Stub New" },
+            ],
+          }),
+        ),
       })
       const changed = yield* Queue.take(frames).pipe(
         Effect.repeat({ until: (frame) => frame.type === "models.changed" }),
