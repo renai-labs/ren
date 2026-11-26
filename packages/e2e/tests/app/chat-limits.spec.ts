@@ -23,9 +23,29 @@ test("the model chip names the provider, and Free on a free model", async ({ pag
     await page.reload()
     await chooseModel(page, /^Stub Free/u)
   }).toPass({ timeout: listRead })
-  await expect(chip).toHaveText(/Stub Free\s*·\s*Ren · Free/u)
+  await expect(chip).toHaveText(/Ren\s*\/\s*Stub Free · Free/u)
   await chooseModel(page, /^Stub Other/u)
-  await expect(chip).toHaveText(/Stub Other\s*·\s*Ren$/u)
+  await expect(chip).toHaveText(/Ren\s*\/\s*Stub Other$/u)
+})
+
+test("the picker finds a model by any words of its name and its provider, and groups each provider under its name", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/")
+  await expect(async () => {
+    await page.reload()
+    await page.getByRole("button", { name: /^Choose model/ }).click()
+    await expect(page.getByRole("heading", { name: /^Ren/u })).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: listRead })
+  const search = page.getByRole("textbox", { name: "Search models or providers" })
+  await search.fill("ren other")
+  await expect(page.getByRole("button", { name: /^Stub Other/u })).toBeVisible()
+  await expect(page.getByRole("button", { name: /^Stub Free/u })).toHaveCount(0)
+  await search.fill("other ren")
+  await expect(page.getByRole("button", { name: /^Stub Other/u })).toBeVisible()
+  await search.fill("groq other")
+  await expect(page.getByText("No models found")).toBeVisible()
 })
 
 test("the inference service's refusals show their error card at once, and Change model opens the picker", async ({

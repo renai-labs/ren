@@ -18,6 +18,8 @@ import { ChatPreferences } from "../lib/chat-preferences.js"
 import { formatPerMillion, modelKey } from "../lib/format.js"
 import { Preference } from "../lib/preference.js"
 import { PaletteDialog, PaletteEmpty, PaletteHeading } from "./palette.js"
+import { ProviderMark } from "./provider-mark.js"
+import { useProviderLogos } from "../lib/use-provider-logo.js"
 
 type Choice = SessionModel.Choice
 
@@ -47,8 +49,11 @@ const effortLabel = (id: string) => (id === "xhigh" ? "Extra high" : capitalize(
 const effortsOf = (model: Choice) =>
   model.variants.map((each) => each.id).toSorted((a, b) => effortRank(a) - effortRank(b))
 
-function defaultEffort(efforts: ReadonlyArray<string>, variant: string | undefined) {
+// oxlint-disable-next-line ren/no-comments -- The effort a model starts at: the one already chosen, else the vendor's default, else medium.
+function defaultEffort(model: Choice, variant: string | undefined) {
+  const efforts = effortsOf(model)
   if (variant && efforts.includes(variant)) return variant
+  if (model.defaultEffort && efforts.includes(model.defaultEffort)) return model.defaultEffort
   if (efforts.includes("medium")) return "medium"
   return efforts[0]
 }
@@ -60,7 +65,7 @@ export function pickModel(
   const found = picks.find((pick) => pick && models.some((model) => modelKey(model) === modelKey(pick)))
   const choice = found ? models.find((model) => modelKey(model) === modelKey(found)) : models.at(0)
   if (!choice) return undefined
-  const variant = found?.variant ?? defaultEffort(effortsOf(choice), undefined)
+  const variant = found?.variant ?? defaultEffort(choice, undefined)
   return { id: choice.id, providerID: choice.providerID, ...(variant && { variant }) }
 }
 
@@ -84,27 +89,35 @@ const normalize = (value: string) =>
     .trim()
     .replaceAll(/\s+/gu, " ")
 
+// oxlint-disable-next-line ren/no-comments -- Every word of the query must match the model's name, its id or its provider, in any order: "anthropic opus", "ren gemini flash".
 const matches = (query: string, model: Choice) => {
-  const search = normalize(query)
-  if (!search) return true
-  const compact = search.replaceAll(" ", "")
-  return [model.name, model.id, providerLabel(model)].some(
-    (value) => normalize(value).includes(search) || normalize(value).replaceAll(" ", "").includes(compact),
-  )
+  const words = normalize(query).split(" ").filter(Boolean)
+  const text = normalize([model.name, model.id, providerLabel(model)].join(" "))
+  const compact = text.replaceAll(" ", "")
+  return words.every((word) => text.includes(word) || compact.includes(word))
 }
 
 interface Group {
   readonly key: string
   readonly title: string
+  readonly providerID?: string
   readonly section: boolean
   readonly models: ReadonlyArray<Choice>
+  // oxlint-disable-next-line ren/no-comments -- How many of the provider's models sit behind "More models": those the vendor does not show first.
+  readonly more: number
 }
 
 const groupsOf = (
   models: ReadonlyArray<Choice>,
-  input: { readonly query: string; readonly recent: ReadonlyArray<string> },
+  input: { readonly query: string; readonly recent: ReadonlyArray<string>; readonly expanded: ReadonlySet<string> },
 ): ReadonlyArray<Group> => {
-  const shown = models.filter((model) => matches(input.query, model)).toSorted((a, b) => a.name.localeCompare(b.name))
+  // oxlint-disable-next-line ren/no-comments -- The vendor's order when it gives one (a subscription's models), else by name.
+  const shown = models
+    .filter((model) => matches(input.query, model))
+    .toSorted(
+      (a, b) =>
+        (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name),
+    )
   const byKey = new Map(shown.map((model) => [modelKey(model), model]))
   const searching = input.query.trim() !== ""
   const recent = searching ? [] : input.recent.flatMap((key) => byKey.get(key) ?? [])
@@ -116,24 +129,49 @@ const groupsOf = (
   // oxlint-disable-next-line ren/no-comments -- Providers in the order Ren lists them: the built-in ones first.
   const providers = [...byProvider.keys()]
   return [
-    ...(recent.length ? [{ key: "recent", title: "Recent", section: true, models: recent }] : []),
+    ...(recent.length ? [{ key: "recent", title: "Recent", section: true, models: recent, more: 0 }] : []),
     ...providers.flatMap((provider) => {
       const own = byProvider.get(provider) ?? []
-      return own.length ? [{ key: provider, title: provider, section: false, models: own }] : []
+      const first = own.at(0)
+      const featured = own.filter((model) => model.featured)
+      // oxlint-disable-next-line ren/no-comments -- Like Claude Code's /model: the models the vendor shows first, the rest behind one row. A search shows every match.
+      const folded = !searching && featured.length > 0 && !input.expanded.has(provider)
+      const models = folded ? featured : own
+      return first
+        ? [
+            {
+              key: provider,
+              title: provider,
+              providerID: first.providerID,
+              section: false,
+              models,
+              more: own.length - models.length,
+            },
+          ]
+        : []
     }),
   ]
 }
 
+// oxlint-disable-next-line ren/no-comments -- Marks each word of the query where it appears in the text.
 function Highlight(props: { text: string; query: string }) {
-  const query = props.query.trim().toLowerCase()
-  const at = query ? props.text.toLowerCase().indexOf(query) : -1
-  if (at === -1) return props.text
-  return (
-    <>
-      {props.text.slice(0, at)}
-      <span className="text-link">{props.text.slice(at, at + query.length)}</span>
-      {props.text.slice(at + query.length)}
-    </>
+  const words = props.query
+    .toLowerCase()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((word) => word.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+  if (words.length === 0) return props.text
+  const parts = props.text.split(new RegExp(`(${words.join("|")})`, "iu"))
+  // oxlint-disable-next-line ren/no-comments -- Odd parts are the matches; each part's key is where it starts in the text.
+  const starts = parts.map((_, index) => parts.slice(0, index).join("").length)
+  return parts.map((part, index) =>
+    index % 2 === 1 ? (
+      <span key={`match-${starts[index]}`} className="text-link">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
   )
 }
 
@@ -160,9 +198,9 @@ const usePicker = (
     current,
     variant,
     isCurrent: (model) => modelKey(model) === key,
-    variantOf: (model) => (modelKey(model) === key ? variant : defaultEffort(effortsOf(model), undefined)),
+    variantOf: (model) => (modelKey(model) === key ? variant : defaultEffort(model, undefined)),
     pick: (model, next) => {
-      const chosen = next ?? defaultEffort(effortsOf(model), modelKey(model) === key ? variant : undefined)
+      const chosen = next ?? defaultEffort(model, modelKey(model) === key ? variant : undefined)
       setPreference(
         ChatPreferences.modelRecent,
         [modelKey(model), ...recent.filter((each) => each !== modelKey(model))].slice(0, 5),
@@ -180,19 +218,21 @@ function ModelChip(props: { picker: Picker; disabled?: boolean | undefined; onOp
     <InputGroupButton
       size="sm"
       disabled={props.disabled}
+      title={providerLabel(current)}
       aria-label={`Choose model, ${props.picker.current.name}`}
       aria-haspopup="dialog"
       className={cn(chipClass, "max-w-72 shrink")}
       onMouseDown={(event) => event.preventDefault()}
       onClick={props.onOpen}
     >
-      <span className="flex min-w-0 whitespace-nowrap">
-        <bdi className="min-w-0 truncate">{current.name}</bdi>
+      {/* oxlint-disable-next-line ren/no-comments -- Provider / Model: the provider shrinks first, so the model's name stays whole on a narrow composer. */}
+      <span className="flex min-w-0 items-center whitespace-nowrap">
+        <bdi className="min-w-0 shrink-2 truncate text-muted-foreground/60">{providerOf(current)}</bdi>
         <span aria-hidden className="mx-1 text-muted-foreground/40">
-          ·
+          /
         </span>
-        <bdi className="min-w-0 shrink-2 truncate text-muted-foreground/60">
-          {providerLabel(current)}
+        <bdi className="min-w-0 truncate text-foreground/90">
+          {current.name}
           {current.free ? " · Free" : ""}
         </bdi>
       </span>
@@ -268,6 +308,7 @@ function Details(props: { model: Choice | SessionModel.Info }) {
         {context > 0 ? ` · ${tokens(context)} context` : ""}
       </span>
       {input ? <span className="truncate">{input}</span> : null}
+      {"description" in model && model.description ? <span className="line-clamp-2">{model.description}</span> : null}
     </div>
   )
 }
@@ -311,6 +352,7 @@ function Flyout(props: {
 
 function ModelRow(props: {
   row: Row
+  logo: string | undefined
   query: string
   active: boolean
   selected: boolean
@@ -342,7 +384,10 @@ function ModelRow(props: {
           <Highlight text={row.model.name} query={props.query} />
         </span>
         {row.group.section ? (
-          <span className="min-w-0 shrink-999 truncate text-muted-foreground">{providerLabel(row.model)}</span>
+          <span className="flex min-w-0 shrink-999 items-center gap-1 truncate text-muted-foreground">
+            <ProviderMark provider={providerOf(row.model)} logo={props.logo} letter className="size-3" />
+            <span className="truncate">{providerLabel(row.model)}</span>
+          </span>
         ) : null}
         {priceLabel(row.model) ? (
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{priceLabel(row.model)}</span>
@@ -358,6 +403,20 @@ function ModelRow(props: {
   )
 }
 
+function MoreModels(props: { count: number; onClick: () => void }) {
+  return (
+    // oxlint-disable-next-line react/forbid-elements -- a row of the model list, laid out as the model rows beside it
+    <button
+      type="button"
+      className="flex h-7 w-full shrink-0 items-center gap-1.5 rounded-md pr-0.75 pl-1.5 text-left text-sm text-muted-foreground outline-none hover:bg-foreground/6 focus-visible:bg-foreground/6"
+      onClick={props.onClick}
+    >
+      <span className="w-4 shrink-0" />
+      More models ({props.count})
+    </button>
+  )
+}
+
 function ModelDialog(props: {
   models: ReadonlyArray<Choice>
   picker: Picker
@@ -365,6 +424,7 @@ function ModelDialog(props: {
   onOpenChange: (open: boolean) => void
 }) {
   const recent = Preference.usePreference(ChatPreferences.modelRecent)
+  const logos = useProviderLogos()
   const [query, setQuery] = useState("")
   const [navigated, setNavigated] = useState(false)
   const [active, setActive] = useState<string>()
@@ -375,9 +435,11 @@ function ModelDialog(props: {
   const keyboard = useRef(false)
   const pending = useRef<HTMLElement>(undefined)
   const pointer = useRef<{ readonly x: number; readonly y: number }>(undefined)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const groups = groupsOf(props.models, {
     query,
     recent: [modelKey(props.picker.current), ...recent.filter((key) => key !== modelKey(props.picker.current))],
+    expanded,
   })
   const rows = groups.flatMap((group) => group.models.map((model): Row => ({ key: modelKey(model), model, group })))
   const current =
@@ -466,13 +528,14 @@ function ModelDialog(props: {
           setQuery("")
           setActive(undefined)
           setStaged({})
+          setExpanded(new Set())
         }
         props.onOpenChange(open)
       }}
       title="Choose model"
       search={{
         value: query,
-        label: "Search models",
+        label: "Search models or providers",
         onChange: (value) => {
           setQuery(value)
           setNavigated(false)
@@ -498,13 +561,29 @@ function ModelDialog(props: {
         {rows.length === 0 ? <PaletteEmpty>No models found</PaletteEmpty> : null}
         {groups.map((group) => (
           <div key={group.key} className="flex flex-col gap-1">
-            <PaletteHeading>{group.title}</PaletteHeading>
+            <PaletteHeading>
+              {group.section ? (
+                group.title
+              ) : (
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <ProviderMark
+                    provider={group.title}
+                    logo={logos.get(group.providerID ?? "")}
+                    letter
+                    className="-ml-5.5 size-4"
+                  />
+                  {group.title}
+                  <span className="text-xs font-normal text-muted-foreground tabular-nums">{group.models.length}</span>
+                </span>
+              )}
+            </PaletteHeading>
             {group.models.map((model) => {
               const row: Row = { key: modelKey(model), model, group }
               return (
                 <ModelRow
                   key={`${group.key}:${row.key}`}
                   row={row}
+                  logo={logos.get(model.providerID)}
                   query={query}
                   active={current?.key === row.key && current.group.key === group.key}
                   selected={props.picker.isCurrent(model)}
@@ -514,6 +593,9 @@ function ModelDialog(props: {
                 />
               )
             })}
+            {group.more > 0 ? (
+              <MoreModels count={group.more} onClick={() => setExpanded(new Set([...expanded, group.key]))} />
+            ) : null}
           </div>
         ))}
       </div>
