@@ -228,7 +228,26 @@ export type SessionMessageToolTextContent = { type: "text"; text: string }
 
 export type SessionMessageToolFileContent = { type: "file"; uri: string; mime: string; name?: string }
 
-export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
+export type SessionErrorCode =
+  | "out_of_credits"
+  | "free_limit"
+  | "provider_not_connected"
+  | "model_off"
+  | "model_unavailable"
+  | "subscription_limit"
+  | "seat_unavailable"
+  | "subscription_unsupported"
+  | "inference_unavailable"
+  | "upstream_unfunded"
+  | "upstream_down"
+  | "rate_limited"
+  | "usage_limit"
+  | "plan_excluded"
+  | "no_access"
+  | "subscription_inactive"
+  | "context_too_long"
+  | "auth_lost"
+  | "content_blocked"
 
 export type SessionMessageTokenUsage = {
   input: number
@@ -816,14 +835,14 @@ export type SessionMessageShell = {
 
 export type SessionMessageToolContent = SessionMessageToolTextContent | SessionMessageToolFileContent
 
-export type SessionMessageRetry = { attempt: number; at: number; error: SessionErrorInfo }
-
-export type SessionMessageIdle = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "idle"
-  outcome: "succeeded" | "failed" | "interrupted"
-  error?: SessionErrorInfo
+export type SessionErrorInfo = {
+  type: string
+  message: string
+  status?: number
+  response?: { body: string }
+  code?: SessionErrorCode
+  retry?: boolean
+  resetsAt?: string
 }
 
 export type SessionMessageCompactionCompleted = {
@@ -835,17 +854,6 @@ export type SessionMessageCompactionCompleted = {
   model?: SessionModelRef
   summary: string
   recent: string
-  cost?: number
-  tokens?: SessionMessageTokenUsage
-}
-
-export type SessionMessageCompactionFailed = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "compaction"
-  status: "failed"
-  reason: "auto" | "manual"
-  error: SessionErrorInfo
   cost?: number
   tokens?: SessionMessageTokenUsage
 }
@@ -1418,10 +1426,26 @@ export type SessionMessageToolError = {
   metadata?: { [x: string]: JsonValue }
 }
 
-export type SessionMessageCompaction =
-  | SessionMessageCompactionRunning
-  | SessionMessageCompactionCompleted
-  | SessionMessageCompactionFailed
+export type SessionMessageRetry = { attempt: number; at: number; error: SessionErrorInfo }
+
+export type SessionMessageCompactionFailed = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "compaction"
+  status: "failed"
+  reason: "auto" | "manual"
+  error: SessionErrorInfo
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+}
+
+export type SessionMessageIdle = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "idle"
+  outcome: "succeeded" | "failed" | "interrupted"
+  error?: SessionErrorInfo
+}
 
 export type SessionModelChoices = { models: Array<SessionModelChoice>; default?: SessionModelRef }
 
@@ -1710,6 +1734,11 @@ export type SessionMessageToolState =
   | SessionMessageToolRunning
   | SessionMessageToolCompleted
   | SessionMessageToolError
+
+export type SessionMessageCompaction =
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type TaskPage = { items: Array<TaskInfo>; page: number; pageSize: number; total: number }
 

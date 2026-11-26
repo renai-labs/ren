@@ -143,9 +143,8 @@ function ErrorRow(props: { row: Extract<TimelineRow.Row, { _tag: "Error" }>; con
   return (
     <TurnProblem
       problem={TurnProblems.of({
-        kind: row.kind,
-        text: row.text,
-        body: row.body,
+        code: row.code,
+        resetsAt: row.resetsAt,
         assistants: props.context.turns.get(row.userMessageID) ?? [],
         modelNames: props.context.modelNames,
         providerNames: props.context.providerNames,

@@ -1,5 +1,6 @@
 export * as Projection from "./projection.js"
 
+import type { SessionError } from "@ren/schema/session/error"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Exit, Option, Predicate, Schema } from "effect"
@@ -270,6 +271,16 @@ export const unwrapErrorMessage = (message: string) => {
   )
 }
 
+const errorRow = (userMessageID: string, error: SessionError.Info) =>
+  new TimelineRow.Error({
+    userMessageID,
+    kind: error.type,
+    text: unwrapErrorMessage(error.message),
+    ...(error.response && { body: error.response.body }),
+    ...(error.code && { code: error.code }),
+    ...(error.resetsAt && { resetsAt: error.resetsAt }),
+  })
+
 const isWorking = (lastStep: Entry | undefined, session: { readonly active: boolean }) =>
   session.active &&
   lastStep?.type === "assistant" &&
@@ -353,15 +364,7 @@ const messageRows = (
     if (lastStep?.type !== "assistant") return
     const error = lastStep.message.error
     if (isActive && lastStep.message.retry) rows.push(new TimelineRow.Retry({ userMessageID: turnID }))
-    else if (error && !isInterrupted(error))
-      rows.push(
-        new TimelineRow.Error({
-          userMessageID: turnID,
-          kind: error.type,
-          text: unwrapErrorMessage(error.message),
-          ...(error.response && { body: error.response.body }),
-        }),
-      )
+    else if (error && !isInterrupted(error)) rows.push(errorRow(turnID, error))
   }
 
   const appendSegment = (messages: ReadonlyArray<SessionMessage.Assistant>) => {
@@ -388,15 +391,7 @@ const messageRows = (
     }
     if (entry.type === "idle") {
       appendSegment(current)
-      if (entry === lastStep)
-        rows.push(
-          new TimelineRow.Error({
-            userMessageID: turnID,
-            kind: entry.message.error.type,
-            text: unwrapErrorMessage(entry.message.error.message),
-            ...(entry.message.error.response && { body: entry.message.error.response.body }),
-          }),
-        )
+      if (entry === lastStep) rows.push(errorRow(turnID, entry.message.error))
       return []
     }
     if (detail && TimelineDetail.noticePlacement(entry.message, detail) === "hidden") return current

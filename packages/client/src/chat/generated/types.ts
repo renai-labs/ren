@@ -46,7 +46,26 @@ export type SessionMessageSyntheticMetadata = {
   timeout?: boolean
 }
 
-export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
+export type SessionErrorCode =
+  | "out_of_credits"
+  | "free_limit"
+  | "provider_not_connected"
+  | "model_off"
+  | "model_unavailable"
+  | "subscription_limit"
+  | "seat_unavailable"
+  | "subscription_unsupported"
+  | "inference_unavailable"
+  | "upstream_unfunded"
+  | "upstream_down"
+  | "rate_limited"
+  | "usage_limit"
+  | "plan_excluded"
+  | "no_access"
+  | "subscription_inactive"
+  | "context_too_long"
+  | "auth_lost"
+  | "content_blocked"
 
 export type SessionEventShell = {
   id: string
@@ -529,75 +548,14 @@ export type SessionEventSessionSynthetic = {
   data: { sessionID: SessionID; text: string; description?: string; metadata?: SessionMessageSyntheticMetadata }
 }
 
-export type SessionEventSessionExecutionFailed = {
-  id: string
-  created: number
-  type: "session.execution.failed"
-  data: { sessionID: SessionID; error: SessionErrorInfo }
-}
-
-export type SessionEventSessionStepFailed = {
-  id: string
-  created: number
-  type: "session.step.failed"
-  data: {
-    sessionID: SessionID
-    assistantMessageID: SessionMessageID
-    cost?: number
-    tokens?: SessionMessageTokenUsage
-    error: SessionErrorInfo
-    finish?: "content-filter"
-    snapshot?: string
-    files?: Array<string>
-  }
-}
-
-export type SessionEventSessionRetryScheduled = {
-  id: string
-  created: number
-  type: "session.retry.scheduled"
-  data: {
-    sessionID: SessionID
-    assistantMessageID: SessionMessageID
-    attempt: number
-    at: number
-    error: SessionErrorInfo
-  }
-}
-
-export type SessionEventSessionCompactionFailed = {
-  id: string
-  created: number
-  type: "session.compaction.failed"
-  data: {
-    sessionID: SessionID
-    cost?: number
-    tokens?: SessionMessageTokenUsage
-    reason: "auto" | "manual"
-    error: SessionErrorInfo
-    inputID?: SessionMessageID
-  }
-}
-
-export type SessionMessageRetry = { attempt: number; at: number; error: SessionErrorInfo }
-
-export type SessionMessageCompactionFailed = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "compaction"
-  status: "failed"
-  reason: "auto" | "manual"
-  error: SessionErrorInfo
-  cost?: number
-  tokens?: SessionMessageTokenUsage
-}
-
-export type SessionMessageIdle = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "idle"
-  outcome: "succeeded" | "failed" | "interrupted"
-  error?: SessionErrorInfo
+export type SessionErrorInfo = {
+  type: string
+  message: string
+  status?: number
+  response?: { body: string }
+  code?: SessionErrorCode
+  retry?: boolean
+  resetsAt?: string
 }
 
 export type SessionEventSessionShellStarted = {
@@ -822,10 +780,76 @@ export type SessionInboxUserPayload = {
   sender?: SessionMessageSender
 }
 
-export type SessionMessageCompaction =
-  | SessionMessageCompactionRunning
-  | SessionMessageCompactionCompleted
-  | SessionMessageCompactionFailed
+export type SessionEventSessionExecutionFailed = {
+  id: string
+  created: number
+  type: "session.execution.failed"
+  data: { sessionID: SessionID; error: SessionErrorInfo }
+}
+
+export type SessionEventSessionStepFailed = {
+  id: string
+  created: number
+  type: "session.step.failed"
+  data: {
+    sessionID: SessionID
+    assistantMessageID: SessionMessageID
+    cost?: number
+    tokens?: SessionMessageTokenUsage
+    error: SessionErrorInfo
+    finish?: "content-filter"
+    snapshot?: string
+    files?: Array<string>
+  }
+}
+
+export type SessionEventSessionRetryScheduled = {
+  id: string
+  created: number
+  type: "session.retry.scheduled"
+  data: {
+    sessionID: SessionID
+    assistantMessageID: SessionMessageID
+    attempt: number
+    at: number
+    error: SessionErrorInfo
+  }
+}
+
+export type SessionEventSessionCompactionFailed = {
+  id: string
+  created: number
+  type: "session.compaction.failed"
+  data: {
+    sessionID: SessionID
+    cost?: number
+    tokens?: SessionMessageTokenUsage
+    reason: "auto" | "manual"
+    error: SessionErrorInfo
+    inputID?: SessionMessageID
+  }
+}
+
+export type SessionMessageRetry = { attempt: number; at: number; error: SessionErrorInfo }
+
+export type SessionMessageCompactionFailed = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "compaction"
+  status: "failed"
+  reason: "auto" | "manual"
+  error: SessionErrorInfo
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+}
+
+export type SessionMessageIdle = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "idle"
+  outcome: "succeeded" | "failed" | "interrupted"
+  error?: SessionErrorInfo
+}
 
 export type SessionEventSessionToolSuccess = {
   id: string
@@ -956,6 +980,11 @@ export type SessionInboxUser = {
   payload: SessionInboxUserPayload
   delivery: SessionInboxDelivery
 }
+
+export type SessionMessageCompaction =
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type SessionMessageToolState =
   | SessionMessageToolStreaming

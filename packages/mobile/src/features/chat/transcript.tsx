@@ -84,8 +84,8 @@ function SystemRow(props: { readonly row: TimelineRow.Row; readonly context: Con
     return (
       <TurnProblem
         problem={TurnProblems.of({
-          kind: row.kind,
-          text: row.text,
+          code: row.code,
+          resetsAt: row.resetsAt,
           assistants,
           modelNames: context.modelNames,
           admin: false,

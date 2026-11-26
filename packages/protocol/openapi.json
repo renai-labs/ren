@@ -26500,6 +26500,30 @@
         ],
         "additionalProperties": false
       },
+      "SessionError.Code": {
+        "type": "string",
+        "enum": [
+          "out_of_credits",
+          "free_limit",
+          "provider_not_connected",
+          "model_off",
+          "model_unavailable",
+          "subscription_limit",
+          "seat_unavailable",
+          "subscription_unsupported",
+          "inference_unavailable",
+          "upstream_unfunded",
+          "upstream_down",
+          "rate_limited",
+          "usage_limit",
+          "plan_excluded",
+          "no_access",
+          "subscription_inactive",
+          "context_too_long",
+          "auth_lost",
+          "content_blocked"
+        ]
+      },
       "SessionError.Info": {
         "type": "object",
         "properties": {
@@ -26523,6 +26547,15 @@
             },
             "required": ["body"],
             "additionalProperties": false
+          },
+          "code": {
+            "$ref": "#/components/schemas/SessionError.Code"
+          },
+          "retry": {
+            "type": "boolean"
+          },
+          "resetsAt": {
+            "type": "string"
           }
         },
         "required": ["type", "message"],

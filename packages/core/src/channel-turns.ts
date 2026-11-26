@@ -3,6 +3,7 @@ export * as ChannelTurns from "./channel-turns.js"
 import { Database } from "@ren/db/database"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
+import type { SessionError } from "@ren/schema/session/error"
 import { and, eq, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
@@ -13,6 +14,7 @@ import { ChannelThreads } from "./channel-threads.js"
 import { DurableRunner } from "./durable-runner.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { SessionRunner } from "./session/runner.js"
+import { TranscriptCodec } from "./transcript-codec.js"
 
 export interface Interface {
   readonly synced: (sessionId: Session.ID) => Effect.Effect<void>
@@ -32,9 +34,10 @@ const reminder = {
     `You have not answered in the ${Channel.titles[provider]} thread. Text in this chat is not sent there: answer the person with ${tool}.`,
 }
 
-const reasonOf = (errorType: string | null): Channel.FailureReason => {
-  if (errorType === "provider.rate-limit") return "model_busy"
-  if (errorType?.startsWith("compaction.")) return "context_too_long"
+// oxlint-disable-next-line ren/no-comments -- D2: the error's code alone (the harness's transcript codec names it) decides the notice.
+const reasonOf = (code: Option.Option<SessionError.Code>): Channel.FailureReason => {
+  if (Option.contains(code, "rate_limited")) return "model_busy"
+  if (Option.contains(code, "context_too_long")) return "context_too_long"
   return "unknown"
 }
 
@@ -47,9 +50,24 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const brains = yield* Brains.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
+    const codecs = yield* TranscriptCodec.Registry
     const thread = Database.Schema.intake_thread
     const session = Database.Schema.agent_session
     const reminded = new Map<Session.ID, string>()
+
+    const errorCodeOf = Effect.fnUntraced(function* (sessionId: Session.ID, messageId: string) {
+      const chat = (yield* database.db
+        .select({ harness: session.harness, version: session.harness_version })
+        .from(session)
+        .where(eq(session.id, sessionId))
+        .pipe(Effect.orDie)).at(0)
+      if (!chat) return Option.none<SessionError.Code>()
+      const rows = yield* database
+        .transaction((transaction) => OpenCodeStore.messagesOf(transaction, sessionId, [messageId]))
+        .pipe(Effect.orDie)
+      const message = (yield* codecs.get(chat.harness).messages(rows, chat.version)).at(0)
+      return Option.fromNullishOr(message?.type === "assistant" ? message.error?.code : undefined)
+    })
 
     const end = Effect.fnUntraced(function* (
       payload: typeof TurnRun.payloadSchema.Type,
@@ -67,11 +85,15 @@ export const layer = Layer.effect(
         .progress(target, failed ? "failed" : "done")
         .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
       if (failed) {
-        const error = yield* OpenCodeStore.latestMessage(database.db, payload.sessionId, "assistant")
+        const last = yield* OpenCodeStore.latestMessage(database.db, payload.sessionId, "assistant")
+        const code = yield* Option.match(last, {
+          onNone: () => Effect.succeed(Option.none<SessionError.Code>()),
+          onSome: (row) => errorCodeOf(payload.sessionId, row.id),
+        })
         return yield* notices.notice({
           provider: found.provider.id,
           target,
-          reason: reasonOf(Option.match(error, { onNone: () => null, onSome: (row) => row.errorType })),
+          reason: reasonOf(code),
           sessionId: payload.sessionId,
         })
       }

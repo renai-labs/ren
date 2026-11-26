@@ -40,7 +40,6 @@ export const message = {
     when 'assistant' then jsonb_path_query_array(${data}, '$.content[*] ? (@.type == "text").text')::text
   end)`,
   isFromChannel: sql<boolean>`(${data} -> 'metadata' -> 'channel') is not null`,
-  errorType: sql<string | null>`${data} -> 'error' ->> 'type'`,
   isFilesReset: sql<boolean>`coalesce(${data} -> 'metadata' ->> 'source' = ${filesResetSource}, false)`,
   createdAt: sql<string | null>`(${data} -> 'time' ->> 'created')::bigint`,
 }
@@ -179,7 +178,6 @@ export const latestMessage = (db: Database.Interface["db"], sessionId: Session.I
     .select({
       id: Database.Schema.opencode_message.id,
       fromChannel: message.isFromChannel,
-      errorType: message.errorType,
     })
     .from(Database.Schema.opencode_message)
     .where(

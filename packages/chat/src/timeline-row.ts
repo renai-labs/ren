@@ -1,5 +1,6 @@
 export * as TimelineRow from "./timeline-row.js"
 
+import type { SessionError } from "@ren/schema/session/error"
 import { Data, Equal, Match } from "effect"
 
 export interface PartRef {
@@ -38,6 +39,8 @@ export class Error extends Data.TaggedClass("Error")<{
   readonly kind: string
   readonly text: string
   readonly body?: string
+  readonly code?: SessionError.Code
+  readonly resetsAt?: string
 }> {}
 
 export class Retry extends Data.TaggedClass("Retry")<{ readonly userMessageID: string }> {}

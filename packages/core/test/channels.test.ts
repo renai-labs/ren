@@ -524,7 +524,13 @@ describe("ChannelTurns", () => {
       const failure = {
         id: "msg_2",
         type: "assistant",
-        data: { content: [], error: { type: "provider.rate-limit", message: "429 from api.internal: org_123" } },
+        data: {
+          time: { created: 1 },
+          agent: "build",
+          model: { id: "claude-opus-5-5", providerID: "anthropic" },
+          content: [],
+          error: { type: "provider.rate-limit", message: "429 from api.internal: org_123" },
+        },
       }
       yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "failed", messages: [fromChannel, failure] })
       expect(outbox.progress.at(-1)).toEqual({ message: thread.found.message, status: "failed" })

@@ -1,5 +1,6 @@
 export * as ChannelFixture from "./channel-fixture.js"
 
+import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -33,6 +34,7 @@ import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelSecrets } from "../../src/channel-secrets.js"
 import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
+import { TranscriptCodec } from "../../src/transcript-codec.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
 import { EgressControl } from "../../src/egress-control.js"
@@ -468,7 +470,12 @@ export const intakeLayer = <E, R>(origins: Layer.Layer<Intake.Receivers | Intake
   )
 
 export const cellLayer = onCell(
-  Layer.mergeAll(intakeOf(channelOrigins, PersistedQueue.layerStoreSql()), ChannelTurns.layer),
+  Layer.mergeAll(
+    intakeOf(channelOrigins, PersistedQueue.layerStoreSql()),
+    ChannelTurns.layer.pipe(
+      Layer.provide(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
+    ),
+  ),
   DurableRunner.layerMemory,
 ).pipe(Layer.provideMerge(Testing.layer))
 

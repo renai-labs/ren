@@ -19,6 +19,7 @@ import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { ScheduleOrigin } from "@ren/schema/schedule-origin"
 import { WebhookOrigin } from "@ren/schema/webhook-origin"
+import { SessionError } from "@ren/schema/session/error"
 import { SessionEvent } from "@ren/schema/session/event"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { SessionCatalog } from "@ren/schema/session/catalog"
@@ -29,6 +30,7 @@ import { SessionVcs } from "@ren/schema/session/vcs"
 import { Shell } from "@ren/schema/shell"
 import { TaskAssignment } from "@ren/schema/task-assignment"
 import { type Brand, Option, Predicate, pipe, Schema, Struct } from "effect"
+import { ErrorCode } from "./error-code.js"
 
 const UserID = Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) })
 const decodeUserID = Schema.decodeUnknownOption(UserID)
@@ -278,12 +280,27 @@ export const frame = (
     onSome: (connected) => Option.some({ id: connected.id, created, type: connected.type, data: {} }),
   })
 
+// oxlint-disable-next-line ren/no-comments -- A model call's error carries Ren's code (`ErrorCode`); a tool's error is the tool's own.
+const modelErrors = new Set([
+  "session.execution.failed",
+  "session.step.failed",
+  "session.retry.scheduled",
+  "session.compaction.failed",
+])
+
+const decodeError = Schema.decodeUnknownOption(SessionError.Info)
+
+const coded = (error: unknown): unknown =>
+  Option.match(decodeError(error), { onNone: () => error, onSome: ErrorCode.of })
+
 export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
   if (!isAllowed(raw)) return Option.none()
+  const model = Predicate.hasProperty(raw, "type") && Predicate.isString(raw.type) && modelErrors.has(raw.type)
   return decodeEvent(
     nested(raw, "data", (data) =>
       pipe(
         data,
+        (value) => (model ? nested(value, "error", coded) : value),
         (value) => nested(value, "item", (item) => nested(item, "payload", withMetadata)),
         (value) => nested(value, "form", withKind),
         (value) => nested(value, "info", withOwner),
@@ -298,7 +315,15 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
 }
 
 export const message = (info: OpenCodeMessage.Info) =>
-  readMessage(withMetadata(info.type === "compaction" ? withRecent(info) : info))
+  readMessage(
+    info.type === "assistant"
+      ? pipe(
+          withMetadata(info),
+          (value) => nested(value, "error", coded),
+          (value) => nested(value, "retry", (retry) => nested(retry, "error", coded)),
+        )
+      : withMetadata(info.type === "compaction" ? withRecent(info) : info),
+  )
 
 export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withMetadata))
 
