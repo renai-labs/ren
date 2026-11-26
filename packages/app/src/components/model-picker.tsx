@@ -192,9 +192,19 @@ const usePicker = (
 ): Picker | undefined => {
   const recent = Preference.usePreference(ChatPreferences.modelRecent)
   const setPreference = Preference.useSetPreference()
+  // oxlint-disable-next-line ren/no-comments -- The models this picker has seen, so a model that leaves the list keeps its name and provider on the chip.
+  const [seen, setSeen] = useState<ReadonlyMap<string, Choice>>(() => new Map())
+  const [seenFrom, setSeenFrom] = useState(models)
+  if (seenFrom !== models) {
+    setSeenFrom(models)
+    setSeen(new Map([...seen, ...models.map((model) => [modelKey(model), model] as const)]))
+  }
   const key = value ? modelKey(value) : undefined
   const listed = models.find((model) => modelKey(model) === key)
-  const current = listed ?? (value && { id: value.id, providerID: value.providerID, name: value.id, variants: [] })
+  const current =
+    listed ??
+    (key && seen.get(key)) ??
+    (value && { id: value.id, providerID: value.providerID, name: value.id, variants: [] })
   if (!current) return undefined
   const variant = value?.variant ?? current.variants.at(0)?.id
   return {
