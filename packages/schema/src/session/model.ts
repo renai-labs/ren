@@ -25,17 +25,30 @@ export const Choice = Schema.Struct({
   method: Schema.optionalKey(Models.Method),
   price: Schema.optionalKey(Models.Price).annotate({ description: "Only for Ren’s models, which Ren charges for." }),
   free: Schema.optionalKey(Schema.Boolean),
+  description: Schema.optionalKey(Schema.String).annotate({ description: "The vendor’s one-line description." }),
+  defaultEffort: Schema.optionalKey(Schema.String).annotate({ description: "The effort a chat starts with." }),
+  rank: Schema.optionalKey(Schema.Int).annotate({ description: "The vendor’s order of its models, 1 first." }),
+  featured: Schema.optionalKey(Schema.Literal(true)).annotate({
+    description: "One of the models the vendor shows first.",
+  }),
 }).annotate({ identifier: "SessionModel.Choice" })
 
 // oxlint-disable-next-line ren/no-comments -- Providers §5.3: what a picker row shows beside the model's name, from the provider and the model of Ren's list.
 export const listed = (
   endpoint: Models.CatalogEndpoint,
   model: Models.Info,
-): Pick<Choice, "providerName" | "method" | "price" | "free"> => ({
+): Pick<
+  Choice,
+  "providerName" | "method" | "price" | "free" | "description" | "defaultEffort" | "rank" | "featured"
+> => ({
   ...(endpoint.name && { providerName: endpoint.name }),
   ...(endpoint.method && { method: endpoint.method }),
   ...(model.price && { price: model.price }),
   ...(model.free && { free: true }),
+  ...(model.description && { description: model.description }),
+  ...(model.defaultEffort && { defaultEffort: model.defaultEffort }),
+  ...(model.rank && { rank: model.rank }),
+  ...(model.featured && { featured: true }),
 })
 
 export interface Choices extends Schema.Schema.Type<typeof Choices> {}

@@ -95,6 +95,18 @@ export const Info = Schema.Struct({
   plans: Schema.optionalKey(Schema.Array(Schema.String)).annotate({
     description: "A subscription model: the organization’s plans that serve it, such as `Max`.",
   }),
+  description: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The vendor’s one-line description of the model.",
+  }),
+  defaultEffort: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "The effort a chat starts with, when the vendor names one.",
+  }),
+  rank: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))).annotate({
+    description: "The vendor’s order of its models, 1 first. Absent: the vendor does not order them.",
+  }),
+  featured: Schema.optionalKey(Schema.Literal(true)).annotate({
+    description: "One of the models the vendor shows first; a picker puts the others behind “More models”.",
+  }),
   client: Schema.optionalKey(
     Schema.Struct({
       effortUpdates: Schema.optionalKey(Schema.Boolean).annotate({

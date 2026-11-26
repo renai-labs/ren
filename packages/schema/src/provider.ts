@@ -16,7 +16,6 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
-  mark: Schema.NonEmptyString,
   logo: Schema.optionalKey(Schema.String).annotate({ description: "The address of the provider’s logo." }),
   payer: InferencePlugin.Payer,
   builtIn: Schema.Boolean.annotate({
@@ -28,6 +27,9 @@ export const Info = Schema.Struct({
   enabled: Schema.Boolean,
   method: Schema.optionalKey(Models.Method).annotate({ description: "Absent on a built-in provider." }),
   methods: Schema.Array(Models.Method),
+  paste: Schema.optionalKey(Schema.NonEmptyString).annotate({
+    description: "What to paste back after signing in with a subscription, in the sign-in page’s words.",
+  }),
   signIn: Schema.optionalKey(Schema.NonEmptyString).annotate({
     description: "The label of the button that starts a member’s sign-in, for a provider with the subscription method.",
   }),
@@ -90,6 +92,7 @@ export const Model = Schema.Struct({
   plans: Schema.optional(Schema.Array(Schema.String)).annotate({
     description: "A subscription model: the organization’s plans that serve it, such as `Max`.",
   }),
+  description: Schema.optional(Schema.String).annotate({ description: "The vendor’s one-line description." }),
   enabled: Schema.Boolean,
 }).annotate({ identifier: "Provider.Model" })
 

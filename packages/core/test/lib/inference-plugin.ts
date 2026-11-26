@@ -10,7 +10,6 @@ import { InferencePlugin } from "../../src/inference-plugin.js"
 export const provider = (id: string, fields: Partial<InferencePlugin.Provider> = {}): InferencePlugin.Provider => ({
   id,
   name: id,
-  mark: id,
   payer: "ren",
   protocol: "openai-chat",
   auth: [{ _tag: "operator" }],

@@ -42,8 +42,13 @@ const anthropicKeyModels = [
     gateway: "anthropic/claude-haiku-5-5",
   },
 ]
-const anthropicSeatModels = anthropicKeyModels.map((model) =>
-  Struct.assign(model, { gateway: `seat/anthropic/${model.id}`, plans: ["Max"] }),
+const anthropicSeatModels = anthropicKeyModels.map((model, index) =>
+  Struct.assign(model, {
+    gateway: `seat/anthropic/${model.id}`,
+    plans: ["Max"],
+    rank: index + 1,
+    ...(index === 0 && { featured: true }),
+  }),
 )
 
 interface ProviderSettings {
@@ -185,7 +190,6 @@ export const start = (
         {
           id: "ren",
           name: "Ren",
-          mark: "ren",
           payer: "ren",
           protocol: "openai-chat",
           auth: [{ _tag: "operator" }],
@@ -194,25 +198,27 @@ export const start = (
         {
           id: "anthropic",
           name: "Anthropic",
-          mark: "anthropic",
           payer: "customer",
           protocol: "anthropic-messages",
           auth: [
             { _tag: "key", fields: [{ name: "apiKey", label: "API key", secret: true }] },
-            { _tag: "subscription", signIn: "Connect your Claude" },
+            {
+              _tag: "subscription",
+              signIn: "Connect your Claude",
+              paste: "Paste the code Claude shows after you sign in.",
+            },
           ],
           models: "organization",
-          modelCount: anthropicKeyModels.length,
+          modelTypes: { chat: anthropicKeyModels.length },
         },
         {
           id: "groq",
           name: "Groq",
-          mark: "groq",
           payer: "customer",
           protocol: "openai-chat",
           auth: [{ _tag: "key", fields: [{ name: "apiKey", label: "API key", secret: true }] }],
           models: "shared",
-          modelCount: groq.length,
+          modelTypes: { chat: groq.length },
         },
       ]),
     "GET /v1/providers/:id/models": (input) => {

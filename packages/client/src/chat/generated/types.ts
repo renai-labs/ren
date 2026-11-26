@@ -769,6 +769,10 @@ export type SessionModelInfo = {
   method?: ModelsMethod
   price?: ModelsPrice
   free?: boolean
+  description?: string
+  defaultEffort?: string
+  rank?: number
+  featured?: true
   input: Array<string>
   limit: { context: number; output: number }
 }

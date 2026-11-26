@@ -859,6 +859,10 @@ export type SessionModelChoice = {
   method?: ModelsMethod
   price?: ModelsPrice
   free?: boolean
+  description?: string
+  defaultEffort?: string
+  rank?: number
+  featured?: true
 }
 
 export type TaskParent = { id: TaskID; identifier: string; title: string }
@@ -1136,6 +1140,7 @@ export type ProviderModel = {
   price?: ModelsPrice | undefined
   free: boolean
   plans?: Array<string> | undefined
+  description?: string | undefined
   enabled: boolean
 }
 
@@ -1723,7 +1728,6 @@ export type RenInferenceKeyList = { baseUrl: string; keys: Array<RenInferenceKey
 export type ProviderInfo = {
   id: string
   name: string
-  mark: string
   logo?: string
   payer: InferencePluginPayer
   builtIn: boolean
@@ -1731,6 +1735,7 @@ export type ProviderInfo = {
   enabled: boolean
   method?: ModelsMethod
   methods: Array<ModelsMethod>
+  paste?: string
   signIn?: string
   fields: Array<InferencePluginField>
   key: ProviderKey | null

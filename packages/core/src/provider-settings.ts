@@ -145,14 +145,13 @@ export const layer = Layer.effect(
                     (model) => !state.off.includes(ModelLists.switchId(model)),
                   ),
                 )
-              : (each.provider.modelTypes ?? { chat: each.provider.modelCount ?? 0 })
-            const signIn = each.provider.auth
-              .flatMap((auth) => (auth._tag === "subscription" ? [auth.signIn] : []))
+              : (each.provider.modelTypes ?? {})
+            const subscription = each.provider.auth
+              .flatMap((auth) => (auth._tag === "subscription" ? [auth] : []))
               .at(0)
             return {
               id: each.provider.id,
               name: each.provider.name,
-              mark: each.provider.mark,
               ...(each.provider.logo && { logo: each.provider.logo }),
               payer: each.provider.payer,
               builtIn: ModelLists.builtIn(each.provider),
@@ -160,7 +159,7 @@ export const layer = Layer.effect(
               enabled: state.enabled,
               ...(state.method && { method: state.method }),
               methods: ModelLists.methodsOf(each.provider),
-              ...(signIn && { signIn }),
+              ...(subscription && { signIn: subscription.signIn, paste: subscription.paste }),
               fields: keyFields(each.provider),
               seats: seats.filter((seat) => seat.providerId === each.provider.id),
               key: key
@@ -185,9 +184,13 @@ export const layer = Layer.effect(
       const state = (yield* settingsOf(actor.organizationId)).stateOf(owned.provider)
       return {
         canManage: canManage(actor),
-        // oxlint-disable-next-line ren/no-comments -- The latest release first; a model without a date goes last. ISO dates sort as text.
+        // oxlint-disable-next-line ren/no-comments -- The vendor's order first when it gives one (a subscription's models), else the latest release first; a model without either goes last. ISO dates sort as text.
         models: (yield* lists.models(actor.organizationId, owned))
-          .toSorted((left, right) => (right.released ?? "").localeCompare(left.released ?? ""))
+          .toSorted(
+            (left, right) =>
+              (left.rank ?? Number.MAX_SAFE_INTEGER) - (right.rank ?? Number.MAX_SAFE_INTEGER) ||
+              (right.released ?? "").localeCompare(left.released ?? ""),
+          )
           .map((model) => ({
             id: ModelLists.switchId(model),
             name: model.name ?? model.id,
@@ -199,6 +202,7 @@ export const layer = Layer.effect(
             price: model.price,
             free: model.free === true,
             plans: model.plans,
+            description: model.description,
             enabled: !state.off.includes(ModelLists.switchId(model)),
           })),
       } satisfies Provider.ModelList

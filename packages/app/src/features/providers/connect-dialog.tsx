@@ -211,7 +211,9 @@ function SubscriptionForm(props: { provider: ProviderInfo; onConnected: () => vo
               setError(undefined)
             }}
           />
-          <FieldDescription>{signIn?.paste ?? "After you sign in, paste what the sign-in shows."}</FieldDescription>
+          <FieldDescription>
+            {signIn?.paste ?? provider.paste ?? "After you sign in, paste what the sign-in shows."}
+          </FieldDescription>
           {error ? <FieldError>{error}</FieldError> : null}
         </Field>
       </FieldGroup>

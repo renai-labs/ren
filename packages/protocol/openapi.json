@@ -24156,10 +24156,6 @@
             "type": "string",
             "minLength": 1
           },
-          "mark": {
-            "type": "string",
-            "minLength": 1
-          },
           "logo": {
             "type": "string",
             "description": "The address of the provider’s logo."
@@ -24186,6 +24182,11 @@
             "items": {
               "$ref": "#/components/schemas/Models.Method"
             }
+          },
+          "paste": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What to paste back after signing in with a subscription, in the sign-in page’s words."
           },
           "signIn": {
             "type": "string",
@@ -24232,7 +24233,6 @@
         "required": [
           "id",
           "name",
-          "mark",
           "payer",
           "builtIn",
           "added",
@@ -24362,6 +24362,17 @@
               }
             ],
             "description": "A subscription model: the organization’s plans that serve it, such as `Max`."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The vendor’s one-line description."
           },
           "enabled": {
             "type": "boolean"
@@ -27823,6 +27834,25 @@
           },
           "free": {
             "type": "boolean"
+          },
+          "description": {
+            "type": "string",
+            "description": "The vendor’s one-line description."
+          },
+          "defaultEffort": {
+            "type": "string",
+            "description": "The effort a chat starts with."
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The vendor’s order of its models, 1 first."
+          },
+          "featured": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "One of the models the vendor shows first."
           }
         },
         "required": ["id", "providerID", "name", "variants"],

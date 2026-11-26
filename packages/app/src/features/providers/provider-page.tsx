@@ -101,6 +101,9 @@ function ModelName(props: { model: ProviderModel }) {
         {props.model.free ? <Badge variant="secondary">Free</Badge> : null}
       </span>
       <span className="font-mono text-xs break-all text-muted-foreground">{props.model.id}</span>
+      {props.model.description ? (
+        <span className="text-xs text-muted-foreground">{props.model.description}</span>
+      ) : null}
     </div>
   )
 }

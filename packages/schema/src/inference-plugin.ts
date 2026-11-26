@@ -16,8 +16,9 @@ export const Auth = Schema.Union([
   Schema.TaggedStruct("key", { fields: Schema.Array(Field) }).annotate({
     description: "The organization’s own key: the person fills in these fields.",
   }),
-  Schema.TaggedStruct("subscription", { signIn: Schema.NonEmptyString }).annotate({
-    description: "Each member signs in with their own subscription; `signIn` is the button’s label.",
+  Schema.TaggedStruct("subscription", { signIn: Schema.NonEmptyString, paste: Schema.NonEmptyString }).annotate({
+    description:
+      "Each member signs in with their own subscription; `signIn` is the button’s label, `paste` what to paste back after signing in.",
   }),
   Schema.TaggedStruct("operator", {}).annotate({
     description: "No form: the deployment holds the credential.",
@@ -39,16 +40,12 @@ export interface Provider extends Schema.Schema.Type<typeof Provider> {}
 export const Provider = Schema.Struct({
   id: Schema.NonEmptyString,
   name: Schema.NonEmptyString,
-  mark: Schema.NonEmptyString,
   payer: Payer,
   protocol: Models.Protocol.annotate({
     description: "How a brain calls the provider’s models, unless a model says otherwise.",
   }),
   auth: Schema.NonEmptyArray(Auth),
   models: Scope,
-  modelCount: Schema.optionalKey(Schema.Int).annotate({
-    description: "How many models the provider offers, for the Connect provider page.",
-  }),
   modelTypes: Schema.optionalKey(Schema.Record(Schema.String, Schema.Int)).annotate({
     description: "How many models of each type the provider offers, such as `{ chat: 30, image: 4 }`.",
   }),

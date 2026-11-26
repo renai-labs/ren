@@ -83,7 +83,7 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
         page.providers.map((each) => [each.id, each.builtIn, each.added, each.modelTypes, each.canManage]),
       ).toEqual([
         ["ren", true, true, { chat: 2 }, false],
-        ["groq", false, false, { chat: 0 }, false],
+        ["groq", false, false, {}, false],
       ])
       const changes: ReadonlyArray<Effect.Effect<unknown, ProviderSettings.Failure>> = [
         found.providers.update(found.member, "ren", { enabled: false }),
@@ -176,20 +176,30 @@ describe("ProviderSettings (Providers P7, P17, P29)", () => {
     }),
   )
 
-  it.live("a provider's models list the latest release first, and a model without a date last", () =>
-    Effect.gen(function* () {
-      const found = yield* setup
-      yield* found.test.setModels("groq", {
-        revision: "2",
-        models: [
-          { ...TestInferencePlugin.model("undated"), gateway: "groq/undated" },
-          { ...TestInferencePlugin.model("older"), gateway: "groq/older", released: "2025-01-23" },
-          { ...TestInferencePlugin.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
-        ],
-      })
-      const listed = yield* found.providers.models(found.member, "groq")
-      expect(listed.models.map((model) => model.id)).toEqual(["groq/newest", "groq/older", "groq/undated"])
-    }),
+  it.live(
+    "a provider's models list the vendor's order first, then the latest release, and a model with neither last",
+    () =>
+      Effect.gen(function* () {
+        const found = yield* setup
+        yield* found.test.setModels("groq", {
+          revision: "2",
+          models: [
+            { ...TestInferencePlugin.model("undated"), gateway: "groq/undated" },
+            { ...TestInferencePlugin.model("older"), gateway: "groq/older", released: "2025-01-23" },
+            { ...TestInferencePlugin.model("newest"), gateway: "groq/newest", released: "2026-10-02" },
+            { ...TestInferencePlugin.model("second"), gateway: "groq/second", rank: 2, released: "2024-01-01" },
+            { ...TestInferencePlugin.model("first"), gateway: "groq/first", rank: 1 },
+          ],
+        })
+        const listed = yield* found.providers.models(found.member, "groq")
+        expect(listed.models.map((model) => model.id)).toEqual([
+          "groq/first",
+          "groq/second",
+          "groq/newest",
+          "groq/older",
+          "groq/undated",
+        ])
+      }),
   )
 
   it.live("a model switched off leaves only its organization's list, after the inference service heard it", () =>

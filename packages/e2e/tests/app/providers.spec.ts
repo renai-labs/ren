@@ -100,4 +100,15 @@ test("the owner connects their Claude subscription from the grid; chats then use
   await expect(
     page.getByRole("table", { name: "Models" }).getByRole("row", { name: /Claude Opus 5.5/u }),
   ).toContainText("Max")
+
+  await page.goto("/")
+  await expect(async () => {
+    await page.reload()
+    await page.getByRole("button", { name: /^Choose model/u }).click()
+    await expect(page.getByRole("heading", { name: /^Anthropic \(subscription\)/u })).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 45_000 })
+  await expect(page.getByRole("button", { name: /^Claude Opus 5.5/u })).toBeVisible()
+  await expect(page.getByRole("button", { name: /^Claude Haiku 5.5/u })).toHaveCount(0)
+  await page.getByRole("button", { name: "More models (1)" }).click()
+  await expect(page.getByRole("button", { name: /^Claude Haiku 5.5/u })).toBeVisible()
 })

@@ -74,7 +74,6 @@ const it = testEffect(
 const renCard = {
   id: "ren",
   name: "Ren",
-  mark: "ren",
   payer: "ren",
   protocol: "openai-chat",
   auth: [{ _tag: "operator" }],

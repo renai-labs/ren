@@ -19,7 +19,6 @@ const sample: ProviderPage = {
   providers: Array.from({ length: 6 }, (_, index) => ({
     id: `sample-${index}`,
     name: "Provider",
-    mark: "sample",
     payer: "customer",
     builtIn: false,
     added: false,
