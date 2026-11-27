@@ -57,6 +57,14 @@ const pdfjsAssets: Plugin = (() => {
   }
 })()
 
+const appVersion = (version: string | undefined): Plugin => ({
+  name: "ren:app-version",
+  apply: "build",
+  generateBundle() {
+    if (version) this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ version }) })
+  },
+})
+
 export default defineConfig((env) => ({
   base: env.command === "build" ? buildBase : "/",
   resolve: {
@@ -75,6 +83,7 @@ export default defineConfig((env) => ({
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     preloadFonts,
+    appVersion(loadEnv(env.mode, process.cwd(), "VITE_").VITE_REN_VERSION),
   ],
   build: { sourcemap: "hidden" },
   define:

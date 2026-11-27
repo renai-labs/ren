@@ -94,6 +94,17 @@ export function make(platform: Platform.Info) {
     parseSearch: OAuthSearch.parse,
     stringifySearch: OAuthSearch.stringify,
   })
+  const onUpdate = platform.onUpdate
+  const redirect = platform.redirect
+  if (onUpdate !== undefined && redirect !== undefined) {
+    let updated = false
+    onUpdate(() => {
+      updated = true
+    })
+    router.subscribe("onBeforeNavigate", (event) => {
+      if (updated && event.pathChanged) redirect(new URL(event.toLocation.href, platform.appUrl).href)
+    })
+  }
   return { context, router }
 }
 

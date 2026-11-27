@@ -58,6 +58,7 @@ interface Base {
   readonly saveFile?: (url: string, name: string) => void
   readonly authorizationQuery?: string | undefined
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
+  readonly onUpdate?: (listener: () => void) => () => void
   readonly markSignedIn?: (signedIn: boolean) => void
   readonly analytics?: Analytics.Interface
 }

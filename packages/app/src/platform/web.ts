@@ -12,6 +12,7 @@ const externalProtocols = new Set(["http:", "https:", "mailto:"])
 const decodeShared = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
 )
+const decodeVersion = Schema.decodeUnknownOption(Schema.Struct({ version: Schema.String }))
 
 export function createWebPlatform(stores: {
   readonly large?: DraftStore.Large | undefined
@@ -31,6 +32,7 @@ export function createWebPlatform(stores: {
     else if (event.key.startsWith(prefix)) notify(event.key.slice(prefix.length))
   })
   const serverUrl = import.meta.env.VITE_REN_API_URL ?? window.location.origin
+  const version = import.meta.env.VITE_REN_VERSION
   return {
     ...(posthogKey && {
       analytics: Analytics.make({
@@ -167,6 +169,30 @@ export function createWebPlatform(stores: {
         window.removeEventListener("online", online)
       }
     },
+    ...(version && {
+      onUpdate: (listener: () => void) => {
+        const check = () => {
+          void globalThis
+            .fetch(`${import.meta.env.BASE_URL}version.json`, { cache: "no-cache" })
+            .then((response) => response.json())
+            .then((body) => {
+              if (Option.exists(decodeVersion(body), (latest) => latest.version !== version)) listener()
+            })
+            .catch(() => undefined)
+        }
+        const restored = (event: PageTransitionEvent) => {
+          if (event.persisted) check()
+        }
+        const timer = setInterval(check, 10 * 60_000)
+        window.addEventListener("focus", check)
+        window.addEventListener("pageshow", restored)
+        return () => {
+          clearInterval(timer)
+          window.removeEventListener("focus", check)
+          window.removeEventListener("pageshow", restored)
+        }
+      },
+    }),
     markSignedIn: (signedIn) => {
       const secure = window.location.protocol === "https:" ? "; Secure" : ""
       document.cookie = `ren_signed_in=1; Path=/; Max-Age=${signedIn ? 7_776_000 : 0}; SameSite=Lax${secure}`
