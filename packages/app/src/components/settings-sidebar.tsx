@@ -11,6 +11,7 @@ import {
   IconCpu,
   IconMessagesFilled,
   IconBuilding,
+  IconChecklist,
   IconCreditCard,
   IconKey,
   IconSearch,
@@ -44,6 +45,7 @@ export const settingsSections = [
         label: "Preferences",
         icon: IconAdjustmentsHorizontal,
       },
+      { id: "onboarding", to: "/settings/onboarding", label: "Onboarding", icon: IconChecklist },
     ],
   },
   {

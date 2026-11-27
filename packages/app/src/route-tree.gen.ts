@@ -32,6 +32,7 @@ import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_
 import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
 import { Route as AuthedShellSettingsMemoryRouteImport } from "./routes/_authed/_shell/settings/memory"
+import { Route as AuthedShellSettingsOnboardingRouteImport } from "./routes/_authed/_shell/settings/onboarding"
 import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
@@ -196,6 +197,12 @@ const AuthedShellSettingsMemoryRoute =
   AuthedShellSettingsMemoryRouteImport.update({
     id: "/settings/memory",
     path: "/settings/memory",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsOnboardingRoute =
+  AuthedShellSettingsOnboardingRouteImport.update({
+    id: "/settings/onboarding",
+    path: "/settings/onboarding",
     getParentRoute: () => AuthedShellRoute,
   } as any)
 const AuthedShellSettingsPreferencesRoute =
@@ -489,6 +496,7 @@ export interface FileRoutesByFullPath {
   "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps/": typeof AuthedShellAppsIndexRoute
   "/automations/": typeof AuthedShellAutomationsIndexRoute
@@ -555,6 +563,7 @@ export interface FileRoutesByTo {
   "/settings": typeof AuthedShellSettingsIndexRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/apps": typeof AuthedShellAppsIndexRoute
   "/automations": typeof AuthedShellAutomationsIndexRoute
@@ -624,6 +633,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin": typeof AuthedShellSettingsAdminRouteWithChildren
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/memory": typeof AuthedShellSettingsMemoryRoute
+  "/_authed/_shell/settings/onboarding": typeof AuthedShellSettingsOnboardingRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
   "/_authed/_shell/apps/": typeof AuthedShellAppsIndexRoute
   "/_authed/_shell/automations/": typeof AuthedShellAutomationsIndexRoute
@@ -693,6 +703,7 @@ export interface FileRouteTypes {
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
+    | "/settings/onboarding"
     | "/settings/preferences"
     | "/apps/"
     | "/automations/"
@@ -759,6 +770,7 @@ export interface FileRouteTypes {
     | "/settings"
     | "/settings/credentials"
     | "/settings/memory"
+    | "/settings/onboarding"
     | "/settings/preferences"
     | "/apps"
     | "/automations"
@@ -827,6 +839,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin"
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/memory"
+    | "/_authed/_shell/settings/onboarding"
     | "/_authed/_shell/settings/preferences"
     | "/_authed/_shell/apps/"
     | "/_authed/_shell/automations/"
@@ -1050,6 +1063,13 @@ declare module "@tanstack/react-router" {
       path: "/settings/memory"
       fullPath: "/settings/memory"
       preLoaderRoute: typeof AuthedShellSettingsMemoryRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/settings/onboarding": {
+      id: "/_authed/_shell/settings/onboarding"
+      path: "/settings/onboarding"
+      fullPath: "/settings/onboarding"
+      preLoaderRoute: typeof AuthedShellSettingsOnboardingRouteImport
       parentRoute: typeof AuthedShellRoute
     }
     "/_authed/_shell/settings/preferences": {
@@ -1478,6 +1498,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsMemoryRoute: typeof AuthedShellSettingsMemoryRoute
+  AuthedShellSettingsOnboardingRoute: typeof AuthedShellSettingsOnboardingRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellAppsIndexRoute: typeof AuthedShellAppsIndexRoute
   AuthedShellAutomationsIndexRoute: typeof AuthedShellAutomationsIndexRoute
@@ -1507,6 +1528,7 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsMemoryRoute: AuthedShellSettingsMemoryRoute,
+  AuthedShellSettingsOnboardingRoute: AuthedShellSettingsOnboardingRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellAppsIndexRoute: AuthedShellAppsIndexRoute,
   AuthedShellAutomationsIndexRoute: AuthedShellAutomationsIndexRoute,

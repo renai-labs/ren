@@ -15,11 +15,11 @@ it.live("a member reads both onboarding checklists and hides each one", () =>
     expect(read.status).toBe(200)
     expect(yield* json(read)).toEqual({
       organization: {
-        steps: Onboarding.OrganizationStep.literals.map((step) => ({ step, completedAt: null })),
+        steps: Onboarding.OrganizationStep.literals.map((step) => ({ step, completedAt: null, reward: null })),
         dismissedAt: null,
       },
       personal: {
-        steps: Onboarding.PersonalStep.literals.map((step) => ({ step, completedAt: null })),
+        steps: Onboarding.PersonalStep.literals.map((step) => ({ step, completedAt: null, reward: null })),
         dismissedAt: null,
       },
     })
@@ -42,7 +42,7 @@ it.live(
         const marked = yield* owner.request("POST", "/onboarding/complete", { step })
         expect(marked.status).toBe(200)
         expect(yield* json(marked)).toMatchObject({
-          personal: { steps: expect.arrayContaining([{ step, completedAt: expect.any(String) }]) },
+          personal: { steps: expect.arrayContaining([{ step, completedAt: expect.any(String), reward: null }]) },
         })
       }
       for (const step of ["gmail.connected", "slack.connected", "apps.connected"])

@@ -58,10 +58,21 @@ export const ChecklistKind = Schema.Literals(["organization", "personal"]).annot
 })
 export type ChecklistKind = typeof ChecklistKind.Type
 
+export interface Reward extends Schema.Schema.Type<typeof Reward> {}
+export const Reward = Schema.Struct({
+  microUsd: Schema.Int.annotate({ description: "Credits, in micro-USD, that one completion pays." }),
+  upTo: Schema.optionalKey(Schema.Int).annotate({
+    description:
+      "How many completions pay, for a step that pays once for each occurrence, such as each member who joins.",
+  }),
+  earnedMicroUsd: Schema.Int.annotate({ description: "Credits, in micro-USD, the completions so far pay." }),
+}).annotate({ identifier: "Onboarding.Reward" })
+
 export interface StepState extends Schema.Schema.Type<typeof StepState> {}
 export const StepState = Schema.Struct({
   step: Step,
   completedAt: Schema.NullOr(Schema.DateTimeUtc).annotate({ description: "Null while the step is not done." }),
+  reward: Schema.NullOr(Reward).annotate({ description: "The credits the step pays. Null when it pays none." }),
 }).annotate({ identifier: "Onboarding.StepState" })
 
 export interface Checklist extends Schema.Schema.Type<typeof Checklist> {}

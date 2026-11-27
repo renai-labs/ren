@@ -53,15 +53,33 @@ export class Listener extends Context.Reference<ListenerInterface>("@ren/core/On
   defaultValue: () => ({ completed: () => Effect.void }),
 }) {}
 
+export interface Reward {
+  readonly microUsd: number
+  readonly upTo?: number
+}
+
+export class Rewards extends Context.Reference<Readonly<Partial<Record<Onboarding.Step, Reward>>>>(
+  "@ren/core/Onboarding/Rewards",
+  { defaultValue: () => ({}) },
+) {}
+
 const table = Database.Schema.onboarding
 
 const checklist = (
   literals: ReadonlyArray<Onboarding.Step>,
+  rewards: Readonly<Partial<Record<Onboarding.Step, Reward>>>,
   row: { readonly steps: Readonly<Record<string, string>>; readonly dismissedAt: Date | null } | undefined,
 ): Onboarding.Checklist => ({
   steps: literals.map((step) => {
     const completedAt = row?.steps[step]
-    return { step, completedAt: completedAt ? DateTime.fromDateUnsafe(new Date(completedAt)) : null }
+    const reward = rewards[step]
+    const occurrences = Object.keys(row?.steps ?? {}).filter((key) => key.startsWith(`${step}:`)).length
+    const paid = Math.min(Math.max(occurrences, completedAt ? 1 : 0), reward?.upTo ?? 1)
+    return {
+      step,
+      completedAt: completedAt ? DateTime.fromDateUnsafe(new Date(completedAt)) : null,
+      reward: reward ? { ...reward, earnedMicroUsd: reward.microUsd * paid } : null,
+    }
   }),
   dismissedAt: row?.dismissedAt ? DateTime.fromDateUnsafe(row.dismissedAt) : null,
 })
@@ -71,6 +89,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const listener = yield* Listener
+    const rewards = yield* Rewards
 
     const record = Effect.fn("Onboarding.record")(
       function* (
@@ -116,10 +135,12 @@ export const layer = Layer.effect(
       return {
         organization: checklist(
           OrganizationStep.literals,
+          rewards,
           rows.find((row) => !row.userId),
         ),
         personal: checklist(
           PersonalStep.literals,
+          rewards,
           rows.find((row) => row.userId === person.userId),
         ),
       } satisfies Onboarding.Info

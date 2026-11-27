@@ -442,6 +442,8 @@ export type OnboardingPersonalStep =
   | "apps.connected"
   | "memory.imported"
 
+export type OnboardingReward = { microUsd: number; upTo?: number; earnedMicroUsd: number }
+
 export type ChannelInstallID = string
 
 export type ChannelMappingID = string
@@ -1557,7 +1559,7 @@ export type RenInferenceHarnessPlan = {
 
 export type BillingInvoicePage = { invoices: Array<BillingInvoice>; nextPage: number | null }
 
-export type OnboardingStepState = { step: OnboardingStep; completedAt: string | null }
+export type OnboardingStepState = { step: OnboardingStep; completedAt: string | null; reward: OnboardingReward | null }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 

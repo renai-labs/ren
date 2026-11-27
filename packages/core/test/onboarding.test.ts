@@ -121,6 +121,7 @@ describe("Onboarding", () => {
             step === Onboarding.steps.organization.slackConnected
               ? DateTime.makeUnsafe("2026-02-01T00:00:00.000Z")
               : null,
+          reward: null,
         })),
         dismissedAt: null,
       })
