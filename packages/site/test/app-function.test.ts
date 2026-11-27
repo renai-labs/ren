@@ -61,3 +61,6 @@ test.each(["/app/assets/index-abc.js", "/ren/install.sh", "/ren/releases/1.0.0/r
 
 test("/install serves the CLI installer, even to a signed-in browser", () =>
   expect(request("/install", { signedIn: true })).toMatchObject({ uri: "/ren/install.sh" }))
+
+test("/onboard serves the coding agent's onboarding script, even to a signed-in browser", () =>
+  expect(request("/onboard", { signedIn: true })).toMatchObject({ uri: "/onboard.md" }))
