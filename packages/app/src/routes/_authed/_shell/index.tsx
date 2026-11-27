@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
-import { Composer } from "@ren/chat"
 import { HomePage } from "../../../features/session/home-page.js"
 import { pickerPageSize } from "../../../lib/pagination.js"
 import { ChatQueries } from "../../../lib/chat-queries.js"
@@ -36,7 +35,7 @@ function HomeRoute() {
     <HomePage
       key={`${search.spaceId ?? ""}:${search.artifact ?? ""}:${search.prompt ?? ""}`}
       draftKey={draftKey}
-      initialDraft={Composer.withText(Composer.empty, search.prompt ?? "")}
+      initialDraft={Drafts.prefilled(search.prompt ?? "")}
       artifact={
         search.artifact && search.artifactName ? { id: search.artifact, title: search.artifactName } : undefined
       }

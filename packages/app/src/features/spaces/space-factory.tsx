@@ -3,7 +3,6 @@ import type { AgentInfo, SpaceInfo } from "@ren/client"
 import type { Infra } from "@ren/schema/infra"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Composer } from "@ren/chat"
 import { IconAlertTriangle, IconSparkles } from "@tabler/icons-react"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
@@ -33,10 +32,7 @@ function EditWithRen(props: { space: SpaceInfo }) {
       <Button
         variant="outline"
         onClick={() => {
-          write(
-            Drafts.space(props.space.id),
-            Composer.withText(Composer.empty, `Edit the factory of the ${props.space.name} space: `),
-          )
+          write(Drafts.space(props.space.id), Drafts.prefilled(`Edit the factory of the ${props.space.name} space:`))
           void navigate({ to: "/", search: { spaceId: props.space.id } })
         }}
       >

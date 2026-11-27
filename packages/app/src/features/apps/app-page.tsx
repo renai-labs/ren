@@ -115,7 +115,7 @@ function useStartChat(app: CatalogApp) {
       brandColor: app.brandColor,
     }
     const text = `${Mentions.text({ label: app.name })} ${withoutMention(prompt)}`
-    write(Drafts.space(spaceId), Composer.withMention(Composer.withText(Composer.empty, text), mention))
+    write(Drafts.space(spaceId), Composer.withMention(Drafts.prefilled(text), mention))
     void navigate({ to: "/", search: { spaceId } })
   }
 }

@@ -11,6 +11,9 @@ export const session = (sessionId: string) => `session.${sessionId}`
 
 export const space = (spaceId: string) => `new.space.${spaceId}`
 
+export const prefilled = (text: string) =>
+  Composer.withText(Composer.empty, text.trim() === "" ? "" : `${text.trimEnd()} `)
+
 export function useWrite() {
   const platform = Platform.usePlatform()
   const drafts = platform.drafts ?? platform.storage
