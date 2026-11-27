@@ -47,13 +47,14 @@ const Markdown = lazy(() => loadMarkdown().then((module) => ({ default: module.M
 const preloadMarkdown = () => void loadMarkdown()
 type AppProfile = AppProfileInfo
 
-function AttentionDot() {
+function AttentionDot(props: { label?: string | undefined }) {
   return (
     <span
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a colored dot drawn with CSS, announced as an image
       role="img"
-      aria-label="Needs attention"
-      className="size-1.5 shrink-0 rounded-full bg-chart-3"
+      aria-label={props.label ?? "Needs attention"}
+      title={props.label}
+      className={cn("size-1.5 shrink-0 rounded-full bg-chart-3", props.label && "relative z-10")}
     />
   )
 }
@@ -122,6 +123,7 @@ export function AppRow(props: {
   icon?: string | null
   caption: string
   attention?: boolean | undefined
+  attentionLabel?: string | undefined
   compact?: boolean | undefined
   onOpen?: () => void
   action?: ReactNode
@@ -157,7 +159,7 @@ export function AppRow(props: {
           ) : (
             <span className="truncate">{props.name}</span>
           )}
-          {props.attention ? <AttentionDot /> : null}
+          {props.attention ? <AttentionDot label={props.attentionLabel} /> : null}
         </ItemTitle>
         <ItemDescription className={cn("line-clamp-1", props.compact && "text-xs")}>{props.caption}</ItemDescription>
       </ItemContent>

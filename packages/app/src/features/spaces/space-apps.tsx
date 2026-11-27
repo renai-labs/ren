@@ -18,7 +18,6 @@ import { AccountList, AppGrid, AppListingSample, AppRow, AppSection, AppSheet } 
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
 import { AppsTable, rowBadge, rowMenuItems, type AppsTableRow } from "../../components/apps-table.js"
-import { StatusBadge } from "../../components/status-badge.js"
 import { DarkUi } from "../../lib/dark-ui.js"
 import { PageActions, PageTabs, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
@@ -216,20 +215,10 @@ function InstalledApps(props: {
               name={row.app.name}
               icon={row.app.icon}
               caption={row.app.description}
-              attention={badge.tone === "warn"}
+              attention={badge.tone !== "ok"}
+              attentionLabel={badge.title ?? badge.label}
               onOpen={() => props.onOpen(row.app.id)}
-              action={
-                <span data-app-status="" className="flex items-center gap-1.5">
-                  {badge.tone === "ok" ? null : (
-                    <StatusBadge tone={badge.tone}>
-                      <span className="truncate" title={badge.title ?? badge.label}>
-                        {badge.label}
-                      </span>
-                    </StatusBadge>
-                  )}
-                  <RowMenu label={`${row.app.name} actions`} items={rowMenuItems(row, props)} />
-                </span>
-              }
+              action={<RowMenu label={`${row.app.name} actions`} items={rowMenuItems(row, props)} />}
             />
           )
         })}

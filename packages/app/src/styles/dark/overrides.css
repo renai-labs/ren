@@ -159,3 +159,85 @@ html.dark
   font-size: 0.875rem;
   line-height: 1.55;
 }
+
+/*
+ * The context meter's popover is a small menu: two reading rows (label, figure), a hairline, then its one
+ * action as a menu row. The action was a 24px full-width button, which read as a stray bar.
+ */
+html.dark [data-chat-part="context-popover"]:not(#d) {
+  width: 224px;
+  gap: 0;
+  padding: 4px;
+}
+
+html.dark [data-chat-part="context-popover"] > div {
+  min-height: 28px;
+  padding-inline: 8px;
+  font-size: var(--d-small);
+  line-height: 1.25;
+}
+
+html.dark [data-chat-part="context-popover"] > div:first-child {
+  margin-top: 2px;
+}
+
+html.dark [data-chat-part="context-popover"] > div > span:first-child {
+  color: var(--d-text-3);
+}
+
+html.dark [data-chat-part="context-popover"] > div > span:last-child {
+  font-weight: 500;
+  color: var(--d-text);
+}
+
+html.dark [data-chat-part="context-popover"] > p {
+  margin: 0;
+  padding: 2px 8px 4px;
+  font-size: var(--d-mini);
+  line-height: 1.4;
+}
+
+html.dark [data-chat-part="context-popover"] > button[data-variant]:not(#d) {
+  position: relative;
+  width: 100%;
+  height: 32px;
+  margin-top: 9px;
+  justify-content: flex-start;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--d-r);
+  background: none;
+  box-shadow: none;
+  font-size: var(--d-small);
+  font-weight: 450;
+  line-height: 1.25;
+  color: var(--d-text-2);
+  scale: none;
+}
+
+html.dark [data-chat-part="context-popover"] > button[data-variant]:not(#d)::before {
+  content: "";
+  position: absolute;
+  inset: -5px -4px auto;
+  height: 0;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+  pointer-events: none;
+}
+
+html.dark [data-chat-part="context-popover"] > button[data-variant]:not(#d):focus-visible {
+  outline: 1px solid var(--d-accent);
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  html.dark [data-chat-part="context-popover"] > button[data-variant]:not(#d):hover {
+    background-color: var(--d-selected);
+    color: var(--d-text);
+  }
+}
+
+/* The meter's trigger is a true 28px circle, like the panel toggle beside it (it was 28 by 24). */
+html.dark [data-chat-part="context"][data-variant]:not(#d) {
+  width: var(--d-ctl);
+  height: var(--d-ctl);
+}

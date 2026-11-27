@@ -106,7 +106,7 @@ export function ContextUsage(props: {
           {formatTokens(usage.tokens)}
         </span>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 gap-2 p-3">
+      <PopoverContent align="end" data-chat-part="context-popover" className="w-64 gap-2 p-3">
         <Row label="Context">
           {formatCount(usage.tokens)}
           {percent}
