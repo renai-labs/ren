@@ -1115,7 +1115,11 @@ export function PromptInput(props: {
               )
             else change(Composer.addPasted(draft, { id: SessionMessage.ID.create(), text: pasted }))
           }}
-          ref={textarea}
+          ref={(node) => {
+            if (!node || textarea.current === node) return
+            textarea.current = node
+            node.setSelectionRange(node.value.length, node.value.length)
+          }}
           onKeyDown={(event) => {
             if (shell) {
               if (shellKey(event, { running: props.running === true, text, leave: toggleShell })) return
