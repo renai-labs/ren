@@ -80,8 +80,8 @@ html.dark [data-slot="inbox-title"] {
   overflow: hidden;
   font-size: var(--d-small);
   font-weight: 500;
-  line-height: var(--d-ctl);
-  letter-spacing: -0.006em;
+  line-height: 1.25;
+  letter-spacing: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--d-text-2);
@@ -238,7 +238,7 @@ html.dark [data-slot="inbox-row-title"] {
   overflow: hidden;
   font-size: var(--d-small);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--d-text-3);

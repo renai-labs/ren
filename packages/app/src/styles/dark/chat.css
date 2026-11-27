@@ -27,8 +27,8 @@ html.dark [data-slot="chat-home"] {
     padding-inline: 4px;
     font-size: var(--d-small);
     font-weight: 500;
-    line-height: var(--d-ctl);
-    letter-spacing: normal;
+    line-height: 1.25;
+    letter-spacing: 0;
     color: var(--d-text-2);
     white-space: nowrap;
   }
@@ -153,6 +153,21 @@ html.dark
 
 /* The bar itself (44px, hairline, padding) is the shell's [data-slot="page-bar"]. Here: what sits in it. */
 html.dark [data-slot="chat-main"] > [data-slot="page-bar"] {
+  /* The chat's title is a crumb that renames on click: it reads as the header-bar title (small/500, text-2),
+     not as a mini ghost button. */
+  & [data-slot="breadcrumb-item"] > span:has(> [data-slot="tooltip-trigger"]) {
+    padding-inline: 0;
+  }
+
+  & [data-slot="breadcrumb-item"] [data-slot="tooltip-trigger"][data-variant]:not(#d) {
+    height: var(--d-ctl);
+    padding-inline: 8px;
+    border-radius: var(--d-r-pill);
+    font-size: var(--d-small);
+    font-weight: 500;
+    color: var(--d-text-2);
+  }
+
   /* The context meter is a circle: its ring is the reading, the count opens on hover with the details. */
   & [data-chat-part="context"] {
     width: var(--d-ctl);
@@ -226,7 +241,7 @@ html.dark [data-slot="turn-time"] {
   margin-block-end: 16px;
   font-size: var(--d-mini);
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1;
   color: var(--d-text-4);
   font-variant-numeric: tabular-nums;
 }
@@ -332,31 +347,13 @@ html.dark [data-slot="message-scroller-content"] [data-slot="markdown"] {
   line-height: 1.6;
   color: var(--d-text-2);
 
+  /* Sizes, weights and line-height are the reading-text steps in type.css. */
   & :is(h1, h2, h3, h4, h5, h6) {
     margin-block: 1.25em 0.4em;
-    line-height: 1.35;
-    letter-spacing: -0.005em;
     color: var(--d-text);
   }
 
-  & h1 {
-    font-size: var(--d-large);
-    font-weight: 600;
-  }
-
-  & h2 {
-    font-size: var(--d-regular);
-    font-weight: 600;
-  }
-
-  & h3 {
-    font-size: var(--d-regular);
-    font-weight: 500;
-  }
-
   & :is(h4, h5, h6) {
-    font-size: var(--d-small);
-    font-weight: 500;
     color: var(--d-text-2);
   }
 
@@ -380,7 +377,6 @@ html.dark [data-slot="message-scroller-content"] [data-slot="markdown"] {
   & a:not([data-slot]) {
     color: var(--d-accent-text);
     text-decoration-color: color-mix(in srgb, var(--d-accent-text) 40%, transparent);
-    text-underline-offset: 0.18em;
   }
 
   & blockquote {
@@ -398,7 +394,7 @@ html.dark [data-slot="message-scroller-content"] [data-slot="markdown"] {
     border: 1px solid var(--d-line-3);
     border-radius: var(--d-r-sm);
     background-color: var(--d-raised);
-    font-size: 0.84em;
+    font-size: 0.9em;
     color: var(--d-text-2);
   }
 }
@@ -421,14 +417,16 @@ html.dark [data-slot="message-scroller-content"] [data-slot="markdown-table"] {
     padding-block: 0;
     font-size: var(--d-mini);
     font-weight: 450;
+    line-height: 1.25;
     color: var(--d-text-3);
     vertical-align: middle;
   }
 
+  /* Cells wrap in a narrow column, so they keep a wrapping line-height rather than a row's 1.25. */
   & td {
     padding-block: 9px;
     font-weight: 450;
-    line-height: 1.45;
+    line-height: 1.4;
     color: var(--d-text-2);
   }
 
@@ -503,12 +501,14 @@ html.dark [data-slot="code-block"] {
   }
 
   & [data-slot="code-block-line"] {
-    line-height: 1.6;
+    line-height: 1.55;
   }
 }
 
+/* Code in reading text is 0.9em of the text around it (its own text-sm would be 0.867em). */
 html.dark [data-slot="markdown"] [data-slot="code-block"] {
   margin-block: 12px;
+  font-size: 0.9em;
 }
 
 /* ───────────────────────── Traces: "Worked for", steps, tools ───────────────────────── */
@@ -743,9 +743,12 @@ html.dark [data-slot="queued-messages"] {
   border-radius: var(--d-r-card) var(--d-r-card) 0 0;
   background-color: var(--d-panel);
 
+  /* The tray's label is a section label (mini/500), in sentence case and without tracking. */
   & > div:first-child {
-    font-size: var(--d-micro);
-    letter-spacing: 0.04em;
+    font-size: var(--d-mini);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--d-text-3);
   }
 }
@@ -889,7 +892,9 @@ html.dark [data-slot="questionnaire"] {
     border-radius: var(--d-r-sm);
     background-color: var(--d-control);
     font-family: inherit;
-    font-size: var(--d-micro);
+    font-size: var(--d-mini);
+    font-weight: 500;
+    line-height: 1;
     color: var(--d-text-3);
   }
 
@@ -1052,7 +1057,9 @@ html.dark [data-slot="message-scroller-content"] [data-slot="marker"] {
   & [data-slot="kbd"] {
     height: 18px;
     min-width: 18px;
-    font-size: var(--d-micro);
+    font-size: var(--d-mini);
+    font-weight: 500;
+    line-height: 1;
   }
 }
 

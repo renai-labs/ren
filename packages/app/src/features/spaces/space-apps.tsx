@@ -1,5 +1,5 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import type { AppProfileInfo } from "@ren/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { IconPlus, IconTrash, IconUserPlus } from "@tabler/icons-react"
@@ -14,14 +14,16 @@ import {
 import { toast } from "@ren/ui/sonner"
 import { Tabs } from "@ren/ui/tabs"
 import { AddAppDialog } from "../../components/add-app-dialog.js"
-import { AccountList, AppGrid, AppRow, AppSheet } from "../../components/app-list.js"
+import { AccountList, AppGrid, AppListingSample, AppRow, AppSection, AppSheet } from "../../components/app-list.js"
 import { CustomAppDialog } from "../../components/custom-app-dialog.js"
 import { EmptyState } from "../../components/empty-state.js"
-import { AppsTable } from "../../components/apps-table.js"
+import { AppsTable, rowBadge, rowMenuItems, type AppsTableRow } from "../../components/apps-table.js"
+import { StatusBadge } from "../../components/status-badge.js"
+import { DarkUi } from "../../lib/dark-ui.js"
 import { PageActions, PageTabs, PageTabsList, PageTabsTrigger, TableSample, useShapeId } from "../../components/page.js"
 import { LoadMore } from "../../components/load-more.js"
 import { afterRemoval } from "../../components/space-removal.js"
-import type { RowMenuItem } from "../../components/row-menu.js"
+import { RowMenu, type RowMenuItem } from "../../components/row-menu.js"
 import { useShown } from "../../lib/use-shown.js"
 import { Loading } from "@ren/ui/loading"
 import { ProfileDialog, type ProfileTarget } from "../../components/profile-dialog.js"
@@ -169,25 +171,70 @@ function CustomApps(props: { space: { id: string; name: string }; query: string 
         </EmptyState>
       ) : (
         <Loading id={shapeId} loading={listed.isPending} label="Loading apps">
-          <AppGrid label={`Apps made in ${props.space.name}`}>
-            {listed.isPending
-              ? Array.from({ length: 4 }, (_, index) => (
-                  <AppRow key={index} name="Team app" caption="Tools for your team’s work" />
-                ))
-              : owned.map((app) => (
-                  <AppRow
-                    key={app.id}
-                    name={app.name}
-                    icon={app.icon}
-                    caption={app.description}
-                    onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: app.id } })}
-                  />
-                ))}
-          </AppGrid>
+          <div data-screen="apps" className="contents">
+            <AppGrid label={`Apps made in ${props.space.name}`}>
+              {listed.isPending
+                ? Array.from({ length: 4 }, (_, index) => (
+                    <AppRow key={index} name="Team app" caption="Tools for your team’s work" />
+                  ))
+                : owned.map((app) => (
+                    <AppRow
+                      key={app.id}
+                      name={app.name}
+                      icon={app.icon}
+                      caption={app.description}
+                      onOpen={() => void navigate({ to: "/apps/$appId", params: { appId: app.id } })}
+                    />
+                  ))}
+            </AppGrid>
+          </div>
         </Loading>
       )}
       {creating ? <CustomAppDialog spaceId={props.space.id} onClose={() => setCreating(false)} /> : null}
     </>
+  )
+}
+
+function InstalledApps(props: {
+  rows: ReadonlyArray<AppsTableRow>
+  total: number
+  empty: ReactNode
+  onOpen: (appId: string) => void
+  onNew: (appId: string) => void
+  onAdd: (appId: string) => void
+  remove: (row: AppsTableRow) => RowMenuItem | undefined
+}) {
+  if (props.rows.length === 0) return <EmptyState>{props.empty}</EmptyState>
+  return (
+    <div data-screen="apps" className="contents">
+      <AppSection title="Installed" count={props.total}>
+        {props.rows.map((row) => {
+          const badge = rowBadge(row)
+          return (
+            <AppRow
+              key={row.app.id}
+              name={row.app.name}
+              icon={row.app.icon}
+              caption={row.app.description}
+              attention={badge.tone === "warn"}
+              onOpen={() => props.onOpen(row.app.id)}
+              action={
+                <span data-app-status="" className="flex items-center gap-1.5">
+                  {badge.tone === "ok" ? null : (
+                    <StatusBadge tone={badge.tone}>
+                      <span className="truncate" title={badge.title ?? badge.label}>
+                        {badge.label}
+                      </span>
+                    </StatusBadge>
+                  )}
+                  <RowMenu label={`${row.app.name} actions`} items={rowMenuItems(row, props)} />
+                </span>
+              }
+            />
+          )
+        })}
+      </AppSection>
+    </div>
   )
 }
 
@@ -211,6 +258,7 @@ export function SpaceAppsTab() {
   const { api } = RouterContext.useRouterContext()
   const space = useSpace()
   const shapeId = useShapeId("apps")
+  const deep = DarkUi.useDarkUi()
   const reach = useQuery({
     ...api["app-profile-reach"].space.profiles.queryOptions({ id: space.id }),
     refetchOnWindowFocus: "always",
@@ -313,7 +361,21 @@ export function SpaceAppsTab() {
         <>
           <Loading id={shapeId} loading={reach.isPending || catalog.pending} label="Loading apps">
             {reach.isPending || catalog.pending ? (
-              <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
+              deep ? (
+                <AppListingSample title="Installed" count={4} />
+              ) : (
+                <TableSample columns={["App", "Used in", "Status", ""]} count={3} />
+              )
+            ) : deep ? (
+              <InstalledApps
+                rows={shown.items}
+                total={rows.length}
+                empty={<NoApps query={query} space={space.name} onAdd={() => setAdding(true)} />}
+                onOpen={setOpened}
+                onNew={(appId) => setProfile({ appId, from, newAccount: true })}
+                onAdd={(appId) => setProfile({ appId, from })}
+                remove={remove}
+              />
             ) : (
               <AppsTable
                 rows={shown.items}

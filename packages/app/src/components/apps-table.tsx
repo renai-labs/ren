@@ -62,7 +62,9 @@ type AppRow = {
   partOf?: ReadonlyArray<string>
 }
 
-type Badge = { tone: StatusTone; label: string; title?: string }
+export type AppsTableRow = AppRow
+
+export type Badge = { tone: StatusTone; label: string; title?: string }
 
 const badgeOf = (row: AppRow, status: Status, expired: number): Badge => {
   const needs = row.needs ?? []
@@ -80,6 +82,44 @@ const badgeOf = (row: AppRow, status: Status, expired: number): Badge => {
   if (status === "expired" && row.profiles.length > 1)
     return { tone: tones[status], label: `${expired} of ${row.profiles.length} need sign-in` }
   return { tone: tones[status], label: statusLabel[status] }
+}
+
+export const rowBadge = (row: AppRow): Badge =>
+  badgeOf(
+    row,
+    statusOf(row.app, row.profiles),
+    row.profiles.filter((profile) => statusOf(row.app, [profile]) === "expired").length,
+  )
+
+export const rowMenuItems = (
+  row: AppRow,
+  props: {
+    onOpen: (appId: string) => void
+    onNew: (appId: string) => void
+    onAdd?: ((appId: string) => void) | undefined
+    remove?: ((row: AppRow) => RowMenuItem | undefined) | undefined
+  },
+): ReadonlyArray<RowMenuItem> => {
+  const add = props.onAdd
+  return [
+    { label: "Open", icon: IconArrowUpRight, onSelect: () => props.onOpen(row.app.id) },
+    ...(row.bundle ? [] : [{ label: "New account", icon: IconUserPlus, onSelect: () => props.onNew(row.app.id) }]),
+    ...(add
+      ? [
+          ...(row.needs ?? []).map((each) => ({
+            label: `Add ${each.name}`,
+            icon: IconPlus,
+            onSelect: () => add(each.id),
+          })),
+          ...(row.bundle?.signIn ?? []).map((each) => ({
+            label: `Connect ${each.name}`,
+            icon: IconPlug,
+            onSelect: () => add(each.id),
+          })),
+        ]
+      : []),
+    ...[props.remove?.(row)].filter((item) => item !== undefined),
+  ]
 }
 
 export function AppsTable(props: {
@@ -105,13 +145,8 @@ export function AppsTable(props: {
           {props.rows.length === 0 ? <TableEmpty columns={5}>{props.empty}</TableEmpty> : null}
           {props.rows.map((row) => {
             const app = row.app
-            const profiles = row.profiles
             const usedIn = row.usedIn
-            const status = statusOf(app, profiles)
-            const expired = profiles.filter((profile) => statusOf(app, [profile]) === "expired").length
-            const needs = row.needs ?? []
-            const badge = badgeOf(row, status, expired)
-            const add = props.onAdd
+            const badge = rowBadge(row)
             return (
               <TableRow key={app.id} className="cursor-pointer" onClick={() => props.onOpen(app.id)}>
                 <TableCell>
@@ -131,30 +166,7 @@ export function AppsTable(props: {
                   </StatusBadge>
                 </TableCell>
                 <TableCell onClick={(event) => event.stopPropagation()}>
-                  <RowMenu
-                    label={`${app.name} actions`}
-                    items={[
-                      { label: "Open", icon: IconArrowUpRight, onSelect: () => props.onOpen(app.id) },
-                      ...(row.bundle
-                        ? []
-                        : [{ label: "New account", icon: IconUserPlus, onSelect: () => props.onNew(app.id) }]),
-                      ...(add
-                        ? [
-                            ...needs.map((each) => ({
-                              label: `Add ${each.name}`,
-                              icon: IconPlus,
-                              onSelect: () => add(each.id),
-                            })),
-                            ...(row.bundle?.signIn ?? []).map((each) => ({
-                              label: `Connect ${each.name}`,
-                              icon: IconPlug,
-                              onSelect: () => add(each.id),
-                            })),
-                          ]
-                        : []),
-                      ...[props.remove?.(row)].filter((item) => item !== undefined),
-                    ]}
-                  />
+                  <RowMenu label={`${app.name} actions`} items={rowMenuItems(row, props)} />
                 </TableCell>
               </TableRow>
             )

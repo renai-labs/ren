@@ -70,7 +70,7 @@ html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-slot="sideb
   border-radius: var(--d-r);
   font-size: var(--d-small);
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.25;
   color: var(--d-text-3);
   transition:
     background-color 100ms ease-out,
@@ -241,8 +241,8 @@ html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-sidebar-par
 
   & > span:nth-child(2) {
     font-size: var(--d-small);
-    font-weight: 550;
-    letter-spacing: -0.006em;
+    font-weight: 600;
+    letter-spacing: 0;
     color: var(--d-text);
   }
 }
@@ -363,18 +363,20 @@ html.dark [data-slot="sidebar"]:not([data-collapsible="icon"]) [data-sidebar-par
   }
 
   & > span:nth-child(2) {
-    gap: 1px;
+    gap: 0;
   }
 
   & > span:nth-child(2) > span:first-child {
     font-size: var(--d-small);
     font-weight: 500;
+    line-height: 1.25;
     color: var(--d-text-2);
   }
 
   & > span:nth-child(2) > span:last-child {
-    font-size: var(--d-micro);
+    font-size: var(--d-mini);
     font-weight: 450;
+    line-height: 1.25;
     color: var(--d-text-3);
   }
 
@@ -465,8 +467,8 @@ html.dark [data-slot="page-bar"] > [data-slot="page-title"] {
   overflow: hidden;
   font-size: var(--d-small);
   font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.006em;
+  line-height: 1.25;
+  letter-spacing: 0;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--d-text-2);
@@ -563,9 +565,9 @@ html.dark [data-page-width="full"]:not(:has(> [data-slot="page-toolbar"]:not([hi
    One centred 59rem column, one top offset, one title block, the view-pill row, then the content. The
    frame never changes between these pages; only what is inside it does. */
 /* Settings-style pages (Preferences, General, a space's Settings, Compute and Instructions) take Linear's
-   settings column: cards 640px wide. The cards hang 16px outside the text column, hence 604 + 48. */
+   settings column: cards 640px wide. The cards hang 16px outside the text column, hence 608 + 48. */
 html.dark [data-page-width="grid"][data-page-grid="settings"] :is([data-slot="page-head"], [data-slot="page-body"]) {
-  max-width: 652px;
+  max-width: 656px;
 }
 
 html.dark [data-page-width="grid"] {
@@ -599,8 +601,12 @@ html.dark [data-page-width="grid"] {
     align-items: flex-start;
   }
 
-  & [data-slot="page-head"] [data-slot="page-header"] > :last-child:not(:first-child) {
-    margin-top: -2px;
+  /* A page's actions (no pills on the page) ride on the title's line, centred on it, at the control edge. */
+  & [data-slot="page-head"] [data-slot="page-header"] > [data-slot="page-actions"] {
+    height: calc(var(--d-title) * 1.25);
+    min-height: 0;
+    align-items: center;
+    margin-inline-start: auto;
   }
 
   & [data-slot="page-head"] [data-slot="page-header"] > div:first-child {
@@ -611,7 +617,8 @@ html.dark [data-page-width="grid"] {
     font-size: var(--d-title);
     font-weight: 500;
     line-height: 1.25;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
     color: var(--d-text);
   }
 

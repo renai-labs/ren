@@ -342,62 +342,6 @@ html.dark [data-screen="space-overview"] .factory .f-scroll > a {
   }
 }
 
-/* ───────────── A space's Apps-grid pages: the same outset as Settings ─────────────
- * Settings and a space's Usage (styled by the settings area) let cards and table rows bleed 16px past the title's
- * line, so row titles sit under the page title. The space's other grid pages (Instructions, Permissions, Compute,
- * Settings, Memory, an agent, a webhook) follow, so moving between them never shifts the text line. */
-
-html.dark
-  [data-screen^="space-"]
-  [data-page-width="grid"]
-  [data-slot="page-body"]
-  :is([data-slot="settings-card"], [data-slot="item-group"], [class~="group/instructions"]):not(
-    [data-slot="dialog-content"] *,
-    [data-slot="sheet-content"] *,
-    [data-slot="card"] *,
-    [data-slot="item-group"] *,
-    [data-slot="settings-card"] *,
-    [data-screen="usage"] *
-  ) {
-  width: auto;
-  max-width: none;
-  margin-inline: calc(var(--settings-outset) * -1 - 2px);
-}
-
-html.dark
-  [data-screen^="space-"]
-  [data-page-width="grid"]
-  [data-slot="page-body"]
-  :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
-    [data-slot="dialog-content"] *,
-    [data-slot="sheet-content"] *,
-    [data-slot="card"] *,
-    [data-slot="item-group"] *,
-    :has(> [data-slot="table-container"] > [data-file-table])
-  ) {
-  width: auto;
-  max-width: none;
-  margin-inline: calc(var(--settings-outset) * -1);
-}
-
-/* A space's Drive bleeds its file table the way the organization's Drive does (screens-library.css), on the
-   table itself, so its loading shape and its rows are one width. */
-html.dark [data-screen="space-drive"] [data-slot="table-container"]:has(> [data-file-table]) {
-  width: calc(100% + 32px);
-  max-width: none;
-  margin-inline: calc(var(--settings-outset) * -1);
-}
-
-html.dark [data-screen^="space-"] [data-page-width="grid"] {
-  & [data-slot="page-body"] > div:first-child:has(> [data-slot="page-section"]) {
-    gap: var(--settings-section-gap);
-  }
-
-  & [data-slot="page-section"] {
-    gap: var(--settings-heading-gap);
-  }
-}
-
 /* ───────────── Spaces list (projects.png) ───────────── */
 
 /* Member stacks: Linear's 20px faces (the group's own -4px overlap stays). */
@@ -425,16 +369,4 @@ html.dark
   > div
   > [data-slot="breadcrumb"]:first-child {
   display: none;
-}
-
-/* ───────────── A space's Instructions: the same card as the Instructions block on General ───────────── */
-
-html.dark [data-screen="space-instructions"] [data-slot="page-body"] [class~="group/instructions"] {
-  padding: 14px 18px;
-  border-color: var(--d-edge-faint);
-  border-radius: var(--d-r-card);
-  background-color: var(--d-card);
-  box-shadow: var(--d-contact);
-  font-size: var(--d-small);
-  color: var(--d-text-2);
 }

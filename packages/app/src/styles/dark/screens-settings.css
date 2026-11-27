@@ -1,26 +1,30 @@
 /* Screens-settings.
  *
- * Every page under /settings, in the Apps grid the shell draws ([data-page-width="grid"]). This file only reaches
- * inside that frame: the rhythm between sections, Linear's outset surfaces, and each screen's own leftovers.
+ * Every grid page ([data-page-width="grid"]: all of Settings, a space's grid pages, Apps and Drive) and what sits
+ * inside its frame: the two edges, the rhythm, the cards and rows, and the type roles (type-roles.md). Each
+ * screen's own leftovers follow, keyed on a data-screen hook in TSX.
  *
- * Scope: the settings shell is the one that renders the settings search ([data-sidebar-part="settings-search"]),
- * so `--settings` rules never touch Apps or a space's pages. Per-screen rules key on a data-screen hook in TSX.
+ * Two edges. Text sits on the column's left edge (the title's), controls end on its right edge. A card hangs
+ * outside both by exactly its own inline padding (16px, Linear's), so its rows' text and their last control or
+ * value are on the edges too. Borders are one device pixel (0.91px at 110% zoom), so a card's padding is 15px
+ * inside its border and rows have no side borders; the sum lands within half a pixel at any zoom.
  *
- * Linear's settings measure (settings-profile.png, settings-members.png, linear-settings-110pct.png):
- * - the title, section headings, row titles, table names and the pill row all start on one vertical line;
- *   the surfaces around them (cards, table rows and group bars) bleed 16px past it on both sides;
- * - 48px between one section's card and the next heading, 16px from a heading to its card.
+ * Rhythm (px, so it holds at every Interface size): title > description 6, header block > first card 24,
+ * card > next section heading 40, section heading > description 4, heading or description > its card 12.
  */
 html.dark {
   --settings-outset: 16px;
-  --settings-section-gap: 44px;
-  --settings-heading-gap: 14px;
+  --settings-pad: 15px;
+  --settings-row: 64px;
+  --settings-section-gap: 40px;
+  --settings-heading-gap: 12px;
 }
 
 /* ───────────────────────── 1. The frame inside the grid ───────────────────────── */
 
-html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
-  & [data-slot="page-body"] > div:first-child {
+html.dark [data-page-width="grid"] [data-slot="page-body"] {
+  & > div:first-child:has(> :is([data-slot="page-section"], [data-slot="item-group"][class~="bg-card"])),
+  & > div:first-child > div:has(> [data-slot="page-section"] + [data-slot="page-section"]) {
     gap: var(--settings-section-gap);
   }
 
@@ -28,12 +32,28 @@ html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
     gap: var(--settings-heading-gap);
   }
 
-  /* Surfaces bleed past the text line, so row titles sit under the page title. */
-  & [data-slot="page-body"] > div:first-child > :is([data-slot="settings-card"], [data-slot="item-group"]),
-  & [data-slot="page-section"] > :is([data-slot="settings-card"], [data-slot="item-group"]),
+  & [data-slot="page-section"] div:has(> [data-slot="page-section-title"]) {
+    gap: 4px;
+  }
+
+  & [data-slot="page-section-title"] {
+    font-size: var(--d-regular);
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--d-text);
+  }
+
+  & [data-slot="page-section-description"] {
+    font-size: var(--d-small);
+    font-weight: 450;
+    line-height: 1.5;
+    text-wrap: pretty;
+    color: var(--d-text-3);
+  }
+
+  /* Cards hang outside the two edges by their padding. */
   &
-    [data-slot="page-body"]
-    :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
+    :is([data-slot="item-group"][class~="bg-card"], [data-slot="settings-card"], [class~="group/instructions"]):not(
       [data-slot="dialog-content"] *,
       [data-slot="sheet-content"] *,
       [data-slot="card"] *,
@@ -44,23 +64,317 @@ html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
     margin-inline: calc(var(--settings-outset) * -1);
   }
 
-  /* A card's row title sits 2px further in than a table's first cell (the card and row borders), so cards
-     bleed 2px more and both land on the title's line. */
-  & [data-slot="page-body"] > div:first-child > :is([data-slot="settings-card"], [data-slot="item-group"]),
-  & [data-slot="page-section"] > :is([data-slot="settings-card"], [data-slot="item-group"]) {
-    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+  /* Tables have no frame: the wrapper keeps no border, so a first cell's 16px lands its text on the edge. */
+  &
+    :is([data-slot="table-card"], div:has(> [data-slot="table-container"])):not(
+      [data-slot="dialog-content"] *,
+      [data-slot="sheet-content"] *,
+      [data-slot="card"] *,
+      [data-slot="item-group"] *,
+      :has(> [data-slot="table-container"] > [data-file-table])
+    ) {
+    width: auto;
+    max-width: none;
+    margin-inline: calc(var(--settings-outset) * -1);
+    border-width: 0;
   }
 
-  /* Instructions (General): the read view is a settings card too, on the same outset as the others. */
-  & [data-slot="page-section"] > [class~="group/instructions"] {
-    margin-inline: calc(var(--settings-outset) * -1 - 2px);
-    padding: 14px 18px;
-    border-color: var(--d-edge-faint);
-    border-radius: var(--d-r-card);
-    background-color: var(--d-card);
-    box-shadow: var(--d-contact);
+  /* A file table (Drive, Memory) bleeds on the table itself, so its loading shape and its rows are one width. */
+  & [data-slot="table-container"]:has(> [data-file-table]) {
+    width: calc(100% + var(--settings-outset) * 2);
+    max-width: none;
+    margin-inline: calc(var(--settings-outset) * -1);
+  }
+}
+
+/* Rows: one height (64px, with or without a description), centred, text 16px inside the card's edge. A row
+   holding a tall control (theme tiles) grows, and its label stays centred on the control. */
+html.dark [data-page-width="grid"] [data-slot="page-body"] [data-slot="item-group"][class~="bg-card"] {
+  & > :is([data-slot="item"], div:has(> [role="radiogroup"])) {
+    min-height: var(--settings-row);
+    column-gap: 16px;
+    padding: 10px var(--settings-pad);
+    border-inline-width: 0;
+  }
+
+  & > :is([data-slot="item"]:not([data-stacked]), div:has(> [role="radiogroup"])) {
+    align-items: center;
+  }
+
+  /* A stacked row (Timeline detail) keeps its title on the row's 64px line: 22px above, as a 64px row's
+     single line sits. */
+  & > [data-slot="item"][data-stacked] {
+    padding-block: 12px;
+  }
+
+  & > [data-slot="item-separator"] {
+    margin-inline: var(--settings-pad);
+  }
+
+  & [data-slot="item-content"] {
+    gap: 2px;
+  }
+
+  & [data-slot="item-title"] {
     font-size: var(--d-small);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--d-text);
+  }
+
+  & [data-slot="item-description"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+    text-wrap: pretty;
+    color: var(--data-description);
+  }
+
+  /* Row value: whatever draws it (text, an inline edit, a picker), small/450 --d-text-2. */
+  & [data-slot="item-actions"] {
+    font-size: var(--d-small);
+    font-weight: 450;
+    line-height: 1.25;
     color: var(--d-text-2);
+  }
+
+  & [data-slot="item-actions"] :is([class~="text-sm"], [class~="text-xs"]):not(button, a, [data-slot]) {
+    font-size: var(--d-small);
+    line-height: 1.25;
+  }
+
+  /* An inline-edit value (EditableText) reads as the value, not as a button label. */
+  & [data-slot="item-actions"] [data-slot="tooltip-trigger"][data-variant="ghost"]:not([data-size^="icon"]):not(#d) {
+    font-size: var(--d-small);
+    font-weight: 450;
+    color: var(--d-text-2);
+  }
+
+  /* Optical alignment: a borderless control at the end of a row is pulled out by its own padding, so its glyph
+     (icon, chevron, avatar, text) ends on the control edge. */
+  & [data-slot="item-actions"] > :last-child:is(button, a)[data-variant="ghost"][data-size^="icon"]:not(#d),
+  &
+    [data-slot="item-actions"]
+    > :last-child
+    > :last-child:is(button, a)[data-variant="ghost"][data-size^="icon"]:not(#d) {
+    width: var(--d-ctl);
+    height: var(--d-ctl);
+    margin-inline-end: calc((var(--d-ctl) - 16px) / -2);
+    border-radius: var(--d-r-pill);
+  }
+
+  & [data-slot="item-actions"] :is(button, a)[data-variant="ghost"][data-size^="icon"]:not(#d) > svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* A borderless picker or link at the end of a row (the model picker): its chevron or text ends on the edge. */
+  &
+    [data-slot="item-actions"]
+    > :is(:last-child, :last-child > :last-child):is(button, a):is([data-variant="ghost"], [data-variant="link"]):not(
+      [data-size^="icon"]
+    ):not(#d),
+  & [data-slot="item-actions"] [data-slot="model-picker"] > :last-child:is(button, a)[data-variant="ghost"]:not(#d) {
+    margin-inline-end: -8px;
+    padding-inline-end: 8px;
+    border-inline-end-width: 0;
+
+    & > svg:last-child {
+      margin-inline-end: 0;
+    }
+  }
+
+  /* The model picker shows a row value: small/450, the vendor quiet, the model --d-text-2. */
+  & [data-slot="item-actions"] [data-slot="model-picker"] [data-composer-part="model"]:not(#d) {
+    gap: 4px;
+    padding-inline-start: 8px;
+    font-size: var(--d-small);
+    font-weight: 450;
+    color: var(--d-text-2);
+
+    & [data-model-part="vendor"] {
+      color: var(--d-text-3);
+    }
+
+    & > svg {
+      width: 14px;
+      height: 14px;
+      color: var(--d-text-3);
+    }
+  }
+
+  /* A photo or logo at the end of a row: a 32px face, or a 24px glyph when the logo has no tile. Either way its
+     visible edge is the control edge. */
+  & [data-slot="item-actions"] > [data-slot="popover-trigger"]:has(> [data-slot="avatar"]):not(#d) {
+    width: auto;
+    height: auto;
+    padding: 0;
+    border-width: 0;
+  }
+
+  & [data-slot="item-actions"] > [data-slot="popover-trigger"] > [data-slot="avatar"] {
+    width: 32px;
+    height: 32px;
+  }
+
+  & [data-slot="item-actions"] > [data-slot="popover-trigger"] > [data-slot="avatar"]:has(> span[aria-hidden] > svg) {
+    width: 24px;
+    height: 24px;
+
+    & > span[aria-hidden] > svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  & [data-slot="item-actions"] [data-slot="avatar-fallback"] {
+    font-size: var(--d-small);
+    font-weight: 500;
+  }
+
+  /* Selects in a row: Linear's 30px trigger. */
+  & [data-slot="item-actions"] [data-slot="select-trigger"][data-size="default"][class]:not(#d) {
+    height: 30px;
+  }
+}
+
+/* Type roles inside a grid page's tables: names small/500 --d-text, other cells small/450 --d-text-3, numbers
+   tabular, the header mini/450. The table recipe (data.css) sets cells at mini; a settings table is a page of
+   small text, so its cells follow the row-value size. */
+html.dark [data-page-width="grid"] [data-slot="page-body"] [data-slot="table"] {
+  font-size: var(--d-small);
+
+  & [data-slot="table-cell"] {
+    font-size: var(--d-small);
+    font-weight: 450;
+    line-height: 1.25;
+    color: var(--d-text-3);
+  }
+
+  & [data-slot="table-cell"] [class~="text-sm"] {
+    font-size: var(--d-small);
+  }
+
+  & [data-slot="table-cell"]:first-child:not([colspan]),
+  & [data-slot="table-cell"]:first-child:not([colspan]) :is(a, button)[data-variant]:not(#d) {
+    font-size: var(--d-small);
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--d-text);
+  }
+
+  & [data-slot="table-cell"]:first-child [data-file-name] {
+    color: var(--d-text);
+  }
+
+  /* The name's sub-line (an app's "1 account"): mini/450 --d-text-3. */
+  & [data-slot="table-cell"]:first-child:not([colspan]) [class~="text-xs"]:not([data-slot]) {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+    color: var(--d-text-3);
+  }
+
+  /* The first cell's face or icon: Linear's 24px. */
+  & [data-slot="table-cell"]:first-child [data-slot="avatar"],
+  & [data-slot="table-cell"]:first-child span[aria-hidden][class~="size-8"] {
+    width: 24px;
+    height: 24px;
+  }
+
+  & [data-slot="avatar-fallback"] {
+    font-size: var(--d-micro);
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  & [data-slot="table-head"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1;
+  }
+
+  /* A sortable header is a ghost pill pulled out by its padding, so its label is on the text edge. */
+  & [data-slot="table-head"] button[data-variant]:not(#d) {
+    border-inline-width: 0;
+  }
+
+  & :is([data-slot="table-head"], [data-slot="table-cell"]):last-child {
+    padding-inline-end: var(--settings-outset);
+  }
+
+  /* A row's trailing icon button (the ⋯ menu): at the end of its cell, its 14px glyph on the control edge. */
+  & [data-slot="table-cell"]:last-child:has(> :is(button, a)[data-size^="icon"]:only-child) {
+    text-align: end;
+  }
+
+  & [data-slot="table-cell"]:last-child > :last-child:is(button, a)[data-size^="icon"]:not(#d),
+  & [data-slot="table-cell"]:last-child > * > :last-child:is(button, a)[data-size^="icon"]:not(#d) {
+    margin-inline: auto calc((var(--d-ctl) - 14px) / -2);
+  }
+
+  /* A trailing text button ("View"): its label ends on the control edge. */
+  &
+    [data-slot="table-cell"]:last-child
+    > :last-child:is(button, a)[data-variant="ghost"]:not([data-size^="icon"]):not(#d) {
+    margin-inline-end: -8px;
+    padding-inline: 8px;
+    border-inline-width: 0;
+  }
+
+  /* Numbers end-aligned and tabular. */
+  & [data-slot="table-cell"]:is([class~="tabular-nums"], [class~="text-right"]) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  & [data-slot="table-cell"][colspan] {
+    font-size: var(--d-small);
+    font-weight: 450;
+    color: var(--d-text-3);
+  }
+}
+
+/* Prose inside the interface (Instructions): small/450 at 1.6, --d-text-2, on a card on the same outset. */
+html.dark [data-page-width="grid"] [data-slot="page-body"] [class~="group/instructions"] {
+  padding: 12px var(--settings-pad);
+  border-color: var(--d-edge-faint);
+  border-radius: var(--d-r-card);
+  background-color: var(--d-card);
+  box-shadow: var(--d-contact);
+
+  & > :not(button) {
+    font-size: var(--d-small);
+    font-weight: 450;
+    line-height: 1.6;
+    text-wrap: pretty;
+    color: var(--d-text-2);
+  }
+
+  & > :not(button) :is(h1, h2, h3, h4) {
+    margin-block: 0.75em 0.25em;
+    line-height: 1.4;
+    color: var(--d-text);
+  }
+
+  & > :not(button) h1 {
+    font-size: var(--d-regular);
+    font-weight: 600;
+  }
+
+  & > :not(button) h2 {
+    font-size: var(--d-small);
+    font-weight: 600;
+  }
+
+  & > :not(button) :is(h3, h4) {
+    font-size: var(--d-small);
+    font-weight: 500;
+  }
+
+  /* "Edit" rides in the card's corner; its label ends on the control edge. */
+  & > button[data-variant] {
+    top: 8px;
+    right: calc(var(--settings-outset) - 10px);
   }
 }
 
@@ -79,7 +393,7 @@ html.dark [data-slot="item-group"] > div:has(> [role="radiogroup"]) {
   & > span:first-child {
     font-size: var(--d-small);
     font-weight: 500;
-    line-height: 1.35;
+    line-height: 1.25;
     color: var(--d-text);
   }
 
@@ -149,7 +463,6 @@ html.dark [data-slot="item-group"] > div:has(> [role="radiogroup"]) {
    second line of text pushed against the right edge. */
 html.dark [data-slot="item"]:has(> div > [data-slot="timeline-detail-level"]) {
   gap: 14px;
-  padding: 12px 16px 10px;
 
   & > div:first-child {
     flex-direction: column;
@@ -159,7 +472,8 @@ html.dark [data-slot="item"]:has(> div > [data-slot="timeline-detail-level"]) {
 
   & [data-slot="timeline-detail-level"] {
     font-size: var(--d-mini);
-    line-height: 1.45;
+    font-weight: 450;
+    line-height: 1.4;
     color: var(--data-description);
   }
 
@@ -172,7 +486,9 @@ html.dark [data-slot="item"]:has(> div > [data-slot="timeline-detail-level"]) {
 /* Leaving and deleting: Linear's "Leave workspace" is red text in the row, no pill around it. */
 html.dark [data-slot="item-actions"] > button[data-tone="danger"]:not(#d) {
   height: var(--d-ctl);
+  margin-inline-end: -10px;
   padding-inline: 10px;
+  border-inline-width: 0;
   border-color: transparent;
   background-color: transparent;
   box-shadow: none;
@@ -205,7 +521,8 @@ html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not
   background-color: var(--d-selected);
   box-shadow: none;
   font-size: var(--d-mini);
-  font-weight: 450;
+  font-weight: 500;
+  line-height: 1;
   color: var(--d-text-2);
 }
 
@@ -250,43 +567,111 @@ html.dark [data-slot="role-badge"] > [data-slot="select-trigger"][data-size]:not
 
 /* ───────────────────────── 4. Usage ───────────────────────── */
 
-/* The stat strip, the chart and the three breakdowns are cards on the same outset as every settings card,
-   their text 16px in, so labels sit on the title's line. */
+/* The stat strip, the chart and the three breakdowns are cards on the same outset as every settings card, with
+   their text on the two edges: 15px inside a card's border (the stat strip and the chart), and 3px + 12px in the
+   breakdowns, whose rows keep a 12px inset for their share bars. Figures are large/500, tabular. */
 html.dark [data-page-width="grid"] [data-screen="usage"] {
   gap: 16px;
 
   & [data-slot="card"] {
-    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+    margin-inline: calc(var(--settings-outset) * -1);
   }
 
-  & > :first-child:is([data-slot="card"], :has(> [data-slot="card"])) [data-slot="card"] > div,
+  /* Stat strip: each figure 15px in. */
+  & > :first-child [data-slot="card"] > div,
   & > [data-slot="card"]:first-child > div {
-    padding: 14px 16px;
+    padding: 14px var(--settings-pad);
   }
 
-  & > div:has(> [data-slot="card"]) > [data-slot="card"] {
-    padding-inline: 16px;
+  /* The chart. */
+  & > :nth-child(2):not(:last-child) [data-slot="card"],
+  & > [data-slot="card"]:nth-child(2):not(:last-child) {
+    padding: 16px var(--settings-pad);
   }
 
   /* The three breakdowns sit side by side; only the outer ones bleed. */
   & > div:last-child:has(> [data-slot="card"] + [data-slot="card"]) {
-    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+    margin-inline: calc(var(--settings-outset) * -1);
   }
 
   & > div:last-child > [data-slot="card"] {
     margin-inline: 0;
-    padding-inline: 4px;
+    padding-inline: 3px;
+  }
+
+  & > div:last-child > [data-slot="card"] :is(div, p)[class~="px-3"] {
+    padding-inline: 12px;
   }
 
   & h2 {
     font-size: var(--d-small);
     font-weight: 500;
+    line-height: 1.25;
     color: var(--d-text);
   }
 
+  & [data-slot="stat-label"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+  }
+
   & [data-slot="stat-value"] {
-    font-size: 1.25rem;
+    font-size: var(--d-large);
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: 0;
     font-variant-numeric: tabular-nums;
+  }
+
+  & [data-slot="stat-detail"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+  }
+
+  & [data-slot="chart-legend"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  & [data-slot="chart-legend"] :is(span, b, strong) {
+    font-weight: 450;
+  }
+
+  /* A breakdown row: the name is a list row's title, the cost its value. */
+  & ul > li > div {
+    font-size: var(--d-small);
+    line-height: 1.25;
+  }
+
+  & ul > li > div > span:nth-child(2) > span:last-child {
+    font-weight: 500;
+    color: var(--d-text);
+  }
+
+  & ul > li > div > span:last-child {
+    font-weight: 450;
+    color: var(--d-text-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  & [data-slot="avatar-fallback"] {
+    font-size: var(--d-micro);
+    font-weight: 500;
+  }
+
+  & p[class~="text-sm"] {
+    font-size: var(--d-small);
+    color: var(--d-text-3);
+  }
+
+  & :is(span, div)[class~="text-xs"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1;
   }
 }
 
@@ -328,15 +713,16 @@ html.dark
   > div:first-child:has(> [data-screen="billing"])
   > [data-slot="alert"] {
   width: auto;
-  margin-inline: calc(var(--settings-outset) * -1 - 2px);
-  padding: 12px 16px;
+  margin-inline: calc(var(--settings-outset) * -1);
+  padding: 12px var(--settings-pad);
 }
 
-/* The notice's action sits on the notice's middle line, not on its top edge. */
-html.dark [data-slot="page-body"] [data-slot="alert"] > [data-slot="alert-action"] {
+/* The notice's action sits on the notice's middle line, its pill ending on the control edge. */
+html.dark [data-page-width="grid"] [data-slot="page-body"] [data-slot="alert"] > [data-slot="alert-action"]:not(#d) {
   top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
+  right: var(--settings-pad);
+  transform: none;
+  translate: 0 -50%;
 }
 
 html.dark [data-page-width="grid"] [data-screen="billing"] {
@@ -344,18 +730,31 @@ html.dark [data-page-width="grid"] [data-screen="billing"] {
 
   /* Plan and credits, and the plan cards: cards on the settings outset. */
   & > div:has(> [data-slot="card"]) {
-    margin-inline: calc(var(--settings-outset) * -1 - 2px);
+    margin-inline: calc(var(--settings-outset) * -1);
+  }
+
+  /* A card's text on the two edges: 15px inside its border. */
+  & [data-slot="card"] > :is([data-slot="card-header"], [data-slot="card-content"], [data-slot="card-footer"]) {
+    padding-inline: var(--settings-pad);
   }
 
   & [data-slot="card"] [data-slot="card-title"] {
-    font-size: 1.25rem;
+    font-size: var(--d-large);
     font-weight: 500;
-    letter-spacing: -0.01em;
+    line-height: 1.25;
+    letter-spacing: 0;
     font-variant-numeric: tabular-nums;
   }
 
+  & [data-slot="card"] [data-slot="card-description"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+  }
+
   & > [data-slot="page-section-title"] {
-    margin-top: 28px;
+    margin-top: calc(var(--settings-section-gap) - 16px);
+    margin-bottom: calc(var(--settings-heading-gap) - 16px);
   }
 }
 
@@ -380,5 +779,84 @@ html.dark:has([data-sidebar-part="settings-search"]) [data-page-width="grid"] {
     border-color: transparent;
     font-size: var(--d-small);
     color: var(--d-text-3);
+  }
+}
+
+/* ───────────────────────── 7. The Apps catalog on the two edges ───────────────────────── */
+
+/* An app row is a card on hover: it hangs outside the edges by its padding (15px inside a one-pixel border),
+   so at rest its icon is on the text edge and its Add pill ends on the control edge; 64px like every row. */
+html.dark [data-screen="apps"] [data-page-width="grid"] [role="list"]:has(> [data-app-row]):not(#d) {
+  margin-inline: calc(var(--settings-outset) * -1);
+}
+
+html.dark [data-screen="apps"] [data-page-width="grid"] [data-app-row]:not(#d):not(#e) {
+  min-height: var(--settings-row);
+  padding: 10px var(--settings-pad);
+}
+
+/* A back link rides above the title: a ghost pill pulled out by its padding, so its arrow is on the text edge. */
+html.dark [data-page-width="grid"] [data-slot="page-back"] > :is(a, button):not(#d) {
+  margin-inline-start: -6px;
+  border-inline-width: 0;
+}
+
+/* The catalog's sections keep the grid's rhythm: 40px from one section's last row to the next heading. */
+html.dark [data-screen="apps"] [data-page-width="grid"] [data-slot="page-body"] div:has(> section + section) {
+  gap: var(--settings-section-gap);
+}
+
+/* Timeline detail's slider: inset by half its thumb, so the thumb at either end touches the two edges. */
+html.dark [data-page-width="grid"] [data-slot="item"][data-stacked] > div:has(> [data-slot="slider"]) {
+  padding-inline: 8px;
+}
+
+/* Section headings on the catalog and a notice's text follow the roles: regular/500 at 1.5; a notice is a row
+   (title small/500 at 1.25, its description mini/450 at 1.4). */
+html.dark [data-screen="apps"] [data-page-width="grid"] [data-slot="page-body"] section > h2 {
+  line-height: 1.5;
+}
+
+html.dark [data-screen="apps"] [data-page-width="grid"] [data-slot="page-body"] section > h2 > a {
+  line-height: inherit;
+}
+
+html.dark [data-page-width="grid"] [data-slot="page-body"] [data-slot="alert"] {
+  & [data-slot="alert-title"] {
+    font-size: var(--d-small);
+    font-weight: 500;
+    line-height: 1.25;
+  }
+
+  & [data-slot="alert-description"] {
+    font-size: var(--d-mini);
+    font-weight: 450;
+    line-height: 1.4;
+  }
+}
+
+/* Timeline detail, Advanced: the eye toggles put their glyph on the text edge (the open/closed eye carries the
+   state, so they keep no resting fill), and the last column (Collapse) ends on the control edge. */
+html.dark [data-page-width="grid"] [data-slot="item"][data-stacked] {
+  & fieldset > div > div:first-child > :is(button, a)[data-size^="icon"]:not(#d):not(#e) {
+    margin-inline-start: calc((24px - 14px) / -2);
+    background-color: transparent;
+  }
+
+  & fieldset > div > div:last-child,
+  & [class~="group/advanced"] > div:first-child > div[aria-hidden] > span:last-child {
+    justify-content: flex-end;
+  }
+}
+
+@media (hover: hover) {
+  html.dark
+    [data-page-width="grid"]
+    [data-slot="item"][data-stacked]
+    fieldset
+    > div
+    > div:first-child
+    > :is(button, a)[data-size^="icon"]:not(#d):not(#e):hover {
+    background-color: var(--d-hover);
   }
 }

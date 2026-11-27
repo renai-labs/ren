@@ -382,7 +382,7 @@ export function EnvironmentsSettingsPage() {
     >
       {templates.isPending ? <RowsSample count={3} /> : null}
       {!templates.isPending && shown.length === 0 ? (
-        <EmptyState action={createButton}>{Search.empty(query, "No machines yet.")}</EmptyState>
+        <EmptyState action={deep ? undefined : createButton}>{Search.empty(query, "No machines yet.")}</EmptyState>
       ) : null}
       {shown.length > 0 ? (
         <Rows>

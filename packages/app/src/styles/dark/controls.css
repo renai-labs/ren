@@ -72,7 +72,14 @@ html.dark [class~="group/button"]:is([class~="size-6.5"], [class~="size-6"]) {
 
 html.dark [class~="group/button"]:is([class~="text-sm"], [class~="text-xs"]) {
   font-size: var(--d-mini);
-  line-height: 1rem;
+  line-height: 1;
+}
+
+/* A label that truncates clips at its own line box: at 1 that cuts Inter's descenders ("p", "g"). The
+   control's height is fixed and the label centred, so 1.25 draws the same row and keeps the glyphs whole. */
+html.dark
+  :is([class~="group/button"], [data-slot="tabs-trigger"])[class]:is([class~="truncate"], :has([class~="truncate"])) {
+  line-height: 1.25;
 }
 
 /* Padding: 10px, 2px less on the icon's side. */
@@ -390,7 +397,7 @@ html.dark :is([data-slot="tabs-trigger"], [data-slot="toggle-group-item"]:not([c
   color: var(--d-text-3);
   font-size: var(--d-mini);
   font-weight: 500;
-  line-height: 1rem;
+  line-height: 1;
   box-shadow: var(--d-contact);
   transition-duration: 100ms;
 }
@@ -516,9 +523,10 @@ html.dark :is([data-slot="input"], [data-slot="textarea"]):not([class~="border-0
   border-color: var(--d-line-3);
   border-radius: var(--d-r);
   background-color: var(--d-control);
-  color: var(--d-text);
+  color: var(--d-text-2);
   font-size: var(--d-small);
-  font-weight: 500;
+  font-weight: 450;
+  line-height: 1.25;
   box-shadow: none;
 }
 
@@ -585,9 +593,10 @@ html.dark [data-slot="input-group"]:has([data-slot][aria-invalid="true"]) {
 }
 
 html.dark [data-slot="input-group"]:not(:has(textarea)) > input[data-slot="input-group-control"] {
-  color: var(--d-text);
+  color: var(--d-text-2);
   font-size: var(--d-small);
-  font-weight: 500;
+  font-weight: 450;
+  line-height: 1.25;
 }
 
 /* Search fields: the icon sits inside at 14px, 10px from the edge. */
@@ -701,17 +710,19 @@ html.dark :is([data-slot="label"], [data-slot="field-label"]) {
   color: var(--d-text-2);
   font-size: var(--d-small);
   font-weight: 500;
+  line-height: 1.25;
 }
 
-html.dark [data-slot="field-description"] {
+html.dark :is([data-slot="field-description"], [data-slot="field-error"]) {
   color: var(--d-text-3);
   font-size: var(--d-mini);
   font-weight: 450;
+  line-height: 1.4;
+  text-wrap: pretty;
 }
 
 html.dark [data-slot="field-error"] {
   color: var(--c-danger);
-  font-size: var(--d-mini);
 }
 
 /* ─── 4. Choice controls ─────────────────────────────────────────────────────────────────────────── */
@@ -939,7 +950,7 @@ html.dark [data-slot="badge"]:is([data-variant="default"], [data-variant="second
   border-radius: 3px;
   font-size: var(--d-mini);
   font-weight: 450;
-  line-height: 1rem;
+  line-height: 1.4;
 }
 
 html.dark [data-slot="badge"][data-variant="default"] {

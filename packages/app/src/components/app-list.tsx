@@ -173,7 +173,11 @@ export function AppRow(props: {
 function AppDetails(props: { app: App; action?: ReactNode; children?: ReactNode }) {
   const app = props.app
   return (
-    <div className="flex flex-1 flex-col gap-9 overflow-y-auto overscroll-contain px-7 pt-7 pb-10">
+    <div
+      data-screen="app"
+      data-app-surface="sheet"
+      className="flex flex-1 flex-col gap-9 overflow-y-auto overscroll-contain px-7 pt-7 pb-10"
+    >
       <SheetHeader className="gap-4 p-0">
         <AppIcon name={app.name} description={app.description} icon={app.icon} size="xl" />
         <div className="flex items-center justify-between gap-8">

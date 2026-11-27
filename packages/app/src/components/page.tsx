@@ -231,7 +231,7 @@ function ColumnPage(props: PageProps) {
   const [mountedTabs, setMountedTabs] = useState(0)
   const width = props.width ?? "column"
   const frame = pageFrames[width]
-  const tabbed = deep || props.tabs !== undefined || mountedTabs > 0
+  const tabbed = props.tabs !== undefined || mountedTabs > 0
   const actions = (
     <>
       {props.actions}
@@ -426,7 +426,7 @@ export function Row(props: {
 
 export function StackedRow(props: { title: string; aside?: ReactNode | undefined; children: ReactNode }) {
   return (
-    <Item className="flex-col flex-nowrap items-stretch gap-4 p-4">
+    <Item data-stacked="" className="flex-col flex-nowrap items-stretch gap-4 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <ItemTitle className="leading-5">{props.title}</ItemTitle>
         {props.aside}
