@@ -23561,6 +23561,31 @@
         "enum": ["github.starred", "memory.imported"],
         "description": "A personal step the app marks done when the person does it. It pays no reward."
       },
+      "Onboarding.Reward": {
+        "type": "object",
+        "properties": {
+          "microUsd": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Credits, in micro-USD, that one completion pays."
+          },
+          "upTo": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many completions pay, for a step that pays once for each occurrence, such as each member who joins."
+          },
+          "earnedMicroUsd": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Credits, in micro-USD, the completions so far pay."
+          }
+        },
+        "required": ["microUsd", "earnedMicroUsd"],
+        "additionalProperties": false
+      },
       "Onboarding.Step": {
         "anyOf": [
           {
@@ -23587,9 +23612,20 @@
               }
             ],
             "description": "Null while the step is not done."
+          },
+          "reward": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Onboarding.Reward"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The credits the step pays. Null when it pays none."
           }
         },
-        "required": ["step", "completedAt"],
+        "required": ["step", "completedAt", "reward"],
         "additionalProperties": false
       },
       "OrganizationInviteLink.CreateInput": {

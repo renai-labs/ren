@@ -4,7 +4,7 @@ import { ChatReact } from "@ren/chat/react"
 import { ChatFilters, SessionPages } from "@ren/client/react"
 import { useState, type ReactNode } from "react"
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { toast } from "@ren/ui/sonner"
 import { cn } from "cn"
 import {
@@ -15,6 +15,7 @@ import {
   IconCalendarEvent,
   IconCalendarMonth,
   IconCalendarWeek,
+  IconChecklist,
   IconChevronRight,
   IconCircle,
   IconCube,
@@ -30,6 +31,7 @@ import {
   IconSelector,
   IconSettings,
   IconWorld,
+  IconX,
   type Icon,
 } from "@tabler/icons-react"
 import { Button, buttonVariants } from "@ren/ui/button"
@@ -54,6 +56,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -68,6 +71,7 @@ import { errorMessage } from "../lib/errors.js"
 import { formText } from "../lib/format.js"
 import { Logomark } from "../icons/logomark.js"
 import { PersonAvatar } from "./person-avatar.js"
+import { ProgressRing } from "./progress-ring.js"
 import { SpaceAvatar } from "./resource-avatar.js"
 import { organizationsOptions } from "../lib/auth.js"
 import { resetSession } from "../lib/chat.js"
@@ -78,6 +82,7 @@ import { Preference } from "../lib/preference.js"
 import { Automations } from "../lib/automations.js"
 import { SidebarPreferences } from "../lib/sidebar-preferences.js"
 import { useMe } from "../lib/use-me.js"
+import { useOnboarding, useOnboardingToasts } from "../lib/use-onboarding.js"
 import { useSignOut } from "../lib/use-sign-out.js"
 import { isPersonal } from "../lib/use-pinned-spaces.js"
 import { useSpaces } from "../lib/use-spaces.js"
@@ -547,6 +552,10 @@ function UserRow() {
               <IconPlus />
               Create organization
             </DropdownMenuItem>
+            <DropdownMenuItem render={<Link to="/settings/onboarding" />}>
+              <IconChecklist />
+              Onboarding
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setLoggingOut(true)}>
               <IconLogout />
               Log out
@@ -605,9 +614,73 @@ function HelpAndSettings() {
   )
 }
 
+function OnboardingRow() {
+  const { api } = RouterContext.useRouterContext()
+  const onboarding = useOnboarding()
+  useOnboardingToasts()
+  const dismiss = useMutation(api.onboarding.dismiss.mutationOptions())
+  const here = useLocation({ select: (location) => location.pathname === "/settings/onboarding" })
+  if (here || onboarding?.info.personal.dismissedAt !== null) return null
+  const progress = onboarding.progress
+  if (progress.done >= progress.total) return null
+  return (
+    <SidebarMenu className={sidebarMenu}>
+      <SidebarMenuItem className="group/onboarding">
+        <SidebarMenuButton
+          className={cn(sidebarRow, "pr-10")}
+          tooltip={`Onboarding · ${progress.done} of ${progress.total} steps done`}
+          aria-label={`Onboarding, ${progress.done} of ${progress.total} steps done`}
+          render={<Link to="/settings/onboarding" />}
+        >
+          <ProgressRing done={progress.done} total={progress.total} />
+          <span>Onboarding</span>
+        </SidebarMenuButton>
+        <SidebarMenuBadge
+          aria-hidden
+          className="right-1.5 font-normal text-sidebar-foreground/60 tabular-nums transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-coarse:hidden pointer-fine:group-focus-within/onboarding:opacity-0 pointer-fine:group-hover/onboarding:opacity-0"
+        >
+          {progress.done}/{progress.total}
+        </SidebarMenuBadge>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <SidebarMenuAction
+                showOnHover
+                aria-label="Hide onboarding"
+                disabled={dismiss.isPending}
+                className="top-1.5 right-1.5 text-sidebar-foreground/70 transition-opacity duration-150 ease-out motion-reduce:transition-none pointer-coarse:opacity-100 [&>svg]:size-3.5"
+                onClick={() =>
+                  dismiss.mutate(
+                    { checklist: "personal" },
+                    {
+                      onSuccess: () =>
+                        toast.success("Onboarding hidden", {
+                          description: "Open it any time from your account menu.",
+                        }),
+                      onError: (error) =>
+                        toast.error("Couldn’t hide onboarding", {
+                          description: errorMessage(error),
+                          duration: Infinity,
+                        }),
+                    },
+                  )
+                }
+              />
+            }
+          >
+            <IconX />
+          </TooltipTrigger>
+          <TooltipContent side="right">Hide onboarding</TooltipContent>
+        </Tooltip>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
 export function Footer() {
   return (
     <SidebarFooter className="gap-1 px-0.5 pt-2 pb-0">
+      <OnboardingRow />
       <SidebarMenu className={sidebarMenu}>
         <NavRow
           to="/settings/preferences"

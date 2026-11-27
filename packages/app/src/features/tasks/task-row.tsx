@@ -5,6 +5,7 @@ import { Badge } from "@ren/ui/badge"
 import { Checkbox } from "@ren/ui/checkbox"
 import { Button } from "@ren/ui/button"
 import { PersonAvatar } from "../../components/person-avatar.js"
+import { ProgressRing } from "../../components/progress-ring.js"
 import { PriorityMenu, StatusMenu } from "../../components/task-pickers.js"
 import { errorMessage } from "../../lib/errors.js"
 import { LabelBadge, PriorityIcon, SpaceBadge, StatusIcon, UnassignedIcon } from "../../components/task-meta.js"
@@ -36,25 +37,6 @@ function DueDate(props: { status: Task["status"]; dueAt: string | null }) {
       <span className="sr-only">{overdue ? "Overdue, due" : "Due"}</span>
       {formatShortDate(props.dueAt)}
     </span>
-  )
-}
-
-function ProgressRing(props: { done: number; total: number }) {
-  const length = 2 * Math.PI * 5
-  return (
-    <svg aria-hidden viewBox="0 0 14 14" className="size-3.5 -rotate-90">
-      <circle cx="7" cy="7" r="5" fill="none" strokeWidth="2" className="stroke-muted-foreground/30" />
-      <circle
-        cx="7"
-        cy="7"
-        r="5"
-        fill="none"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeDasharray={`${(props.done / props.total) * length} ${length}`}
-        className={props.done === props.total ? "stroke-chart-6" : "stroke-muted-foreground"}
-      />
-    </svg>
   )
 }
 

@@ -113,6 +113,33 @@ describe("OnboardingRewards", () => {
     }),
   )
 
+  it.live("shows each step's reward and what its completions earn", () =>
+    Effect.gen(function* () {
+      const onboarding = yield* Onboarding.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* Seed.actor(organizationId, "owner")
+      yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
+      yield* Effect.forEach(["usr_ada", "usr_grace", "usr_joan"], (who) =>
+        onboarding.record(organizationId, Onboarding.steps.organization.memberJoined, { occurrence: who }),
+      )
+      yield* Queue.takeN(grants, 3)
+      const info = yield* onboarding.get(ada)
+      const reward = (step: Onboarding.Step) =>
+        [...info.organization.steps, ...info.personal.steps].find((state) => state.step === step)?.reward
+      expect(reward(Onboarding.steps.organization.slackConnected)).toEqual({
+        microUsd: 3_000_000,
+        earnedMicroUsd: 3_000_000,
+      })
+      expect(reward(Onboarding.steps.organization.memberJoined)).toEqual({
+        microUsd: 1_000_000,
+        upTo: 2,
+        earnedMicroUsd: 2_000_000,
+      })
+      expect(reward(Onboarding.steps.personal.appsConnected)).toEqual({ microUsd: 3_000_000, earnedMicroUsd: 0 })
+      expect(reward(Onboarding.steps.organization.artifactCreated)).toBeNull()
+    }),
+  )
+
   it.live("gives nothing for a step completed before its reward was configured", () =>
     Effect.gen(function* () {
       const organizationId = yield* Seed.organization()
@@ -149,6 +176,10 @@ describe("OnboardingRewards", () => {
       yield* onboarding.record(organizationId, Onboarding.steps.organization.slackConnected)
       expect(yield* Queue.take(grants)).toEqual(grant(organizationId, 2, "onboarding:slack.connected"))
       expect(yield* Queue.size(grants)).toBe(0)
+      const info = yield* onboarding.get(ada)
+      expect(
+        info.personal.steps.find((state) => state.step === Onboarding.steps.personal.memoryImported),
+      ).toMatchObject({ reward: null })
     }),
   )
 })
