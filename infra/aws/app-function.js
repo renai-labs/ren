@@ -12,6 +12,8 @@ function query(querystring) {
   return pairs.length === 0 ? "" : "?" + pairs.join("&")
 }
 
+// oxlint-disable-next-line ren/no-comments -- CloudFront Functions run plain JavaScript, so JSDoc is the only way to type the event
+/** @param {{ request: { uri: string, querystring: Record<string, { value: string, multiValue?: Array<{ value: string }> }>, cookies: Record<string, { value: string } | undefined> } }} event */
 function handler(event) {
   var request = event.request
   var uri = request.uri
@@ -28,6 +30,10 @@ function handler(event) {
   }
   if (uri === "/install") {
     request.uri = "/ren/install.sh"
+    return request
+  }
+  if (uri === "/onboard") {
+    request.uri = "/onboard.md"
     return request
   }
   if (uri.startsWith("/ren/") || file) {
