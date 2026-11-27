@@ -10,14 +10,14 @@ import { Button } from "@ren/ui/button"
 import { Card } from "@ren/ui/card"
 import { Loading } from "@ren/ui/loading"
 import { toast } from "@ren/ui/sonner"
-import { Tabs } from "@ren/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Textarea } from "@ren/ui/textarea"
-import { MermaidDiagram } from "../../components/mermaid-diagram.js"
-import { PageActions, PageTabsList, PageTabsTrigger, useShapeId } from "../../components/page.js"
+import { PageActions, useShapeId } from "../../components/page.js"
 import { FactorySample } from "../../components/route-skeleton.js"
 import { Drafts } from "../../lib/drafts.js"
 import { errorMessage } from "../../lib/errors.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { FactoryFlow } from "./factory-flow.js"
 import { FactorySpec } from "./factory-spec.js"
 import { spaceAgentsOptions, useSpace } from "./use-space.js"
 
@@ -118,11 +118,22 @@ function SpecEditor(props: {
   )
 }
 
-function FactoryFlow(props: { declaration: Infra.FactoryDeclaration }) {
-  const chart = useDeferredValue(FactorySpec.diagram(props.declaration))
-  if (props.declaration.agents.length === 0)
+function Flow(props: { declaration: Infra.FactoryDeclaration }) {
+  const declaration = useDeferredValue(props.declaration)
+  if (declaration.agents.length === 0)
     return <p className="m-auto text-sm text-muted-foreground">Add an agent to spec.yaml to see how tasks move.</p>
-  return <MermaidDiagram chart={chart} label="How tasks move between the agents" />
+  return <FactoryFlow declaration={declaration} />
+}
+
+function ViewSwitch(props: { view: FactoryView; onView: (view: FactoryView) => void }) {
+  return (
+    <Tabs value={props.view} onValueChange={(value: string) => props.onView(value === "spec" ? "spec" : "flow")}>
+      <TabsList>
+        <TabsTrigger value="flow">Flow</TabsTrigger>
+        <TabsTrigger value="spec">spec.yaml</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  )
 }
 
 function useFactoryDraft(space: SpaceInfo, agents: ReadonlyArray<AgentInfo>) {
@@ -170,20 +181,15 @@ function FactoryCard(props: {
   const draft = useFactoryDraft(props.space, props.agents)
   return (
     <Card className="mt-4 min-h-120 flex-1 gap-0 py-0 contain-size has-[textarea:focus-visible]:ring-ring">
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2">
-        <Tabs value={props.view} onValueChange={(value: string) => props.onView(value === "spec" ? "spec" : "flow")}>
-          <PageTabsList>
-            <PageTabsTrigger value="flow">Flow</PageTabsTrigger>
-            <PageTabsTrigger value="spec">spec.yaml</PageTabsTrigger>
-          </PageTabsList>
-        </Tabs>
+      <div className="flex h-12 shrink-0 items-center justify-end gap-2 border-b px-2">
         {props.view === "flow" ? <FlowStatus state={draft.state} /> : null}
         {props.view === "spec" && props.space.canUpdate ? (
           <SpecActions state={draft.state} onDiscard={draft.discard} onSave={draft.save} />
         ) : null}
+        <ViewSwitch view={props.view} onView={props.onView} />
       </div>
       {props.view === "flow" ? (
-        <FactoryFlow declaration={draft.declaration} />
+        <Flow declaration={draft.declaration} />
       ) : (
         <SpecEditor
           text={draft.text}

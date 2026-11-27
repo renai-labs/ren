@@ -5,6 +5,7 @@ import { Button } from "@ren/ui/button"
 import { Card } from "@ren/ui/card"
 import { Separator } from "@ren/ui/separator"
 import { Switch } from "@ren/ui/switch"
+import { Tabs, TabsList, TabsTrigger } from "@ren/ui/tabs"
 import { Channels } from "../lib/channels.js"
 import { Routing } from "../lib/routing.js"
 import { inboxColumns } from "../lib/sessions.js"
@@ -86,9 +87,13 @@ export function TasksSample() {
 export function FactorySample() {
   return (
     <Card className="mt-4 min-h-120 flex-1 gap-0 py-0 contain-size">
-      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2 text-sm">
-        <span className="px-3">Flow</span>
-        <span className="px-3">spec.yaml</span>
+      <div className="flex h-12 shrink-0 items-center justify-end border-b px-2">
+        <Tabs value="flow">
+          <TabsList>
+            <TabsTrigger value="flow">Flow</TabsTrigger>
+            <TabsTrigger value="spec">spec.yaml</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
     </Card>
   )
