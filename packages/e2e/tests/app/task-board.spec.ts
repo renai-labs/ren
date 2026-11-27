@@ -46,7 +46,9 @@ test("a member writes the factory spec, moves a card and moves a task to an agen
     "maxHandoffs: 20\nagents:\n  - agent: plan\n    to:\n      - agent: build\n        max: 2\n  - agent: build\n",
   )
   await page.getByRole("tab", { name: "Flow", exact: true }).click()
-  await expect(page.getByRole("application", { name: /^How tasks move between the agents/ })).toBeVisible()
+  const flow = page.getByRole("application", { name: /^How tasks move between the agents/ })
+  await expect(flow.getByText("plan", { exact: true })).toBeVisible()
+  await expect(flow.getByText("build", { exact: true })).toBeVisible()
 
   await page.goto(`/spaces/${space.id}/tasks`)
   await page.getByRole("button", { name: "Display options" }).click()

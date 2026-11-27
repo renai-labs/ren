@@ -83,34 +83,3 @@ export const toInfo = (declaration: Infra.FactoryDeclaration, ids: ReadonlyMap<s
     })),
   }
 }
-
-export const diagram = (declaration: Infra.FactoryDeclaration) => {
-  const node = new Map(declaration.agents.map((entry, index) => [entry.agent, `a${index}`]))
-  const at = (name: string) => node.get(name) ?? name
-  const nodes = declaration.agents.map((entry) => {
-    const notes = [
-      ...(entry.maxRuns ? [`up to ${entry.maxRuns} runs`] : []),
-      ...(entry.to ? [] : ["hands off to anyone"]),
-    ]
-    return `  ${at(entry.agent)}["${[entry.agent, ...notes].join("<br/>")}"]${entry.to ? "" : ":::free"}`
-  })
-  const edges = declaration.agents.flatMap((entry) =>
-    (entry.to ?? []).map((edge) => {
-      const label = [
-        ...(edge.max ? [`up to ${edge.max}×, then ${edge.else ?? "a person"}`] : []),
-        ...(edge.start === "continue" ? ["continues its session"] : []),
-        ...(edge.start === "new" ? ["new session"] : []),
-      ].join(", ")
-      return `  ${at(entry.agent)} -->${label ? `|"${label}"|` : ""} ${at(edge.agent)}`
-    }),
-  )
-  const finishers = declaration.agents.filter((entry) => entry.to && entry.finish)
-  return [
-    "flowchart LR",
-    ...nodes,
-    ...(finishers.length > 0 ? ['  finish(["Finish"])'] : []),
-    ...edges,
-    ...finishers.map((entry) => `  ${at(entry.agent)} --> finish`),
-    "  classDef free stroke-dasharray: 4 3",
-  ].join("\n")
-}
